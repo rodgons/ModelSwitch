@@ -1,0 +1,31 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+*.trx
+coverage*.xml
+
+# IDEs / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+
+# Node / web
+node_modules/
+web/dist/
+web/coverage/
+*.tsbuildinfo
+.vite/
+
+# Secrets and local overrides
+.env
+.env.*
+!.env.example
+compose.override.yaml
+
+# Claude Code local state
+.claude/worktrees/
