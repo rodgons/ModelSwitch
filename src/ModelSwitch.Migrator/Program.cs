@@ -47,6 +47,7 @@ return await StartupExit.RunAsync(
             builder.Services.RequireSetting("Seed:TenantName");
         }
 
+        builder.Services.AddSingleton<DatabaseRoles>();
         builder.Services.AddSingleton<MigratorRunner>();
 
         using var host = builder.Build();
@@ -55,7 +56,7 @@ return await StartupExit.RunAsync(
         {
             var runner = host.Services.GetRequiredService<MigratorRunner>();
             return command == MigratorCommand.Seed
-                ? await runner.SeedAsync(host.Services.GetRequiredService<IConfiguration>(), Console.Out, CancellationToken.None)
+                ? await runner.SeedAsync(Console.Out, CancellationToken.None)
                 : await runner.MigrateAsync(CancellationToken.None);
         }
         finally

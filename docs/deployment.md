@@ -50,6 +50,7 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 |---|---|---|---|
 | `POSTGRES_MIGRATOR_PASSWORD` | ✔ | postgres container | Password of `modelswitch_migrator`, the bootstrap superuser that owns the schemas |
 | `POSTGRES_APP_PASSWORD` | ✔ | migrator | Password the migrator gives `modelswitch_app` when it creates the role |
+| `POSTGRES_RETENTION_PASSWORD` | | migrator | Password for `modelswitch_retention` when the migrator creates it. Unset: the role is created `NOLOGIN` |
 | `POSTGRES_DB` | | postgres container | `modelswitch` |
 | `MODELSWITCH__ConnectionStrings__Postgres` | ✔ | api, worker | `modelswitch_app` role |
 | `MODELSWITCH__ConnectionStrings__PostgresMigrator` | ✔ | migrator | `modelswitch_migrator` role |
@@ -77,7 +78,7 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 
 - `migrator` connects as the migrator role, creates the schemas and roles if they are missing, applies every module's migrations in order (`identity, registry, routing, config, usage, evaluation, jobs`), then bootstraps the Owner. It is idempotent: a second run applies nothing and exits 0.
 - Commands: `migrate` (default) and `seed`. `seed` migrates, finds or creates the Tenant, creates a new API Key with every Scope, and prints the plaintext key **once, alone on stdout** (logs go to stderr), so `KEY=$(migrator seed --tenant acme)` works. The key cannot be shown again. Run it again for another key. An unknown command exits 64.
-- Not yet implemented: creating the `modelswitch_app` and `modelswitch_retention` roles and their grants (the migrator currently runs every migration as the connection string's role); this lands with the first migration that needs a restricted table.
+- Roles: after the migrations, the migrator creates `modelswitch_app` (when `POSTGRES_APP_PASSWORD` is set) and `modelswitch_retention` (`NOLOGIN` unless `POSTGRES_RETENTION_PASSWORD` is set) if they are missing, then re-applies their grants on every run (idempotent, one transaction). Roles that already exist, for example ones a DBA created, are never altered, only granted privileges. If `modelswitch_app` is missing and no password is given, the migrator logs a warning and skips the grants. `modelswitch_app` gets `SELECT/INSERT/UPDATE/DELETE` on every module table except the EF migrations history, and loses `UPDATE`/`DELETE` on `audit_record` and `model_price`. `modelswitch_retention` gets `SELECT/DELETE` on the retention-managed tables only (data-model.md "Retention"). Creating roles needs `CREATEROLE`, which the bootstrap `modelswitch_migrator` role has in Compose.
 - Development: `dotnet run --project src/ModelSwitch.Migrator`. Adding a migration: `dotnet ef migrations add <Name> --project src/Modules/ModelSwitch.<Module> --context <Module>DbContext --output-dir Infrastructure/Migrations` (after `dotnet tool restore`).
 - Migrations must be backward-compatible with the previous app version, so they can be applied before api/worker are rolled (expand → migrate → contract).
 

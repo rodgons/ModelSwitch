@@ -8,16 +8,28 @@ namespace ModelSwitch.Migrator;
 internal sealed partial class MigratorRunner(
     IEnumerable<IModuleMigrator> migrators,
     IServiceProvider services,
+    IConfiguration configuration,
+    DatabaseRoles roles,
     ILogger<MigratorRunner> logger)
 {
     /// <summary>Applies every module's migrations in registration order. Idempotent: a second run applies nothing.</summary>
     public async Task<int> MigrateAsync(CancellationToken cancellationToken)
     {
+        var schemas = new List<string>();
         foreach (var migrator in migrators)
         {
             var applied = await migrator.MigrateAsync(cancellationToken);
             LogModuleMigrated(logger, migrator.Schema, applied.Count);
+            schemas.Add(migrator.Schema);
         }
+
+        // After every module's tables exist: roles and grants (data-model.md "Database roles").
+        await roles.ApplyAsync(
+            configuration["ConnectionStrings:PostgresMigrator"]!,
+            schemas,
+            configuration["POSTGRES_APP_PASSWORD"],
+            configuration["POSTGRES_RETENTION_PASSWORD"],
+            cancellationToken);
 
         return 0;
     }
@@ -26,7 +38,7 @@ internal sealed partial class MigratorRunner(
     /// Migrates, then creates (or finds) the Tenant and a new API Key. The plaintext key is the only thing written
     /// to <paramref name="stdout"/>, once, on its own line. Everything else goes to the log (stderr).
     /// </summary>
-    public async Task<int> SeedAsync(IConfiguration configuration, TextWriter stdout, CancellationToken cancellationToken)
+    public async Task<int> SeedAsync(TextWriter stdout, CancellationToken cancellationToken)
     {
         await MigrateAsync(cancellationToken);
 
