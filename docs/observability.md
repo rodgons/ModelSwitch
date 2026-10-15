@@ -46,7 +46,8 @@ Meter `ModelSwitch`. Allowed labels: `alias`, `provider`, `model` (Provider Mode
 | `modelswitch.inference.gateway_overhead` | histogram | s: total minus time inside Adapter calls and backoff waits (NFR-01) |
 | `modelswitch.attempts` | counter | {attempt} |
 | `modelswitch.fallbacks` | counter | {fallback} |
-| `modelswitch.tokens` | counter | {token}, label `direction=input\|output`, `source` |
+| `modelswitch.tokens` | counter | {token}, label `direction=input\|cached_input\|output`, `source` (`cached_input` is a subset of `input`) |
+| `modelswitch.provider.invalid_usage` | counter | label `field`; reported usage the Adapter discarded as inconsistent |
 | `modelswitch.estimated_cost` | counter | USD |
 | `modelswitch.circuit.state` | observable gauge | 0 closed, 1 half-open, 2 open |
 | `modelswitch.circuit.transitions` | counter | |

@@ -29,7 +29,7 @@ Neutral types:
 - `NeutralChatRequest`: messages (role + text), `MaxOutputTokens`, sampling params (all nullable), `Stop`, `Seed`, `ResponseFormat` (`Text | JsonObject | JsonSchema(name, schema, strict)`).
 - `CompletionOutcome`: either `Success(text, finishReason, NeutralUsage?)` or `Failure(ProviderFailure)`.
 - `StreamEvent`: `ContentDelta(text)`, `Finish(reason)`, `Usage(NeutralUsage)`, `Failed(ProviderFailure)`. The stream always ends with exactly one `Finish` or `Failed`, and `Usage` may come before or after `Finish`.
-- `NeutralUsage(int InputTokens, int OutputTokens)`. Only *reported* values go here. The Adapter never estimates.
+- `NeutralUsage(int InputTokens, int OutputTokens, int? CachedInputTokens)`. Only *reported* values go here. The Adapter never estimates. `CachedInputTokens` is a subset of `InputTokens`: `null` when the Provider didn't report it, `0` when it reported none. If a Provider reports more cached than input tokens, the Adapter sets `CachedInputTokens = null` (everything is then priced at the full input rate) and increments `modelswitch.provider.invalid_usage`. It doesn't fail the Attempt.
 - `ProviderFailure(FailureClass Class, string Code, int? HttpStatus, TimeSpan? RetryAfter, bool RequestSent)`. Classification follows [routing-and-resilience.md §3](routing-and-resilience.md#3-failure-classification).
 
 Rules every Adapter must follow:
@@ -47,7 +47,8 @@ Rules every Adapter must follow:
 ## 2. OpenAI-compatible Adapter
 
 - `POST {endpoint}/chat/completions`, `Authorization: Bearer <secret>` (header name configurable for Azure-style `api-key`).
-- Always sends `stream_options: {include_usage: true}` when streaming.
+- Always sends `stream_options: {include_usage: true}` when streaming. Usage is accepted on any chunk.
+- `CachedInputTokens` is read from `usage.prompt_tokens_details.cached_tokens`, falling back to a top-level `usage.cached_tokens` (some Together models use the flat shape).
 - Maps `response_format` 1:1. `max_tokens` is sent as `max_completion_tokens`, falling back to `max_tokens` for endpoints that reject the newer field (a per-Provider flag).
 - Parses SSE line by line from a `PipeReader`. `data: [DONE]` ends the stream.
 - An error object inside a 200 stream maps to `Failed`.
@@ -57,7 +58,7 @@ Rules every Adapter must follow:
 
 - `POST {endpoint}/api/chat` with `stream: true|false`, `options: {temperature, top_p, seed, stop, num_predict}`.
 - `format: "json"` for `JsonObject`, and `format: <schema>` for `JsonSchema` (Ollama ≥ 0.5).
-- Streaming is NDJSON (one JSON object per line). The final object has `done: true` and `prompt_eval_count` / `eval_count`, which map to reported usage.
+- Streaming is NDJSON (one JSON object per line). The final object has `done: true` and `prompt_eval_count` / `eval_count`, which map to reported usage. `prompt_eval_cached_count`, when present, maps to `CachedInputTokens`.
 - `done_reason` maps to `finish_reason` (`stop`, `length`).
 - `CheckAsync`: `GET {endpoint}/api/version`. `ListModelsAsync`: `GET /api/tags`.
 - No credential by default. An optional bearer token is supported for Ollama behind a reverse proxy.
@@ -73,6 +74,7 @@ Scenarios (each one runs for every Adapter):
 | Area | Scenario |
 |---|---|
 | Success | Non-streaming text, usage reported → `Success` with exact usage |
+| | Cached input tokens reported (streaming and non-streaming) → `CachedInputTokens` set; not reported → `null`; more cached than input → `null` |
 | | Streaming text → deltas in order, `Finish`, `Usage` |
 | | Usage absent → `Usage` null / no `Usage` event (no estimating) |
 | | JSON object / JSON schema request is encoded correctly (request body assertion) |
@@ -108,6 +110,7 @@ X-Mock-Fault: status=503;times=2             → fail twice, then succeed (keyed
 X-Mock-Fault: hang                           → never send headers
 X-Mock-Fault: cut-after=5                    → send 5 chunks then drop the socket
 X-Mock-Fault: no-usage                       → omit usage
+X-Mock-Usage: cached=900                     → report 900 of the input tokens as cached
 X-Mock-Fault: garbage                        → invalid JSON
 ```
 

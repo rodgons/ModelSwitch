@@ -74,12 +74,17 @@ This follows FR-05: "treat ambiguous provider timeouts as potentially billable o
 ## 5. Cost calculation
 
 ```
-input_cost  = round_half_even(input_tokens  × price.input_per_million  / 1_000_000, 10)
+cached      = cached_input_tokens ?? 0
+input_cost  = round_half_even(((input_tokens − cached) × price.input_per_million
+                             + cached × (price.cached_input_per_million ?? price.input_per_million))
+                            / 1_000_000, 10)
 output_cost = round_half_even(output_tokens × price.output_per_million / 1_000_000, 10)
 total_cost  = input_cost + output_cost
 ```
 
 - The price used is the one in force at **Attempt start**.
+- Cached Input Tokens are only ever *reported*. Estimated and unavailable usage has `cached_input_tokens = null`, so all input is priced at the full rate.
+- The **worst case** used for Reservations assumes nothing is cached, because the cache hit isn't known until the Provider answers. Settlement releases the difference.
 - `decimal` is used throughout. `double` is never used for money.
 - A pure `CostCalculator` in the Usage module's `Domain/` is the only implementation, used by routing (worst case), settlement and evaluation.
 
@@ -91,6 +96,7 @@ Dashboard totals for tokens and cost read `usage_hourly` for whole hours and the
 
 ## 7. What is *not* guaranteed (documented limitations)
 
-- Estimated Cost is not the Provider's bill. Provider-side discounts, cached-input pricing and rounding are not modelled in the MVP.
+- Estimated Cost is not the Provider's bill. Cache *reads* are priced (§5), but other Provider-side discounts and rounding are not modelled in the MVP.
+- **Cache writes are not priced.** Some Provider Models (OpenAI GPT-5.6+, Anthropic via OpenRouter) charge 1.25×–2× the input rate for tokens written to the prompt cache. The MVP prices them at the input rate, so the first request of a cached conversation is *under*estimated. The error is bounded by the write surcharge, and later cache reads usually offset it.
 - Reserving with the worst case can refuse requests slightly before the budget is fully used.
 - A request in flight when its Tenant's budget is lowered completes under the old reservation.

@@ -52,7 +52,7 @@ _Avoid_: Model (unqualified), deployment, engine
 A declared feature of a Provider Model that a request may require, such as streaming, JSON-schema output, or a context window size.
 
 **Price**:
-The immutable, versioned per-token rate for a Provider Model from a given point in time onward.
+The immutable, versioned per-token rates (input, cached input, output) for a Provider Model from a given point in time onward.
 _Avoid_: Pricing (as a mutable field), rate card
 
 **Credential Reference**:
@@ -116,6 +116,10 @@ The moment the first piece of generated content is forwarded to a streaming clie
 **Usage Record**:
 The authoritative record of tokens consumed and cost estimated for one Attempt.
 _Avoid_: Usage event, billing record
+
+**Cached Input Tokens**:
+The part of an Attempt's input tokens that the Provider served from its prompt cache; always a subset of the input tokens.
+_Avoid_: Cache hits, cached prompt
 
 **Usage Source**:
 Where a Usage Record's token counts came from: reported by the Provider, estimated by the gateway, or unavailable.

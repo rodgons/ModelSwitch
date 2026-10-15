@@ -51,7 +51,7 @@ The PostgreSQL schema, module by module. Every module owns one schema and is the
 - `unique(provider_id, provider_model_id)`
 - `capabilities` shape: `{ "streaming": true, "jsonObject": true, "jsonSchema": false, "contextWindow": 128000, "maxOutputTokens": 16384, "parameters": ["temperature","top_p","seed","stop"], "tokenizer": "o200k_base" }`
 
-**model_price**: `id`, `provider_model_id fk`, `input_per_million numeric`, `output_per_million numeric`, `currency`, `effective_from timestamptz`, `created_at`, `created_by_admin_id`
+**model_price**: `id`, `provider_model_id fk`, `input_per_million numeric`, `cached_input_per_million numeric null` (null = no discount: cached tokens cost the input rate; `0` = free), `output_per_million numeric`, `currency`, `effective_from timestamptz`, `created_at`, `created_by_admin_id`
 - `unique(provider_model_id, effective_from)`. No updates. The price in force is the row with the latest `effective_from ≤ now`.
 
 **provider_health_snapshot**: `instance_id text`, `provider_model_id`, `circuit_state text`, `window_failure_rate real`, `window_calls int`, `captured_at`. pk `(instance_id, provider_model_id)`, upserted every 15 s.
@@ -100,7 +100,7 @@ Indexes: `(tenant_id, started_at desc)`, `(started_at desc)`, `(status, started_
 **provider_attempt**: `id`, `inference_request_id`, `attempt_number smallint`, `provider_id`, `provider_model_id`, `kind text (primary|retry|fallback)`, `status text (succeeded|failed|cancelled|ambiguous|skipped_circuit_open)`, `error_class text null (transient|permanent|ambiguous)`, `error_code null`, `http_status smallint null`, `provider_error_type text null` (sanitized, ≤64 chars), `started_at`, `completed_at`, `duration_ms`, `ttft_ms null`, `input_tokens null`, `output_tokens null`, `estimated_cost null`
 - `unique(inference_request_id, attempt_number)`. Index on `inference_request_id`. Partitioned like `inference_request`.
 
-**usage_record**: `id`, `inference_request_id`, `provider_attempt_id unique`, `tenant_id`, `provider_model_id`, `model_price_id null`, `input_tokens null`, `output_tokens null`, `usage_source text (reported|estimated|unavailable)`, `estimate_method text null` (e.g. `tokenizer:o200k_base`, `reservation_upper_bound`), `input_cost`, `output_cost`, `total_cost numeric`, `currency`, `recorded_at`
+**usage_record**: `id`, `inference_request_id`, `provider_attempt_id unique`, `tenant_id`, `provider_model_id`, `model_price_id null`, `input_tokens null`, `cached_input_tokens null` (subset of `input_tokens`; null = not reported; always null unless `usage_source = reported`), `output_tokens null`, `usage_source text (reported|estimated|unavailable)`, `estimate_method text null` (e.g. `tokenizer:o200k_base`, `reservation_upper_bound`), `input_cost`, `output_cost`, `total_cost numeric`, `currency`, `recorded_at`
 - Exactly one per Attempt, including failed Attempts. A failed Attempt has 0 tokens unless it was ambiguous.
 - Index `(tenant_id, recorded_at)`.
 
@@ -109,7 +109,7 @@ Indexes: `(tenant_id, started_at desc)`, `(started_at desc)`, `(status, started_
 
 **reservation**: `id`, `inference_request_id unique`, `tenant_id`, `period_start`, `amount numeric`, `status (held|settled|expired)`, `expires_at`, `created_at`, `settled_at null`. Index `(status, expires_at) where status = 'held'`.
 
-**usage_hourly** (rollup, written by the worker): `tenant_id`, `provider_model_id`, `requested_alias`, `hour timestamptz`, `requests`, `failed_requests`, `fallback_requests`, `attempts`, `input_tokens bigint`, `output_tokens bigint`, `estimated_cost numeric`, `duration_ms_sum bigint`, `latency_histogram int[]` (fixed bucket bounds, so percentiles can be merged approximately), `ttft_histogram int[]`. pk `(tenant_id, provider_model_id, requested_alias, hour)`.
+**usage_hourly** (rollup, written by the worker): `tenant_id`, `provider_model_id`, `requested_alias`, `hour timestamptz`, `requests`, `failed_requests`, `fallback_requests`, `attempts`, `input_tokens bigint`, `cached_input_tokens bigint` (null counted as 0), `output_tokens bigint`, `estimated_cost numeric`, `duration_ms_sum bigint`, `latency_histogram int[]` (fixed bucket bounds, so percentiles can be merged approximately), `ttft_histogram int[]`. pk `(tenant_id, provider_model_id, requested_alias, hour)`.
 
 ## `evaluation`
 

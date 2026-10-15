@@ -38,7 +38,7 @@ curl http://localhost:8080/v1/chat/completions -H "Authorization: Bearer $KEY" -
 
 The "setup time from a clean checkout" metric (PRD §13) is measured by timing this script on a clean machine.
 
-`./scripts/seed-demo.sh --with-openai` also seeds the reference hosted Provider: an `openai` Provider with `credential_reference = env:OPENAI_API_KEY`, the Provider Models `gpt-5-nano` and `gpt-4o-mini`, and their input and output Prices with `effective_from` set to the seed date. The seeded Prices are a snapshot, so check them against OpenAI's pricing page before relying on Estimated Cost. Without the flag, only the mock Provider is seeded and nothing calls a paid API.
+`./scripts/seed-demo.sh --with-openai` also seeds the reference hosted Provider: an `openai` Provider with `credential_reference = env:OPENAI_API_KEY`, the Provider Models `gpt-5-nano` and `gpt-4o-mini`, and their input, cached-input and output Prices (cached $0.005 and $0.075 per 1M tokens, 0.1× and 0.5× of input) with `effective_from` set to the seed date. The seeded Prices are a snapshot, so check them against OpenAI's pricing page before relying on Estimated Cost. Without the flag, only the mock Provider is seeded and nothing calls a paid API.
 
 ## 3. Environment variables
 
