@@ -61,7 +61,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     private async Task<string> CreateAsync(string? template)
     {
-        var name = $"test_{Interlocked.Increment(ref _databases)}_{Guid.NewGuid():N}";
+        var name = $"test_{Interlocked.Increment(ref _databases)}_{Guid.CreateVersion7():N}";
         await using (var connection = new NpgsqlConnection(_container.GetConnectionString()))
         {
             await connection.OpenAsync();

@@ -10,7 +10,7 @@ namespace ModelSwitch.UnitTests.Registry;
 
 public sealed class ProviderHealthTests : IDisposable
 {
-    private static readonly Guid _model = Guid.NewGuid();
+    private static readonly Guid _model = Guid.CreateVersion7();
     private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero));
     private readonly ProviderHealth _health;
 
@@ -54,7 +54,7 @@ public sealed class ProviderHealthTests : IDisposable
     [Fact]
     public void A_model_nobody_has_called_is_closed()
     {
-        _health.StateOf(Guid.NewGuid()).ShouldBe(CircuitState.Closed);
+        _health.StateOf(Guid.CreateVersion7()).ShouldBe(CircuitState.Closed);
         _health.OpenCircuits().ShouldBeEmpty();
         _health.Snapshot().ShouldBeEmpty();
     }
@@ -208,7 +208,7 @@ public sealed class ProviderHealthTests : IDisposable
     [Fact]
     public async Task Circuits_are_independent_per_provider_model()
     {
-        var other = Guid.NewGuid();
+        var other = Guid.CreateVersion7();
         await OpenAsync();
 
         var result = await CallAsync(null, other);

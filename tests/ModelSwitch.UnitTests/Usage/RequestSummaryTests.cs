@@ -18,7 +18,7 @@ public sealed class RequestSummaryTests
         int? output = 5,
         Guid? model = null,
         Money? cost = null)
-        => new(number, Guid.Empty, model ?? Guid.NewGuid(), kind, status, null, null, null, null, _t, _t, null, input, output, source, cost);
+        => new(number, Guid.Empty, model ?? Guid.CreateVersion7(), kind, status, null, null, null, null, _t, _t, null, input, output, source, cost);
 
     [Fact]
     public void No_attempts_is_reported_with_no_totals()
@@ -31,7 +31,7 @@ public sealed class RequestSummaryTests
     [Fact]
     public void Totals_sum_attempts_and_the_successful_one_is_selected()
     {
-        var winner = Guid.NewGuid();
+        var winner = Guid.CreateVersion7();
 
         var summary = RequestSummary.From(
         [

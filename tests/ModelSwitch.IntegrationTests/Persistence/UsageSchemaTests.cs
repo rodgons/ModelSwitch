@@ -125,7 +125,7 @@ public sealed class UsageSchemaTests(PostgresFixture postgres)
     // The last month of the migrated window (twelve months ahead), whatever today's date is.
     private static string FarMonthSuffix()
     {
-        var today = DateTime.UtcNow;
+        var today = TimeProvider.System.GetUtcNow();
         var month = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(12);
         return $"{month:yyyy}m{month:MM}";
     }

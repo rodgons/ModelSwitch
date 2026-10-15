@@ -16,8 +16,8 @@ public sealed class ApiKeyAuthenticatorTests
     private readonly ApiKeyUsageRecorder _usage;
     private readonly ApiKeyAuthenticator _authenticator;
     private readonly GeneratedApiKey _key = ApiKeyFormat.Generate();
-    private readonly Guid _tenantId = Guid.NewGuid();
-    private readonly Guid _apiKeyId = Guid.NewGuid();
+    private readonly Guid _tenantId = Guid.CreateVersion7();
+    private readonly Guid _apiKeyId = Guid.CreateVersion7();
 
     public ApiKeyAuthenticatorTests()
     {

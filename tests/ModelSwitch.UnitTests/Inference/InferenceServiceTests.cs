@@ -21,8 +21,8 @@ namespace ModelSwitch.UnitTests.Inference;
 public sealed class InferenceServiceTests : IDisposable
 {
     private static readonly Guid _policyId = new("0192f0c8-0000-7000-8000-0000000000a1");
-    private static readonly ProviderModelTarget _target = new(Guid.NewGuid(), Guid.NewGuid(), "p", "ollama", new Uri("http://x/"), null, TimeSpan.FromSeconds(5), "m1");
-    private static readonly ProviderModelTarget _other = new(Guid.NewGuid(), Guid.NewGuid(), "p", "ollama", new Uri("http://x/"), null, TimeSpan.FromSeconds(5), "m2");
+    private static readonly ProviderModelTarget _target = new(Guid.CreateVersion7(), Guid.CreateVersion7(), "p", "ollama", new Uri("http://x/"), null, TimeSpan.FromSeconds(5), "m1");
+    private static readonly ProviderModelTarget _other = new(Guid.CreateVersion7(), Guid.CreateVersion7(), "p", "ollama", new Uri("http://x/"), null, TimeSpan.FromSeconds(5), "m2");
 
     private readonly FakeSnapshots _snapshots = new();
     private readonly FakeAdapters _adapters = new();
@@ -91,7 +91,7 @@ public sealed class InferenceServiceTests : IDisposable
     }
 
     private static InferenceRequest Request(string alias = "balanced")
-        => new(Guid.NewGuid(), Guid.NewGuid(), alias, new NeutralChatRequest([new NeutralMessage(MessageRole.User, "hi")]));
+        => new(Guid.CreateVersion7(), Guid.CreateVersion7(), alias, new NeutralChatRequest([new NeutralMessage(MessageRole.User, "hi")]));
 
     [Fact]
     public async Task Unknown_alias_is_model_not_found()
@@ -166,8 +166,8 @@ public sealed class InferenceServiceTests : IDisposable
     [Fact]
     public void Model_list_shows_the_tenants_aliases_only_sorted_with_a_stable_created_time()
     {
-        var tenant = Guid.NewGuid();
-        var other = Guid.NewGuid();
+        var tenant = Guid.CreateVersion7();
+        var other = Guid.CreateVersion7();
         var policies = new Dictionary<string, Guid> { ["b"] = _policyId, ["a"] = _policyId, ["secret"] = _policyId };
         _snapshots.Current = Snapshot(1, limits: new Dictionary<Guid, TenantLimits>
         {

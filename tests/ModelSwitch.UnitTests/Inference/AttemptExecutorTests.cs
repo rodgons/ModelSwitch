@@ -550,7 +550,7 @@ public sealed class AttemptExecutorTests : IDisposable
 
         public int TotalCalls => _calls.Values.Sum();
 
-        public Guid IdOf(string model) => _ids.TryGetValue(model, out var id) ? id : _ids[model] = Guid.NewGuid();
+        public Guid IdOf(string model) => _ids.TryGetValue(model, out var id) ? id : _ids[model] = Guid.CreateVersion7();
 
         public int Calls(string model) => _calls.GetValueOrDefault(model);
 

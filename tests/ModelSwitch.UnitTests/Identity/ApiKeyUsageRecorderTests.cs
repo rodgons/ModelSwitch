@@ -13,8 +13,8 @@ public sealed class ApiKeyUsageRecorderTests
     public void A_key_is_noted_once_per_minute_and_keys_are_throttled_independently()
     {
         var recorder = new ApiKeyUsageRecorder(_time);
-        var a = Guid.NewGuid();
-        var b = Guid.NewGuid();
+        var a = Guid.CreateVersion7();
+        var b = Guid.CreateVersion7();
 
         recorder.Record(a);
         recorder.Record(b);
@@ -37,8 +37,8 @@ public sealed class ApiKeyUsageRecorderTests
         var recorder = new ApiKeyUsageRecorder(_time);
         var store = new RecordingStore();
         var writer = new ApiKeyUsageWriter(recorder, store, NullLogger<ApiKeyUsageWriter>.Instance);
-        var failing = Guid.NewGuid();
-        var good = Guid.NewGuid();
+        var failing = Guid.CreateVersion7();
+        var good = Guid.CreateVersion7();
         store.FailFor = failing;
 
         recorder.Record(failing);
