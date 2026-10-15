@@ -105,7 +105,7 @@ public sealed class ProviderHangScenario(GatewayFixture gateway) : ScenarioTests
         outcome.Elapsed.ShouldBeInRange(TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(3));
         (await AttemptsAsync(outcome.RequestId)).ShouldBe(
         [
-            ["primary", "ambiguous", "ambiguous", "deadline_exceeded", "", "mock-echo"],
+            ["primary", "ambiguous", "ambiguous", "provider_unavailable", "", "mock-echo"],
             ["fallback", "succeeded", "", "", "", "mock-fallback"],
         ]);
         (await RequestAsync(outcome.RequestId)).ShouldBe(["succeeded", "", "2", "true"]);

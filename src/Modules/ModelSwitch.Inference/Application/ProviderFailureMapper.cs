@@ -4,8 +4,10 @@ using ModelSwitch.SharedKernel.Errors;
 namespace ModelSwitch.Inference.Application;
 
 /// <summary>
-/// Turns a classified Provider failure into the error a client sees. Phase 1 stub for a single Attempt: with no retries
-/// or Fallback, every failure surfaces directly. The messages are fixed text: Provider messages are never copied (ADR-0010).
+/// Turns a classified Provider failure into the error recorded on the Attempt and, when the Attempt loop stops on it, the
+/// error a client sees. A per-Attempt timeout is a Provider failure (<c>provider_unavailable</c>), never <c>deadline_exceeded</c>:
+/// that code is reserved for the request Deadline actually being reached, which only the Attempt loop can tell. The messages are
+/// fixed text: Provider messages are never copied (ADR-0010).
 /// </summary>
 internal static class ProviderFailureMapper
 {
@@ -20,7 +22,7 @@ internal static class ProviderFailureMapper
 
         if (failure.Code is ProviderFailureCodes.Timeout or ProviderFailureCodes.EdgeTimeout)
         {
-            return new Error(ErrorCode.DeadlineExceeded, "The Provider did not answer in time.");
+            return new Error(ErrorCode.ProviderUnavailable, "The Provider did not answer in time.");
         }
 
         return failure.Class == FailureClass.Transient

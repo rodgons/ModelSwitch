@@ -152,9 +152,10 @@ public sealed class InferenceServiceTests : IDisposable
 
     [Theory]
     [InlineData(FailureClass.Permanent, ProviderFailureCodes.ContextLengthExceeded, "context_length_exceeded")]
-    [InlineData(FailureClass.Ambiguous, ProviderFailureCodes.Timeout, "deadline_exceeded")]
-    [InlineData(FailureClass.Transient, ProviderFailureCodes.EdgeTimeout, "deadline_exceeded")]
+    [InlineData(FailureClass.Ambiguous, ProviderFailureCodes.Timeout, "provider_unavailable")]
+    [InlineData(FailureClass.Transient, ProviderFailureCodes.EdgeTimeout, "provider_unavailable")]
     [InlineData(FailureClass.Transient, ProviderFailureCodes.RateLimited, "provider_unavailable")]
+    // A per-Attempt timeout is a Provider failure; deadline_exceeded is only for the request Deadline (routing-and-resilience.md section 4).
     // A Provider answering HTTP 408 is a transient Provider failure, not the request Deadline (routing-and-resilience.md section 3).
     [InlineData(FailureClass.Transient, ProviderFailureCodes.RequestTimeout, "provider_unavailable")]
     [InlineData(FailureClass.Permanent, ProviderFailureCodes.Unauthorized, "provider_error")]

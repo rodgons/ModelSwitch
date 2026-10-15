@@ -151,6 +151,8 @@ for candidate in decision.ordered:
 return the last failure, normalized (provider_unavailable / provider_error / deadline_exceeded)
 ```
 
+A per-Attempt timeout (`timeout`, or an edge `524`) is a Provider failure: its Attempt is `ambiguous` with `provider_error_type = timeout` and `error_code = provider_unavailable`. `deadline_exceeded` is returned to the client only when the request Deadline itself was reached (checked before every Attempt and after the last one); stopping on `maxAttempts` or running out of Candidates returns the last Provider failure.
+
 Bounds:
 
 - **Total Attempts** ≤ `maxAttempts` (default 4), across all Candidates. This bounds *retry amplification*: one client call produces at most 4 Provider calls. The failure-injection report measures it.

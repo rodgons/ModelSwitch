@@ -40,6 +40,8 @@ public sealed class AttemptExecutorTests : IDisposable
 
     private static CompletionOutcome.Failure Http503() => Fail(FailureClass.Transient, ProviderFailureCodes.ServerError, 503);
 
+    private static CompletionOutcome.Failure Timeout() => Fail(FailureClass.Ambiguous, ProviderFailureCodes.Timeout, null);
+
     private ExecutionPlan Plan(IReadOnlyList<string> models, int maxAttempts = 4, int maxRetries = 1, int deadlineMs = 60_000, int attemptTimeoutMs = 30_000)
         => new(
             [.. models.Select(_fleet.Candidate)],
@@ -319,6 +321,31 @@ public sealed class AttemptExecutorTests : IDisposable
         result.Error.Code.ShouldBe(ErrorCode.DeadlineExceeded);
         _fleet.TotalCalls.ShouldBeLessThanOrEqualTo(2);
         _fleet.Calls("b").ShouldBe(0, "no Attempt starts at or after the Deadline");
+    }
+
+    [Fact]
+    public async Task A_per_attempt_timeout_is_recorded_as_a_provider_failure_and_exhausting_candidates_is_not_a_deadline()
+    {
+        _fleet.Script("a", Timeout());
+
+        var result = await RunAsync(Plan(["a"], deadlineMs: 60_000, attemptTimeoutMs: 1_000));
+
+        result.Error.Code.ShouldBe(ErrorCode.ProviderUnavailable);
+        var attempt = _attempts.ShouldHaveSingleItem();
+        attempt.Status.ShouldBe(AttemptStatus.Ambiguous);
+        attempt.ProviderErrorType.ShouldBe(ProviderFailureCodes.Timeout);
+        attempt.ErrorCode.ShouldBe("provider_unavailable");
+    }
+
+    [Fact]
+    public async Task Max_attempts_exhausted_by_timeouts_is_not_a_deadline()
+    {
+        _fleet.Script("a", Timeout());
+        _fleet.Script("b", Timeout());
+
+        var result = await RunAsync(Plan(["a", "b", "c"], deadlineMs: 60_000, attemptTimeoutMs: 1_000, maxAttempts: 2));
+
+        result.Error.Code.ShouldBe(ErrorCode.ProviderUnavailable);
     }
 
     [Fact]

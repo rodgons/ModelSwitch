@@ -42,7 +42,8 @@ internal sealed partial class AttemptExecutor(
     /// <summary>
     /// Runs the plan. Every Attempt, including skipped ones, is appended to <paramref name="attempts"/> as it happens, so the
     /// caller still has them when this throws <see cref="OperationCanceledException"/> because the client went away.
-    /// Fails with <c>provider_unavailable</c>, <c>provider_error</c>, <c>context_length_exceeded</c> or <c>deadline_exceeded</c>.
+    /// Fails with <c>provider_unavailable</c>, <c>provider_error</c> or <c>context_length_exceeded</c> when the Attempts stop for
+    /// their own reasons (MaxAttempts, Candidates exhausted), and with <c>deadline_exceeded</c> only when the Deadline was reached.
     /// </summary>
     public Task<Result<CompletionOutcome.Success>> ExecuteAsync(
         ExecutionPlan plan,
@@ -235,7 +236,8 @@ internal sealed partial class AttemptExecutor(
             }
         }
 
-        if (deadlineReached)
+        // The last Attempt may have used up the Deadline without a further loop turn noticing it.
+        if (deadlineReached || time.GetUtcNow() >= plan.Deadline)
         {
             return new Error(ErrorCode.DeadlineExceeded, "The Deadline was reached before a Provider answered.");
         }
