@@ -48,15 +48,15 @@ public sealed class AttemptExecutorStreamingTests : IDisposable
         => new(new ProviderFailure(failureClass, code, status, null, RequestSent: true));
 
     // OpenAsync drives the fake clock in a tight loop, so on a cold run it can outpace the executor by minutes: the Deadline must be out of reach.
-    private const int DayMs = 86_400_000;
+    private const int _dayMs = 86_400_000;
 
     private ExecutionPlan Plan(params string[] models) => Plan(models, attemptTimeoutMs: 30_000);
 
     private ExecutionPlan Plan(string[] models, int attemptTimeoutMs, int maxRetries = 1)
         => new(
             [.. models.Select(_fleet.Candidate)],
-            new ExecutionSettings(DayMs, attemptTimeoutMs, 4, maxRetries, new BackoffSettings(200, 2_000, FullJitter: true)),
-            _time.GetUtcNow().AddMilliseconds(DayMs));
+            new ExecutionSettings(_dayMs, attemptTimeoutMs, 4, maxRetries, new BackoffSettings(200, 2_000, FullJitter: true)),
+            _time.GetUtcNow().AddMilliseconds(_dayMs));
 
     // Backoff waits and stall timers run on the fake clock, so it has to be driven until the executor finishes.
     private async Task<Result<StreamingAttempt>> OpenAsync(ExecutionPlan plan, CancellationTokenSource? abort = null)
