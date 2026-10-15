@@ -1,0 +1,18 @@
+{
+  "_source": "synthetic",
+  "_captured": null,
+  "_model": "openai/gpt-4.1-nano",
+  "_note": "Hand-written from the documented error body; carries no real data.",
+  "status": 429,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "error": {
+      "message": "You exceeded your current quota, please check your plan and billing details.",
+      "type": "insufficient_quota",
+      "param": null,
+      "code": "insufficient_quota"
+    }
+  }
+}

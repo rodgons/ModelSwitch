@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="fixtures/ollama/**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="fixtures/**/*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

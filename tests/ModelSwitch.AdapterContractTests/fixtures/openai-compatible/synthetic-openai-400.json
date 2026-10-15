@@ -1,0 +1,18 @@
+{
+  "_source": "synthetic",
+  "_captured": null,
+  "_model": "openai/gpt-4.1-nano",
+  "_note": "Hand-written from the documented error body; carries no real data.",
+  "status": 400,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "error": {
+      "message": "Invalid value for 'temperature'.",
+      "type": "invalid_request_error",
+      "param": "temperature",
+      "code": "decimal_above_max_value"
+    }
+  }
+}

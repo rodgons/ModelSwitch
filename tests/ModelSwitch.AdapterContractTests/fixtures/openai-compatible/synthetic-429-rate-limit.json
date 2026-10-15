@@ -1,0 +1,19 @@
+{
+  "_source": "synthetic",
+  "_captured": null,
+  "_model": "openai/gpt-4.1-nano",
+  "_note": "Hand-written from the documented error body; carries no real data.",
+  "status": 429,
+  "headers": {
+    "content-type": "application/json",
+    "retry-after": "3"
+  },
+  "body": {
+    "error": {
+      "message": "Rate limit reached for requests.",
+      "type": "requests",
+      "param": null,
+      "code": "rate_limit_exceeded"
+    }
+  }
+}

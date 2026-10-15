@@ -1,0 +1,21 @@
+{
+  "_source": "synthetic",
+  "_captured": null,
+  "_model": "openai/gpt-4.1-nano",
+  "_note": "Hand-written from the documented error body; carries no real data.",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "error": {
+      "message": "Provider returned error",
+      "code": 429,
+      "metadata": {
+        "provider_name": "OpenAI",
+        "raw": "rate limited"
+      }
+    },
+    "user_id": "user_synthetic"
+  }
+}

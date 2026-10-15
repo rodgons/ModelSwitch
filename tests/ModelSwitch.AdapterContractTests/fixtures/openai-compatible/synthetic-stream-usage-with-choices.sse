@@ -1,0 +1,17 @@
+: _source: synthetic
+: _captured: null
+: _model: openai/gpt-4.1-nano
+: _note: OpenRouter puts usage on a chunk that still has choices, and may repeat it. The Adapter must report it once.
+
+: OPENROUTER PROCESSING
+
+data: {"id":"gen-1760000000-Xk3Provisional0002","provider":"OpenAI","model":"openai/gpt-4.1-nano","object":"chat.completion.chunk","created":1760000000,"choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-1760000000-Xk3Provisional0002","provider":"OpenAI","model":"openai/gpt-4.1-nano","object":"chat.completion.chunk","created":1760000000,"choices":[{"index":0,"delta":{"role":"assistant","content":"Paris"},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-1760000000-Xk3Provisional0002","provider":"OpenAI","model":"openai/gpt-4.1-nano","object":"chat.completion.chunk","created":1760000000,"choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":"stop","native_finish_reason":"stop","logprobs":null}],"usage":{"prompt_tokens":24,"completion_tokens":2,"total_tokens":26,"cost":6.2e-06,"is_byok":false,"prompt_tokens_details":{"cached_tokens":0},"cost_details":{"upstream_inference_cost":6.2e-06},"completion_tokens_details":{"reasoning_tokens":0}}}
+
+data: {"id":"gen-1760000000-Xk3Provisional0002","provider":"OpenAI","model":"openai/gpt-4.1-nano","object":"chat.completion.chunk","created":1760000000,"choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null,"native_finish_reason":null,"logprobs":null}],"usage":{"prompt_tokens":24,"completion_tokens":2,"total_tokens":26,"cost":6.2e-06,"is_byok":false,"prompt_tokens_details":{"cached_tokens":0},"cost_details":{"upstream_inference_cost":6.2e-06},"completion_tokens_details":{"reasoning_tokens":0}}}
+
+data: [DONE]
+

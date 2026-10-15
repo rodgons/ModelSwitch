@@ -1,0 +1,16 @@
+{
+  "_source": "provisional",
+  "_captured": null,
+  "_model": "openai/gpt-4.1-nano",
+  "_note": "Hand-written from OpenRouter/OpenAI documented formats. Not a recording: scripts/record-fixtures overwrites it.",
+  "status": 400,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "error": {
+      "message": "Temperature must be between 0 and 2",
+      "code": 400
+    }
+  }
+}

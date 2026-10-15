@@ -1,0 +1,16 @@
+{
+  "_source": "provisional",
+  "_captured": null,
+  "_model": "openai/gpt-3.5-turbo",
+  "_note": "Hand-written from OpenRouter/OpenAI documented formats. Not a recording: scripts/record-fixtures overwrites it.",
+  "status": 400,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "error": {
+      "message": "This endpoint's maximum context length is 16385 tokens. However, you requested about 31000 tokens (30900 of text input, 100 in the output). Please reduce the length of either one, or use the \"middle-out\" transform to compress your prompt automatically.",
+      "code": 400
+    }
+  }
+}

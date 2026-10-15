@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# Records the OpenAI-compatible Adapter's wire fixtures through OpenRouter, pinned to the OpenAI upstream.
+# See docs/provider-adapters.md section 4 ("Wire fixtures") and ADR-0013.
+#
+# Manual only: it spends real (tiny) credit and is NEVER run in CI. It sends synthetic prompts, nothing else.
+#
+#   OPENROUTER_API_KEY=sk-or-... scripts/record-fixtures [--model openai/gpt-4.1-nano] [--context-model openai/gpt-3.5-turbo]
+#
+# It overwrites the "recorded" fixtures (the ones stamped "provisional" until now) in
+# tests/ModelSwitch.AdapterContractTests/fixtures/openai-compatible/. The hand-written synthetic-* fixtures are never touched.
+# Needs: bash, curl, jq.
+
+set -euo pipefail
+
+MODEL="openai/gpt-4.1-nano"
+CONTEXT_MODEL="openai/gpt-3.5-turbo" # small context window, so the context-length rejection needs only ~120 KB of text
+BASE_URL="https://openrouter.ai/api/v1"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+OUT="$ROOT/tests/ModelSwitch.AdapterContractTests/fixtures/openai-compatible"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --model) MODEL="$2"; shift 2 ;;
+    --context-model) CONTEXT_MODEL="$2"; shift 2 ;;
+    --base-url) BASE_URL="$2"; shift 2 ;; # for testing the script against the Mock Provider
+    --out) OUT="$2"; shift 2 ;;
+    -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+if [[ -n "${CI:-}" ]]; then
+  echo "refusing to run in CI: recording is manual (ADR-0013)" >&2
+  exit 1
+fi
+: "${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY}"
+command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
+command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
+
+CAPTURED="$(date -u +%Y-%m-%d)"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$OUT"
+
+# Headers that identify the account, the request or the session never reach a fixture.
+DENY='^(authorization|proxy-authorization|openai-organization|openai-project|x-request-id|x-generation-id|cf-ray|cookie|set-cookie|.*session.*|.*-id)$'
+
+# Pin every request to the OpenAI upstream, so what is captured is OpenAI's behaviour (ADR-0013).
+PIN='{"provider":{"only":["openai"],"allow_fallbacks":false}}'
+
+SYSTEM="You are a terse assistant."
+QUESTION="What is the capital of France? Answer in one short sentence."
+
+# post NAME KEY JSON: sends JSON to /chat/completions with KEY, leaves status, headers and body in $WORK.
+post() {
+  local key="$1" payload="$2"
+  jq -c ". * $PIN" <<<"$payload" >"$WORK/request.json"
+  # The key travels on curl's stdin config, never on the command line (it would show in `ps`).
+  printf 'header = "Authorization: Bearer %s"\n' "$key" |
+    curl -sS -N -K - -X POST "$BASE_URL/chat/completions" \
+      -H 'Content-Type: application/json' \
+      -D "$WORK/headers.txt" -o "$WORK/body.txt" -w '%{http_code}' \
+      --data-binary @"$WORK/request.json" >"$WORK/status.txt"
+}
+
+headers_json() {
+  jq -Rn --arg deny "$DENY" '
+    [inputs | select(test("^[A-Za-z0-9-]+:")) | capture("^(?<k>[^:]+):[ \t]*(?<v>.*)$")
+      | {key: (.k | ascii_downcase), value: (.v | rtrimstr("\r"))}]
+    | from_entries | with_entries(select(.key | test($deny) | not))' <"$WORK/headers.txt"
+}
+
+# record_json NAME EXPECTED_STATUS MODEL KEY PAYLOAD
+record_json() {
+  local name="$1" expected="$2" model="$3" key="$4" payload="$5"
+  post "$key" "$payload"
+  local status; status="$(<"$WORK/status.txt")"
+  [[ "$status" == "$expected" ]] || echo "WARNING: $name returned $status, expected $expected" >&2
+  local body_args=(--rawfile text "$WORK/body.txt")
+  jq -n --arg src "recorded-openrouter" --arg cap "$CAPTURED" --arg model "$model" \
+        --arg note "Recorded through OpenRouter pinned to the OpenAI upstream. Synthetic prompt." \
+        --argjson status "$status" --argjson headers "$(headers_json)" "${body_args[@]}" '
+    {_source: $src, _captured: $cap, _model: $model, _note: $note, status: $status, headers: $headers}
+    + (($text | try fromjson catch null) as $json | if $json != null then {body: $json} else {body_text: $text} end)' \
+    >"$OUT/$name"
+  echo "recorded $name ($status)"
+}
+
+# record_sse NAME MODEL PAYLOAD
+record_sse() {
+  local name="$1" model="$2" payload="$3"
+  post "$OPENROUTER_API_KEY" "$payload"
+  local status; status="$(<"$WORK/status.txt")"
+  [[ "$status" == "200" ]] || echo "WARNING: $name returned $status, expected 200" >&2
+  {
+    echo ": _source: recorded-openrouter"
+    echo ": _captured: $CAPTURED"
+    echo ": _model: $model"
+    echo ": _note: Recorded through OpenRouter pinned to the OpenAI upstream. Synthetic prompt."
+    echo
+    cat "$WORK/body.txt"
+  } >"$OUT/$name"
+  echo "recorded $name ($status)"
+}
+
+msgs() { jq -nc --arg s "$SYSTEM" --arg u "$1" '[{role:"system",content:$s},{role:"user",content:$u}]'; }
+
+KEY="$OPENROUTER_API_KEY"
+
+record_json completion-text.json 200 "$MODEL" "$KEY" \
+  "$(jq -nc --arg m "$MODEL" --argjson msgs "$(msgs "$QUESTION")" '{model:$m,messages:$msgs,max_tokens:64}')"
+
+record_json completion-length.json 200 "$MODEL" "$KEY" \
+  "$(jq -nc --arg m "$MODEL" --argjson msgs "$(msgs "Explain in detail why the sky is blue.")" '{model:$m,messages:$msgs,max_tokens:16}')"
+
+record_json completion-json-object.json 200 "$MODEL" "$KEY" \
+  "$(jq -nc --arg m "$MODEL" --argjson msgs "$(msgs "Reply in JSON with the keys city and country for the capital of France.")" \
+      '{model:$m,messages:$msgs,max_tokens:64,response_format:{type:"json_object"}}')"
+
+record_json completion-json-schema.json 200 "$MODEL" "$KEY" \
+  "$(jq -nc --arg m "$MODEL" --argjson msgs "$(msgs "$QUESTION")" \
+      '{model:$m,messages:$msgs,max_tokens:64,response_format:{type:"json_schema",json_schema:{name:"answer_schema",strict:true,
+        schema:{type:"object",properties:{answer:{type:"string"}},required:["answer"],additionalProperties:false}}}}')"
+
+record_sse stream-text.sse "$MODEL" \
+  "$(jq -nc --arg m "$MODEL" --argjson msgs "$(msgs "$QUESTION")" '{model:$m,messages:$msgs,max_tokens:64,stream:true,stream_options:{include_usage:true}}')"
+
+record_sse stream-length.sse "$MODEL" \
+  "$(jq -nc --arg m "$MODEL" --argjson msgs "$(msgs "Explain in detail why the sky is blue.")" '{model:$m,messages:$msgs,max_tokens:16,stream:true,stream_options:{include_usage:true}}')"
+
+# Errors. The 400 and 404 are provoked on purpose; the 401 uses a made-up key.
+record_json error-400-invalid-request.json 400 "$MODEL" "$KEY" \
+  "$(jq -nc --arg m "$MODEL" --argjson msgs "$(msgs "$QUESTION")" '{model:$m,messages:$msgs,temperature:5}')"
+
+# Roughly 22k tokens of filler (~100 KB, under the OS limit for a single argument), over the context window of $CONTEXT_MODEL. A rejected request is not billed.
+FILLER="$(printf 'lorem ipsum dolor sit amet %.0s' $(seq 1 3500))"
+record_json error-400-context-length.json 400 "$CONTEXT_MODEL" "$KEY" \
+  "$(jq -nc --arg m "$CONTEXT_MODEL" --argjson msgs "$(msgs "$FILLER")" '{model:$m,messages:$msgs,max_tokens:16}')"
+
+record_json error-401.json 401 "$MODEL" "sk-or-v1-synthetic-invalid-key" \
+  "$(jq -nc --arg m "$MODEL" --argjson msgs "$(msgs "$QUESTION")" '{model:$m,messages:$msgs}')"
+
+record_json error-404-model.json 404 "openai/does-not-exist" "$KEY" \
+  "$(jq -nc --argjson msgs "$(msgs "$QUESTION")" '{model:"openai/does-not-exist",messages:$msgs}')"
+
+echo "done. Review 'git diff' for anything account-specific before committing."

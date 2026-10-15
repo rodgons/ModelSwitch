@@ -1,0 +1,48 @@
+{
+  "_source": "provisional",
+  "_captured": null,
+  "_model": "openai/gpt-4.1-nano",
+  "_note": "Hand-written from OpenRouter/OpenAI documented formats. Not a recording: scripts/record-fixtures overwrites it.",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "id": "gen-1760000000-Xk3Provisional0001",
+    "provider": "OpenAI",
+    "model": "openai/gpt-4.1-nano",
+    "object": "chat.completion",
+    "created": 1760000000,
+    "choices": [
+      {
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "stop",
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"answer\":\"Paris\"}",
+          "refusal": null,
+          "reasoning": null
+        }
+      }
+    ],
+    "system_fingerprint": "fp_provisional",
+    "usage": {
+      "prompt_tokens": 58,
+      "completion_tokens": 6,
+      "total_tokens": 64,
+      "cost": 6.2e-06,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 6.2e-06
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      }
+    }
+  }
+}
