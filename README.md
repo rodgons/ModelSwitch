@@ -21,6 +21,7 @@ A self-hosted AI gateway: one OpenAI-compatible API in front of multiple LLM Pro
 | [docs/observability.md](docs/observability.md) | Traces, metrics, logs, correlation, degradation rules |
 | [docs/evaluation.md](docs/evaluation.md) | Datasets, prompts, evaluators, runs, reproducibility, export |
 | [docs/frontend.md](docs/frontend.md) | Dashboard stack, screens, UX rules |
+| [docs/design-system.md](docs/design-system.md) | Dashboard design system: violet palette, type, spacing, buttons, links, Route Strip, responsive primitives. Rendered in [design-system-specimen.html](docs/design-system-specimen.html) |
 | [docs/testing.md](docs/testing.md) | Test layers, integration/failure/security catalogues, load tests, benchmark report |
 | [docs/deployment.md](docs/deployment.md) | Compose services, quick start, environment variables, migrations |
 | [docs/conventions.md](docs/conventions.md) | Coding standards and CI |
