@@ -8,12 +8,12 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 
 ## Phase 0: Repository skeleton (½ week)
 
-- [ ] `git init`, `.gitignore`, `.editorconfig`, `Directory.Build.props`, `Directory.Packages.props`, `global.json` (SDK 10.0.x)
-- [ ] Empty solution with all projects from [architecture.md §3](architecture.md#3-solution-layout) and the reference graph
-- [ ] Architecture tests for module boundaries and thin endpoints (they pass vacuously at first)
-- [ ] CI workflow: format, build, test, gitleaks
-- [ ] `web/` Vite + Vue + TS scaffold with lint/typecheck/test in CI
-- [ ] `deploy/docker-compose.yml` with postgres + valkey, `.env.example`
+- [x] `git init`, `.gitignore`, `.editorconfig`, `Directory.Build.props`, `Directory.Packages.props`, `global.json` (SDK 10.0.x)
+- [x] Empty solution with all projects from [architecture.md §3](architecture.md#3-solution-layout) and the reference graph
+- [x] Architecture tests for module boundaries and thin endpoints (they pass vacuously at first)
+- [x] CI workflow: format, build, test, gitleaks
+- [x] `web/` Vite + Vue + TS scaffold with lint/typecheck/test in CI
+- [x] `deploy/docker-compose.yml` with postgres + valkey, `.env.example`
 
 **Exit:** `dotnet build` and `pnpm build` are green in CI; `docker compose up postgres valkey` works.
 
