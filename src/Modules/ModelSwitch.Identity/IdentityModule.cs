@@ -8,6 +8,7 @@ using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Identity.Domain;
 using ModelSwitch.Identity.Infrastructure;
 using ModelSwitch.SharedKernel.Hosting;
+using ModelSwitch.SharedKernel.Http;
 using ModelSwitch.SharedKernel.Persistence;
 
 namespace ModelSwitch.Identity;
@@ -30,6 +31,7 @@ public static class IdentityModule
         services.TryAddSingleton<IApiKeyStore, EfApiKeyStore>();
         services.TryAddSingleton<VerifiedKeyCache>();
         services.TryAddSingleton<IApiKeyAuthenticator, ApiKeyAuthenticator>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IReadinessCheck, PostgresReadinessCheck>());
         return services;
     }
 

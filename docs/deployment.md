@@ -63,6 +63,8 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 | `MODELSWITCH__Hosting__PublicBaseUrl` | ✔ | api | used for cookie and CSP settings |
 | `MODELSWITCH__Limits__FailureMode` | | api | `Closed` |
 | `MODELSWITCH__Limits__MaxRequestBodyBytes` | | api | `1048576` |
+| `MODELSWITCH__Limits__MaxMessages` | | api | `256` |
+| `MODELSWITCH__Inference__StaticAliases__<alias>` | Phase 1 only | api | `<providerName>/<providerModelId>`, e.g. `ollama-local/llama3.2`. Temporary stand-in for Routing Policies; removed in Phase 2 |
 | `MODELSWITCH__Outbound__AllowedPrivateHosts` | | api, worker | `""`. Compose sets `ollama,mock-provider` |
 | `MODELSWITCH__Retention__RequestDays` | | worker | `30` |
 | `MODELSWITCH__Circuit__*` | | api, worker | see routing-and-resilience §5 |

@@ -122,6 +122,7 @@ public sealed class ApiKeyAuthenticationHandlerTests
         var services = new ServiceCollection().AddLogging().AddOptions().BuildServiceProvider();
         var context = new DefaultHttpContext { RequestServices = services };
         context.Response.Body = new MemoryStream();
+        context.Request.Path = "/v1/chat/completions";
         if (authorization is not null)
         {
             context.Request.Headers.Authorization = authorization;

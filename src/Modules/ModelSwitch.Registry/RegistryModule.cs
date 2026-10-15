@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using ModelSwitch.Adapters.Abstractions;
 using ModelSwitch.Registry.Contracts;
 using ModelSwitch.Registry.Infrastructure;
 using ModelSwitch.Registry.Infrastructure.Credentials;
@@ -14,6 +15,7 @@ namespace ModelSwitch.Registry;
 
 public static class RegistryModule
 {
+    private const string _appConnection = "ConnectionStrings:Postgres";
     private const string _migratorConnection = "ConnectionStrings:PostgresMigrator";
 
     public static IServiceCollection AddRegistryModule(this IServiceCollection services)
@@ -27,6 +29,29 @@ public static class RegistryModule
         services.TryAddSingleton<ICredentialResolver, CredentialResolver>();
         services.TryAddSingleton<IOutboundDestinationPolicy, OutboundDestinationPolicy>();
         services.TryAddSingleton<IOutboundHandlerFactory, OutboundHandlerFactory>();
+        services.RequireSetting(_appConnection);
+        services.AddDbContextFactory<RegistryDbContext>((provider, options) =>
+            options.UseNpgsql(
+                provider.GetRequiredService<IConfiguration>()[_appConnection],
+                npgsql => npgsql.MigrationsHistoryTable(RegistryDbContext.MigrationsHistoryTable, RegistryDbContext.Schema)));
+        services.TryAddSingleton<IProviderCatalog, EfProviderCatalog>();
+        services.TryAddSingleton<IAdapterFactory, AdapterFactory>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers an Adapter implementation for Providers whose type is <paramref name="typeName"/>. Its
+    /// <c>HttpClient</c> uses the outbound destination policy handler, has no timeout of its own (the Adapter applies
+    /// the Attempt timeout) and no resilience handlers (ADR-0004).
+    /// </summary>
+    public static IServiceCollection AddProviderAdapter<TAdapter>(this IServiceCollection services, string typeName)
+        where TAdapter : class, IProviderAdapter
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentException.ThrowIfNullOrWhiteSpace(typeName);
+        services.AddHttpClient<TAdapter>(client => client.Timeout = Timeout.InfiniteTimeSpan)
+            .ConfigurePrimaryHttpMessageHandler(provider => provider.GetRequiredService<IOutboundHandlerFactory>().CreatePrimaryHandler());
+        services.AddSingleton(new AdapterRegistration(typeName, typeof(TAdapter)));
         return services;
     }
 

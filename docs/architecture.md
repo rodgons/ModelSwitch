@@ -42,6 +42,7 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
 | Shouldly | Assertion messages that name the failing expression, which makes CI failures readable | Plain `Assert`: weaker messages. FluentAssertions: commercial licence |
 | Testcontainers | Real PostgreSQL and Valkey in integration tests, so tests exercise real SQL and Lua | In-memory fakes: hide provider-specific behaviour |
 | WireMock.Net | Scriptable HTTP Provider fixtures for the Adapter contract suite (tests never call a real Provider) | Hand-written `HttpMessageHandler` stubs: cannot test real sockets or timeouts |
+| `Microsoft.AspNetCore.Mvc.Testing` | `WebApplicationFactory<Program>` hosts the real api in integration tests (test project only; ships from the ASP.NET Core team, version tracks the framework patch) | Starting the api as a separate process: slow, no access to its services |
 | NetArchTest | Enforces the module-boundary and endpoint rules in §3 as tests | Code review only: boundaries erode silently |
 | Vue Router, Pinia | Routing and session/UI state for the Vue 3 dashboard | — (official Vue libraries) |
 | TanStack Query (Vue) | Server-state caching, refetching and the loading/error/empty states the UX rules require | Hand-written fetch state in Pinia: duplicated, stale data |

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.SharedKernel.Errors;
+using ModelSwitch.SharedKernel.Http;
 
 namespace ModelSwitch.Api.Authentication;
 
@@ -11,10 +12,10 @@ public static class ApiKeyDefaults
 {
     public const string Scheme = "ApiKey";
 
-    public const string TenantIdClaim = "tenant_id";
-    public const string ApiKeyIdClaim = "api_key_id";
-    public const string KeyPrefixClaim = "key_prefix";
-    public const string ScopeClaim = "scope";
+    public const string TenantIdClaim = ApiKeyClaims.TenantId;
+    public const string ApiKeyIdClaim = ApiKeyClaims.ApiKeyId;
+    public const string KeyPrefixClaim = ApiKeyClaims.KeyPrefix;
+    public const string ScopeClaim = ApiKeyClaims.Scope;
 }
 
 /// <summary>
@@ -75,31 +76,15 @@ internal sealed class ApiKeyAuthenticationHandler(
             Response.Headers.WWWAuthenticate = "Bearer";
         }
 
-        await ProblemFor(error, status).ExecuteAsync(Context);
+        await ProblemFor(error).ExecuteAsync(Context);
     }
 
     protected override Task HandleForbiddenAsync(AuthenticationProperties properties)
     {
         var error = new Error(ErrorCode.InsufficientScope, "The API key does not have the required scope.");
-        return ProblemFor(error, StatusCodes.Status403Forbidden).ExecuteAsync(Context);
+        return ProblemFor(error).ExecuteAsync(Context);
     }
 
-    // RFC 9457 body plus the OpenAI `error` member (ADR-0012).
-    private IResult ProblemFor(Error error, int status) => Results.Problem(
-        statusCode: status,
-        title: error.Message,
-        detail: error.Message,
-        type: $"/errors/{error.Code.Value}",
-        instance: Request.Path,
-        extensions: new Dictionary<string, object?>
-        {
-            ["errorCode"] = error.Code.Value,
-            ["error"] = new Dictionary<string, object?>
-            {
-                ["message"] = error.Message,
-                ["type"] = error.Code.Type,
-                ["code"] = error.Code.Value,
-                ["param"] = null,
-            },
-        });
+    // The shared writer adds the OpenAI `error` member under /v1 (ADR-0012).
+    private IResult ProblemFor(Error error) => ProblemResults.From(Context, error);
 }
