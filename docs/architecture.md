@@ -36,7 +36,7 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
 | Polly v8 | Circuit-breaker state machine and backoff-with-jitter maths (ADR-0004, ADR-0005) | Writing our own breaker: more code to test for no gain |
 | `Microsoft.ML.Tokenizers` | Estimates input tokens for Reservations when the Provider does not report usage | A chars/4 heuristic: underestimates and lets Budgets be exceeded |
 | OpenTelemetry .NET SDK + OTLP exporter | Traces, metrics and logs in a vendor-neutral format (FR-08, NFR-05) | Vendor SDKs: tie the product to one backend |
-| xUnit v3 | Mandated by the constitution | — |
+| xUnit v3 (+ `Microsoft.NET.Test.Sdk`, `xunit.runner.visualstudio`) | Mandated by the constitution. The two extra packages let IDE test explorers discover the tests; CI runs on Microsoft.Testing.Platform | — |
 | Shouldly | Assertion messages that name the failing expression, which makes CI failures readable | Plain `Assert`: weaker messages. FluentAssertions: commercial licence |
 | Testcontainers | Real PostgreSQL and Valkey in integration tests, so tests exercise real SQL and Lua | In-memory fakes: hide provider-specific behaviour |
 | WireMock.Net | Scriptable HTTP Provider fixtures for the Adapter contract suite (tests never call a real Provider) | Hand-written `HttpMessageHandler` stubs: cannot test real sockets or timeouts |
@@ -139,7 +139,7 @@ Only `Contracts/` and the `*Module.cs` entry point are `public`. Everything else
 | Identity | `identity` | `IApiKeyAuthenticator`, `ITenantDirectory`, `IAuditWriter`, current-principal accessors | — |
 | Registry | `registry` | `IProviderCatalog` (snapshot of providers, models, capabilities, current prices), `IAdapterFactory`, `IProviderHealth` | Adapters.Abstractions |
 | Routing | `routing` | `IRouter.Decide(RoutingInput) → RoutingDecision`, `IPolicyStore` | Registry, Identity (tenant model access) |
-| Inference | — (writes through Usage) | `IInferenceService` (used by the HTTP endpoint and by Evaluation) | Routing, Registry, Usage, Identity |
+| Inference | — (writes through Usage) | `IInferenceService` (used by the HTTP endpoint and by Evaluation) | Routing, Registry, Usage, Identity, Adapters.Abstractions (runs Attempts through `IProviderAdapter`) |
 | Usage | `usage` | `IUsageLedger` (open/settle requests, Reservations), `IUsageQueries` | Registry (prices) |
 | Evaluation | `evaluation` | — (endpoints and worker jobs only) | Inference, Usage |
 | Admin | — | — | Contracts/queries of all modules |

@@ -34,13 +34,6 @@ internal static class ArchitectureModel
 
     public static readonly Assembly ApiHost = Assembly.Load("ModelSwitch.Api");
 
-    public static readonly string[] HostNamespaces =
-    [
-        "ModelSwitch.Api",
-        "ModelSwitch.Worker",
-        "ModelSwitch.Migrator",
-    ];
-
     public static TheoryData<string> ModuleCases()
     {
         var data = new TheoryData<string>();

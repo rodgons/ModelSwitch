@@ -1,4 +1,5 @@
 using NetArchTest.Rules;
+using Shouldly;
 
 namespace ModelSwitch.ArchitectureTests;
 
@@ -28,20 +29,17 @@ public sealed class ModuleBoundaryTests
     [MemberData(nameof(AdapterData))]
     public void Adapters_depend_only_on_adapters_abstractions_and_shared_kernel(string adapter)
     {
-        var forbidden = ArchitectureModel.Modules.Keys
-            .Select(m => $"ModelSwitch.{m}")
-            .Concat(ArchitectureModel.HostNamespaces)
-            .Concat(ArchitectureModel.Adapters.Keys
-                .Where(a => a != adapter)
-                .Select(a => $"ModelSwitch.Adapters.{a}"))
-            .ToArray();
+        // An allowlist, which NetArchTest's prefix matching cannot express, so it checks assembly references:
+        // any new ModelSwitch project an Adapter starts using fails here.
+        string[] allowed = ["ModelSwitch.Adapters.Abstractions", "ModelSwitch.SharedKernel"];
 
-        var result = Types.InAssembly(ArchitectureModel.Adapters[adapter])
-            .ShouldNot()
-            .HaveDependencyOnAny(forbidden)
-            .GetResult();
+        var disallowed = ArchitectureModel.Adapters[adapter]
+            .GetReferencedAssemblies()
+            .Select(a => a.Name ?? string.Empty)
+            .Where(name => name.StartsWith("ModelSwitch.", StringComparison.Ordinal) && !allowed.Contains(name))
+            .ToList();
 
-        ArchitectureModel.ShouldHaveNoFailures(result, $"Adapter {adapter} may only use Adapters.Abstractions and SharedKernel");
+        disallowed.ShouldBeEmpty($"Adapter {adapter} may only use Adapters.Abstractions and SharedKernel. Offending references: {string.Join(", ", disallowed)}");
     }
 
     [Theory]
