@@ -48,7 +48,9 @@ Provider endpoints are entered by Owners, but are still validated as untrusted i
 
 - Scheme must be `https`, or `http` only for hosts in `MODELSWITCH__Outbound__AllowedPrivateHosts` (e.g. `ollama`, `mock-provider`, `host.docker.internal`).
 - On save **and** at connect time (`SocketsHttpHandler.ConnectCallback`), the resolved IP addresses are checked. Loopback, link-local (incl. `169.254.169.254` metadata), private (RFC 1918), CGNAT, ULA and multicast are rejected unless the host is in the allow-list. Checking at connect time defeats DNS rebinding.
-- Redirects are disabled on Adapter clients.
+- Redirects and proxies are disabled on Adapter clients (a proxy would connect on the gateway's behalf and bypass the connect-time check). IPv4-mapped, NAT64 (`64:ff9b::/96`) and 6to4 addresses are judged by the IPv4 address they embed.
+- `MODELSWITCH__Outbound__AllowedPrivateHosts` matches the endpoint host exactly (case-insensitive, no subdomain wildcards) and exempts it from the scheme and address checks.
+- `env:NAME` Credential References resolve from process environment variables. Names starting with `MODELSWITCH__` are refused so a Provider cannot read deployment secrets. An unset variable fails with `provider_unavailable`; secrets are never logged.
 - Response size caps apply: 10 MiB for non-streaming, and streams are cut at `maxOutputTokens × 16 bytes + 1 MiB`.
 
 ## 6. Logging and telemetry hygiene
