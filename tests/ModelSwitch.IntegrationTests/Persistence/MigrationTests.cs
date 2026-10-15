@@ -24,14 +24,16 @@ public sealed class MigrationTests(PostgresFixture postgres)
         first["registry"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         second["identity"].ShouldBeEmpty();
         second["registry"].ShouldBeEmpty();
+        first["usage"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
+        second["usage"].ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task Migrations_apply_in_the_fixed_order_identity_then_registry()
+    public async Task Migrations_apply_in_the_fixed_order_identity_registry_usage()
     {
         await using var services = ModuleServices.ForMigrator(await postgres.CreateDatabaseAsync());
 
-        services.GetServices<IModuleMigrator>().Select(m => m.Schema).ShouldBe(["identity", "registry"]);
+        services.GetServices<IModuleMigrator>().Select(m => m.Schema).ShouldBe(["identity", "registry", "usage"]);
     }
 
     [Fact]

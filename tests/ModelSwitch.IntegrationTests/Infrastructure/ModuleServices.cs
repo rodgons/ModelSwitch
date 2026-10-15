@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ModelSwitch.Identity;
 using ModelSwitch.Registry;
 using ModelSwitch.SharedKernel;
+using ModelSwitch.Usage;
 
 namespace ModelSwitch.IntegrationTests.Infrastructure;
 
@@ -17,6 +18,7 @@ public static class ModuleServices
         var services = Base(connectionString, time);
         services.AddIdentityMigrations();
         services.AddRegistryMigrations();
+        services.AddUsageMigrations();
         services.AddIdentitySeeding();
         return services.BuildServiceProvider();
     }

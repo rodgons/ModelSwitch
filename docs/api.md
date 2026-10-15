@@ -30,7 +30,7 @@ The response never reveals *why* a key is invalid, so revoked and unknown keys l
 |---|---|
 | `X-ModelSwitch-Task` | Task Type for rule-based routing, `[a-z0-9_-]{1,64}` |
 | `X-ModelSwitch-Timeout-Ms` | Requests a Deadline shorter than the policy's. Cannot extend it |
-| `X-Client-Request-Id` | Client correlation ID, ≤128 printable ASCII chars, stored as `client_request_id` |
+| `X-Client-Request-Id` | Client correlation ID, ≤128 printable ASCII chars, stored as `client_request_id`. Longer or non-printable values are rejected with `400 invalid_request` |
 | `traceparent` / `tracestate` | W3C trace context, continued if present |
 
 ### Response headers

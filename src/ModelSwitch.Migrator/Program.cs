@@ -7,6 +7,7 @@ using ModelSwitch.Migrator;
 using ModelSwitch.Registry;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Hosting;
+using ModelSwitch.Usage;
 
 // Commands: `migrate` (default) and `seed`. Everything after the command is configuration, e.g.
 //   dotnet run --project src/ModelSwitch.Migrator -- seed --tenant acme --key-name ci
@@ -40,6 +41,7 @@ return await StartupExit.RunAsync(
         // The fixed migration order (docs/deployment.md section 4). Each module appends itself here.
         builder.Services.AddIdentityMigrations();
         builder.Services.AddRegistryMigrations();
+        builder.Services.AddUsageMigrations();
 
         if (command == MigratorCommand.Seed)
         {

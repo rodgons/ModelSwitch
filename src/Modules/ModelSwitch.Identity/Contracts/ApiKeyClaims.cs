@@ -22,4 +22,8 @@ public static class ApiKeyClaims
     /// <summary>The key's Tenant, or null when the principal is not an authenticated API Key.</summary>
     public static Guid? FindTenantId(ClaimsPrincipal? principal)
         => Guid.TryParse(principal?.FindFirst(TenantId)?.Value, out var id) ? id : null;
+
+    /// <summary>The authenticated API Key's id, or null when the principal is not an authenticated API Key.</summary>
+    public static Guid? FindApiKeyId(ClaimsPrincipal? principal)
+        => Guid.TryParse(principal?.FindFirst(ApiKeyId)?.Value, out var id) ? id : null;
 }

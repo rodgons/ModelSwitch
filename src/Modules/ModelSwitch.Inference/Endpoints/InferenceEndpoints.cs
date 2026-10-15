@@ -30,7 +30,12 @@ internal static class InferenceEndpoints
             return ProblemResults.From(http, tenant.Error);
         }
 
-        var result = await chat.CompleteAsync(RequestId.Get(http), tenant.Value, http.Request.Body, http.RequestAborted);
+        var caller = new ChatCaller(
+            RequestId.Get(http),
+            tenant.Value,
+            ApiKeyClaims.FindApiKeyId(http.User),
+            http.Request.Headers[ClientRequestIds.HeaderName].FirstOrDefault());
+        var result = await chat.CompleteAsync(caller, http.Request.Body, http.RequestAborted);
         return result.IsSuccess
             ? Results.Json(ChatCompletionWire.ChatCompletion(result.Value, time.GetUtcNow().ToUnixTimeSeconds()))
             : ProblemResults.From(http, result.Error);

@@ -86,7 +86,10 @@ total_cost  = input_cost + output_cost
 - Cached Input Tokens are only ever *reported*. Estimated and unavailable usage has `cached_input_tokens = null`, so all input is priced at the full rate.
 - The **worst case** used for Reservations assumes nothing is cached, because the cache hit isn't known until the Provider answers. Settlement releases the difference.
 - `decimal` is used throughout. `double` is never used for money.
-- A pure `CostCalculator` in the Usage module's `Domain/` is the only implementation, used by routing (worst case), settlement and evaluation.
+- A pure `CostCalculator` in the Usage module's `Domain/` is the only implementation, used by routing (worst case), settlement and evaluation. Other modules reach it through `ICostCalculator` in `Usage/Contracts`, with `IInputTokenEstimator` for input tokens. Each of `input_cost` and `output_cost` is rounded half-to-even on its own before they are added. A cached count above the input count is clamped to it. If a request has no `max_tokens`, the output ceiling is the policy's `defaultMaxOutputTokens`, else 1024.
+- **Input estimate.** The tokenizer named by the Provider Model's `capabilities.tokenizer` (`o200k_base` or `cl100k_base`) counts each message, plus 4 tokens per message. With no (or an unknown) tokenizer the estimate is `ceil(totalUtf8Bytes / 3) + 4 per message`, recorded as `bytes_div_3`.
+
+**Phase 2 recording.** `IUsageLedger.OpenAsync` (step 8) inserts the `inference_request` with `status = running` and `usage_status = unavailable`; `SettleAsync` (step 11) updates it and inserts the `provider_attempt` rows in one transaction, and does nothing if the request is no longer `running`. Totals, `attempt_count`, `had_fallback`, `selected_provider_model_id` and `usage_status` are derived from the Attempts (an Attempt skipped for an open circuit is excluded). Reservations, `usage_record` rows and budget movement are added behind the same two methods in Phase 3. A request that fails before any Attempt (unknown alias, no eligible model) is recorded as `failed` with zero Attempts. Settlement runs on its own 10 s token, retried with backoff, whatever the client did.
 
 ## 6. Aggregation
 

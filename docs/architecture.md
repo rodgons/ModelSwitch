@@ -36,6 +36,7 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
 | `StackExchange.Redis` | Client for Valkey, which holds the shared Rate and Concurrency Limit counters (ADR-0003) | None. It is the standard .NET Redis-protocol client |
 | Polly v8 | Circuit-breaker state machine and backoff-with-jitter maths (ADR-0004, ADR-0005) | Writing our own breaker: more code to test for no gain |
 | `Microsoft.ML.Tokenizers` | Estimates input tokens for Reservations when the Provider does not report usage | A chars/4 heuristic: underestimates and lets Budgets be exceeded |
+| `Microsoft.ML.Tokenizers.Data.O200kBase`, `Microsoft.ML.Tokenizers.Data.Cl100kBase` | The vocabulary files `Microsoft.ML.Tokenizers` needs for the `o200k_base` and `cl100k_base` encodings. They embed the data, so no download happens at runtime | Fetching vocabularies at startup: needs network access and breaks air-gapped deployments |
 | OpenTelemetry .NET SDK + OTLP exporter | Traces, metrics and logs in a vendor-neutral format (FR-08, NFR-05) | Vendor SDKs: tie the product to one backend |
 | xUnit v3 (+ `Microsoft.NET.Test.Sdk`, `xunit.runner.visualstudio`) | Mandated by the constitution. The two extra packages let IDE test explorers discover the tests; CI runs on Microsoft.Testing.Platform | — |
 | `Microsoft.Extensions.TimeProvider.Testing` | `FakeTimeProvider` for deterministic time in unit tests (framework package, listed for the test project) | Hand-written fake clocks |

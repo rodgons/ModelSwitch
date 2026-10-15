@@ -1,5 +1,6 @@
 using ModelSwitch.Adapters.Abstractions;
 using ModelSwitch.SharedKernel;
+using ModelSwitch.Usage.Contracts;
 
 namespace ModelSwitch.Inference.Contracts;
 
@@ -8,7 +9,22 @@ namespace ModelSwitch.Inference.Contracts;
 /// <param name="TenantId">From the authenticated API Key, never from the request body.</param>
 /// <param name="Alias">The Model Alias the client asked for.</param>
 /// <param name="Chat">The validated, provider-neutral request.</param>
-public sealed record InferenceRequest(Guid RequestId, Guid TenantId, string Alias, NeutralChatRequest Chat);
+public sealed record InferenceRequest(Guid RequestId, Guid TenantId, string Alias, NeutralChatRequest Chat)
+{
+    /// <summary>The API Key that made the request. Required for <see cref="RequestOrigin.Api"/> traffic.</summary>
+    public Guid? ApiKeyId { get; init; }
+
+    /// <summary>Api for HTTP traffic; Evaluation for requests an Evaluation Run generates (then <see cref="EvaluationRunId"/> is set).</summary>
+    public RequestOrigin Origin { get; init; } = RequestOrigin.Api;
+
+    public Guid? EvaluationRunId { get; init; }
+
+    /// <summary><c>X-Client-Request-Id</c>, already validated.</summary>
+    public string? ClientRequestId { get; init; }
+
+    /// <summary>Size of the request body in bytes, recorded as <c>input_bytes</c> (a size, never content).</summary>
+    public int InputBytes { get; init; }
+}
 
 /// <summary>A successful completion. <see cref="Text"/> is content (ADR-0010): it is never logged or persisted.</summary>
 /// <param name="RequestId">The Inference Request ID.</param>
