@@ -37,6 +37,7 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
 | `Microsoft.ML.Tokenizers` | Estimates input tokens for Reservations when the Provider does not report usage | A chars/4 heuristic: underestimates and lets Budgets be exceeded |
 | OpenTelemetry .NET SDK + OTLP exporter | Traces, metrics and logs in a vendor-neutral format (FR-08, NFR-05) | Vendor SDKs: tie the product to one backend |
 | xUnit v3 (+ `Microsoft.NET.Test.Sdk`, `xunit.runner.visualstudio`) | Mandated by the constitution. The two extra packages let IDE test explorers discover the tests; CI runs on Microsoft.Testing.Platform | — |
+| `Microsoft.Extensions.TimeProvider.Testing` | `FakeTimeProvider` for deterministic time in unit tests (framework package, listed for the test project) | Hand-written fake clocks |
 | Shouldly | Assertion messages that name the failing expression, which makes CI failures readable | Plain `Assert`: weaker messages. FluentAssertions: commercial licence |
 | Testcontainers | Real PostgreSQL and Valkey in integration tests, so tests exercise real SQL and Lua | In-memory fakes: hide provider-specific behaviour |
 | WireMock.Net | Scriptable HTTP Provider fixtures for the Adapter contract suite (tests never call a real Provider) | Hand-written `HttpMessageHandler` stubs: cannot test real sockets or timeouts |

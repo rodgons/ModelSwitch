@@ -19,7 +19,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 
 ## Phase 1: Foundation (≈2 weeks)
 
-- [ ] SharedKernel: ids, `Result`, error codes, Money, `TimeProvider` wiring
+- [x] SharedKernel: ids, `Result`, error codes, Money, `TimeProvider` wiring
 - [ ] Migrator host + `identity` (tenant, api_key), `registry` (provider, provider_model, model_price) migrations; seed command
 - [ ] API key authentication handler (HMAC, prefix lookup, cache) + unit tests
 - [ ] Adapters.Abstractions neutral contract

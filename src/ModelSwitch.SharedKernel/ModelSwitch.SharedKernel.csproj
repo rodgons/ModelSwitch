@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="ModelSwitch.UnitTests" />
     <InternalsVisibleTo Include="ModelSwitch.IntegrationTests" />
   </ItemGroup>

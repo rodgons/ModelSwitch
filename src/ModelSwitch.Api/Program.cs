@@ -4,10 +4,12 @@ using ModelSwitch.Identity;
 using ModelSwitch.Inference;
 using ModelSwitch.Registry;
 using ModelSwitch.Routing;
+using ModelSwitch.SharedKernel;
 using ModelSwitch.Usage;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddSharedKernel();
 builder.Services.AddIdentityModule();
 builder.Services.AddRegistryModule();
 builder.Services.AddRoutingModule();

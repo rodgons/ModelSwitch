@@ -3,10 +3,12 @@ using ModelSwitch.Identity;
 using ModelSwitch.Inference;
 using ModelSwitch.Registry;
 using ModelSwitch.Routing;
+using ModelSwitch.SharedKernel;
 using ModelSwitch.Usage;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+builder.Services.AddSharedKernel();
 builder.Services.AddUsageModule();
 builder.Services.AddEvaluationModule();
 builder.Services.AddRegistryModule();
