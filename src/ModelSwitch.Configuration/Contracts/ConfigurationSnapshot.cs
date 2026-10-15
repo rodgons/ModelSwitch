@@ -26,6 +26,10 @@ public sealed record ConfigurationSnapshot(
         TenantLimits.TryGetValue(tenantId, out var limits)
             ? new TenantModelAccess(limits.AllowedAliases, limits.MaxRequestCost)
             : new TenantModelAccess(_everyAlias, MaxRequestCost: null);
+
+    /// <summary>The distinct tokenizer names the snapshot's models declare, in ordinal order.</summary>
+    public string[] Tokenizers() =>
+        [.. Routing.Models.Values.Select(m => m.Capabilities.Tokenizer).Where(t => t is not null).Distinct().Order(StringComparer.Ordinal)!];
 }
 
 /// <summary>Holder of the current <see cref="ConfigurationSnapshot"/> of this instance.</summary>

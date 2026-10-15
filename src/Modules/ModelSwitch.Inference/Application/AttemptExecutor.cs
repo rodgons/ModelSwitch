@@ -335,7 +335,7 @@ internal sealed partial class AttemptExecutor(
             errorCode,
             httpStatus,
             providerErrorType,
-            inputTokens: estimator.Estimate([.. chat.Messages.Select(m => m.Text)], target.Tokenizer).Tokens,
+            inputTokens: estimator.Estimate(ChatInput.Texts(chat), target.Tokenizer).Tokens,
             outputTokens: null,
             UsageSource.Unavailable);
 
@@ -396,7 +396,7 @@ internal sealed partial class AttemptExecutor(
         }
         else
         {
-            var input = estimator.Estimate([.. chat.Messages.Select(m => m.Text)], target.Tokenizer).Tokens;
+            var input = estimator.Estimate(ChatInput.Texts(chat), target.Tokenizer).Tokens;
             var output = forwarded.Length == 0 ? 0 : Math.Max(0, estimator.Estimate([forwarded], target.Tokenizer).Tokens - IInputTokenEstimator.PerMessageOverhead);
             usage = new NeutralUsage(input, output, null);
             source = UsageSource.Estimated;
@@ -438,5 +438,21 @@ internal sealed partial class AttemptExecutor(
     internal static class ProviderErrorTypes
     {
         public const string ClientCancelled = "client_cancelled";
+    }
+}
+
+/// <summary>The message texts of a request, as the input-token estimate takes them. Text is only counted, never kept (ADR-0010).</summary>
+internal static class ChatInput
+{
+    public static string[] Texts(NeutralChatRequest chat)
+    {
+        ArgumentNullException.ThrowIfNull(chat);
+        var texts = new string[chat.Messages.Count];
+        for (var i = 0; i < texts.Length; i++)
+        {
+            texts[i] = chat.Messages[i].Text;
+        }
+
+        return texts;
     }
 }

@@ -117,12 +117,7 @@ internal sealed partial class InferenceService(
     private Routed Route(InferenceRequest request, DateTimeOffset received, bool streaming)
     {
         var snapshot = configuration.Current;
-        var texts = new string[request.Chat.Messages.Count];
-        for (var i = 0; i < texts.Length; i++)
-        {
-            texts[i] = request.Chat.Messages[i].Text;
-        }
-
+        var texts = ChatInput.Texts(request.Chat);
         var input = new RoutingInput(
             request.TenantId,
             request.Alias,
@@ -175,11 +170,9 @@ internal sealed partial class InferenceService(
     }
 
     // One estimate per tokenizer the snapshot's models declare (routing-and-resilience.md section 1); the byte estimate covers the rest.
-    private Routing.Contracts.InputTokenEstimate EstimateInput(ConfigurationSnapshot snapshot, string[] texts)
+    private Routing.Contracts.InputTokenEstimate EstimateInput(ConfigurationSnapshot snapshot, IReadOnlyList<string> texts)
     {
-        var tokenizers = _tokenizers.GetValue(
-            snapshot,
-            static s => [.. s.Routing.Models.Values.Select(m => m.Capabilities.Tokenizer).Where(t => t is not null).Distinct().Order(StringComparer.Ordinal)!]);
+        var tokenizers = _tokenizers.GetValue(snapshot, static s => s.Tokenizers());
         var byTokenizer = new Dictionary<string, int>(tokenizers.Length, StringComparer.Ordinal);
         foreach (var tokenizer in tokenizers)
         {

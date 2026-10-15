@@ -31,6 +31,12 @@ internal static class InferenceEndpoints
             return ProblemResults.From(http, tenant.Error);
         }
 
+        var timeout = RoutingHeaders.ValidateTimeout(http.Request.Headers[RoutingHeaders.TimeoutHeaderName].FirstOrDefault());
+        if (timeout.IsFailure)
+        {
+            return ProblemResults.From(http, timeout.Error);
+        }
+
         var caller = new ChatCaller(
             RequestId.Get(http),
             tenant.Value,
@@ -38,7 +44,7 @@ internal static class InferenceEndpoints
             http.Request.Headers[ClientRequestIds.HeaderName].FirstOrDefault())
         {
             TaskType = http.Request.Headers[RoutingHeaders.TaskHeaderName].FirstOrDefault(),
-            TimeoutMs = http.Request.Headers[RoutingHeaders.TimeoutHeaderName].FirstOrDefault(),
+            Timeout = timeout.Value,
         };
         var result = await chat.CompleteAsync(caller, http.Request.Body, http.RequestAborted);
         if (result.IsFailure)

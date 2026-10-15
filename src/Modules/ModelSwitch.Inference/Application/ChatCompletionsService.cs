@@ -14,8 +14,8 @@ internal sealed record ChatCaller(Guid RequestId, Guid TenantId, Guid? ApiKeyId,
     /// <summary>Raw <c>X-ModelSwitch-Task</c>.</summary>
     public string? TaskType { get; init; }
 
-    /// <summary>Raw <c>X-ModelSwitch-Timeout-Ms</c>.</summary>
-    public string? TimeoutMs { get; init; }
+    /// <summary><c>X-ModelSwitch-Timeout-Ms</c>, parsed at the edge with <see cref="RoutingHeaders.ValidateTimeout"/>.</summary>
+    public TimeSpan? Timeout { get; init; }
 }
 
 /// <summary>Validates the ModelSwitch request headers (api.md section 1): <c>X-ModelSwitch-Task</c> and <c>X-ModelSwitch-Timeout-Ms</c>.</summary>
@@ -145,12 +145,6 @@ internal sealed class ChatCompletionsService(InferenceOptions options, IInferenc
             return taskType.Error;
         }
 
-        var timeout = RoutingHeaders.ValidateTimeout(caller.TimeoutMs);
-        if (timeout.IsFailure)
-        {
-            return timeout.Error;
-        }
-
         var counted = new CountingStream(body);
 
         JsonDocument document;
@@ -177,7 +171,7 @@ internal sealed class ChatCompletionsService(InferenceOptions options, IInferenc
                 ApiKeyId = caller.ApiKeyId,
                 ClientRequestId = clientRequestId.Value,
                 TaskType = taskType.Value,
-                Timeout = timeout.Value,
+                Timeout = caller.Timeout,
                 InputBytes = (int)Math.Min(counted.BytesRead, int.MaxValue),
             };
             if (parsed.Value.Stream)
