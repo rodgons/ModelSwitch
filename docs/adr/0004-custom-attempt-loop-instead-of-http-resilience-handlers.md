@@ -9,4 +9,4 @@ Retries, Fallbacks, Deadlines and Ambiguous-Outcome handling are implemented in 
 ## Consequences
 
 - Adapter `HttpClient`s have only a per-Attempt timeout and no retry handler. Adding a standard resilience handler to them is a bug, not a cleanup.
-- Polly is still used as a library for its circuit-breaker state machine (see ADR-0005) and backoff-with-jitter calculation.
+- Polly is still used as a library for its circuit-breaker state machine (see ADR-0005). The backoff-with-jitter calculation is a few lines in the loop itself, because `Polly.Core` has no public backoff calculator.

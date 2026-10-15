@@ -21,7 +21,7 @@ public sealed class ModelsAndHealthEndpointTests(GatewayFixture gateway) : IClas
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         body.GetProperty("object").GetString().ShouldBe("list");
         var models = body.GetProperty("data").EnumerateArray().ToList();
-        models.Select(m => m.GetProperty("id").GetString()).ShouldBe([GatewayFixture.ChatAlias, GatewayFixture.OllamaAlias]);
+        models.Select(m => m.GetProperty("id").GetString()).ShouldBe([GatewayFixture.ChatAlias, GatewayFixture.OllamaAlias, GatewayFixture.ResilientAlias]);
         models.ShouldAllBe(m => m.GetProperty("object").GetString() == "model" && m.GetProperty("owned_by").GetString() == "modelswitch");
         body.ToString().ShouldNotContain("mock-echo");
     }

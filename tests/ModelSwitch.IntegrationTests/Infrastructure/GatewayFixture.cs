@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -19,6 +20,12 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
 {
     public const string ChatAlias = "balanced";
     public const string OllamaAlias = "local";
+
+    /// <summary><c>mock-echo</c> first, then <c>mock-fallback</c>, both on the OpenAI-protocol Mock Provider.</summary>
+    public const string ResilientAlias = "resilient";
+
+    public const string PrimaryModel = "mock-echo";
+    public const string FallbackModel = "mock-fallback";
 
     private RunningMockProvider? _mock;
     private Factory? _factory;
@@ -53,8 +60,8 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
         }
 
         await ExecuteAsync("update identity.api_key set scopes = array['models:read'] where name = 'models-only'");
-        await InsertProviderAsync("mock-openai", "openai_compatible", new Uri(_mock.BaseAddress, "v1").ToString());
-        await InsertProviderAsync("mock-ollama", "ollama", _mock.BaseAddress.ToString());
+        await InsertProviderAsync("mock-openai", "openai_compatible", new Uri(_mock.BaseAddress, "v1").ToString(), PrimaryModel, FallbackModel);
+        await InsertProviderAsync("mock-ollama", "ollama", _mock.BaseAddress.ToString(), PrimaryModel);
 
         _factory = new Factory(ConnectionString);
         Client = Authenticated(full.PlaintextKey);
@@ -94,7 +101,17 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
         await command.ExecuteNonQueryAsync();
     }
 
-    private async Task InsertProviderAsync(string name, string adapterType, string endpoint)
+    /// <summary>Scripts a fault on the Mock Provider for one of its model ids (e.g. <c>status=503;times=2</c>); null clears all faults.</summary>
+    public async Task SetFaultAsync(string? model, string? fault)
+    {
+        using var http = new HttpClient { BaseAddress = _mock!.BaseAddress };
+        var response = model is null || fault is null
+            ? await http.DeleteAsync(new Uri("/__scenarios", UriKind.Relative))
+            : await http.PostAsJsonAsync(new Uri("/__scenarios", UriKind.Relative), new { model, fault });
+        response.EnsureSuccessStatusCode();
+    }
+
+    private async Task InsertProviderAsync(string name, string adapterType, string endpoint, params string[] models)
     {
         var providerId = Guid.CreateVersion7();
         await using var connection = new NpgsqlConnection(ConnectionString);
@@ -103,16 +120,27 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
             """
             insert into registry.provider (id, name, adapter_type, endpoint, request_timeout_ms, enabled, created_at, updated_at)
             values (@id, @name, @type, @endpoint, 10000, true, now(), now());
-            insert into registry.provider_model (id, provider_id, provider_model_id, display_name, capabilities, enabled, created_at, updated_at)
-            values (@modelId, @id, 'mock-echo', 'Mock echo', '{}'::jsonb, true, now(), now());
             """,
             connection);
         command.Parameters.AddWithValue("id", providerId);
-        command.Parameters.AddWithValue("modelId", Guid.CreateVersion7());
         command.Parameters.AddWithValue("name", name);
         command.Parameters.AddWithValue("type", adapterType);
         command.Parameters.AddWithValue("endpoint", endpoint);
         await command.ExecuteNonQueryAsync();
+
+        foreach (var model in models)
+        {
+            await using var insertModel = new NpgsqlCommand(
+                """
+                insert into registry.provider_model (id, provider_id, provider_model_id, display_name, capabilities, enabled, created_at, updated_at)
+                values (@modelId, @id, @model, @model, '{}'::jsonb, true, now(), now());
+                """,
+                connection);
+            insertModel.Parameters.AddWithValue("id", providerId);
+            insertModel.Parameters.AddWithValue("modelId", Guid.CreateVersion7());
+            insertModel.Parameters.AddWithValue("model", model);
+            await insertModel.ExecuteNonQueryAsync();
+        }
     }
 
     private sealed class Factory(string connectionString) : WebApplicationFactory<ApiHost>
@@ -127,6 +155,7 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
                 ["Outbound:AllowedPrivateHosts"] = "127.0.0.1",
                 [$"Inference:StaticAliases:{ChatAlias}"] = "mock-openai/mock-echo",
                 [$"Inference:StaticAliases:{OllamaAlias}"] = "mock-ollama/mock-echo",
+                [$"Inference:StaticAliases:{ResilientAlias}"] = $"mock-openai/{PrimaryModel},mock-openai/{FallbackModel}",
             }));
         }
     }

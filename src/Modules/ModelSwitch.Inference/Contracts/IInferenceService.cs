@@ -24,6 +24,11 @@ public sealed record InferenceRequest(Guid RequestId, Guid TenantId, string Alia
 
     /// <summary>Size of the request body in bytes, recorded as <c>input_bytes</c> (a size, never content).</summary>
     public int InputBytes { get; init; }
+
+    /// <summary>
+    /// <c>X-ModelSwitch-Timeout-Ms</c>: a Deadline shorter than the Routing Policy's. It can shorten the Deadline, never extend it.
+    /// </summary>
+    public TimeSpan? Timeout { get; init; }
 }
 
 /// <summary>A successful completion. <see cref="Text"/> is content (ADR-0010): it is never logged or persisted.</summary>
@@ -47,8 +52,8 @@ public sealed record InferenceResult(Guid RequestId, string Alias, string Text, 
 /// completion. The HTTP endpoint and, later, Evaluation both call it in-process.
 /// </summary>
 /// <remarks>
-/// Phase 1 stub: the Model Alias is bound statically to one Provider Model and there is one Attempt. Routing, retries,
-/// Fallback, limits and usage recording arrive in Phase 2 behind this same interface.
+/// Runs the Attempt loop (retries, backoff, Fallback, Deadline) over a static alias binding for now. Routing Policies
+/// and limits arrive behind this same interface.
 /// </remarks>
 public interface IInferenceService
 {

@@ -39,9 +39,9 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [x] `routing` schema: policies, versions, aliases; definition JSON Schema + semantic validation
 - [x] `IRouter` pure implementation: eligibility filters + three ranking strategies + table-driven tests
 - [x] Tokenizer-based input estimation and worst-case cost
-- [ ] `AttemptExecutor`: deadlines, retries with backoff+jitter, Retry-After, Fallback, cancellation
-- [ ] Failure classification in both Adapters (contract-tested)
-- [ ] Per-instance circuit breakers + health snapshot job
+- [x] `AttemptExecutor`: deadlines, retries with backoff+jitter, Retry-After, Fallback, cancellation
+- [x] Failure classification in both Adapters (contract-tested)
+- [x] Per-instance circuit breakers + health snapshot job
 - [ ] SSE streaming end-to-end: first-token rule, keep-alives, mid-stream error event, disconnect cancellation
 - [x] `usage` schema: `inference_request`, `provider_attempt` (+ partitions); request/attempt recording
 - [x] Runtime configuration snapshot + NOTIFY/poll refresh

@@ -129,6 +129,41 @@ namespace ModelSwitch.Registry.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ModelSwitch.Registry.Domain.ProviderHealthSnapshot", b =>
+                {
+                    b.Property<string>("InstanceId")
+                        .HasColumnType("text")
+                        .HasColumnName("instance_id");
+
+                    b.Property<Guid>("ProviderModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_model_id");
+
+                    b.Property<DateTimeOffset>("CapturedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("captured_at");
+
+                    b.Property<string>("CircuitState")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("circuit_state");
+
+                    b.Property<int>("WindowCalls")
+                        .HasColumnType("integer")
+                        .HasColumnName("window_calls");
+
+                    b.Property<float>("WindowFailureRate")
+                        .HasColumnType("real")
+                        .HasColumnName("window_failure_rate");
+
+                    b.HasKey("InstanceId", "ProviderModelId");
+
+                    b.ToTable("provider_health_snapshot", "registry", t =>
+                        {
+                            t.HasCheckConstraint("ck_provider_health_snapshot_circuit_state", "circuit_state in ('closed', 'half_open', 'open')");
+                        });
+                });
+
             modelBuilder.Entity("ModelSwitch.Registry.Domain.ProviderModel", b =>
                 {
                     b.Property<Guid>("Id")

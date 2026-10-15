@@ -133,7 +133,7 @@ for candidate in decision.ordered:
     for try in 0..policy.maxRetriesPerCandidate:
         if attempts == maxAttempts or now >= deadline or cancelled: stop
         attempts++
-        timeout = min(attemptTimeoutMs, deadline - now)
+        timeout = min(attemptTimeoutMs, deadline - now, provider.requestTimeout)
         outcome = adapter.Execute(candidate, request, timeout, ct)
         record Attempt(outcome)
         circuit(candidate).Report(outcome)
@@ -141,8 +141,10 @@ for candidate in decision.ordered:
         if outcome.Class == permanent and not fallback-eligible: return failure
         if streaming and firstTokenSent: return stream_interrupted
         if outcome.Class == transient and try < maxRetries:
-            delay = backoff(try) with full jitter, or RetryAfter
-            if now + delay + minAttemptBudget > deadline: break  // go to the next candidate
+            delay = RetryAfter if present, else backoff(try) with full jitter
+            if RetryAfter present: it must be ≤ 5 s and ≤ (deadline - now) - attemptTimeout
+            else: now + delay + minAttemptBudget (500 ms) must be ≤ deadline
+            if it does not fit: break  // go to the next candidate
             await delay (cancellation-aware)
             continue
         break   // next candidate
@@ -153,11 +155,13 @@ Bounds:
 
 - **Total Attempts** ≤ `maxAttempts` (default 4), across all Candidates. This bounds *retry amplification*: one client call produces at most 4 Provider calls. The failure-injection report measures it.
 - **Total time** ≤ Deadline. The Deadline is `min(policy.deadlineMs, X-ModelSwitch-Timeout-Ms)` from request receipt.
+- **Skipped Attempts.** A Candidate whose circuit is open is recorded as a `skipped_circuit_open` Attempt (it consumes an `attempt_number` but not `maxAttempts`). When nothing was called because every circuit was open the request fails `503 provider_unavailable`. A Retry-After on the response is not emitted yet.
+- **Backoff maths** is hand-written (`RetryPolicy.Backoff`): `Polly.Core` has no public backoff API, only its retry strategy, which the attempt loop must not use (ADR-0004). Full jitter is a uniform sample from zero to `min(maxMs, baseMs * 2^try)`, taken from an injectable source so tests are deterministic.
 - **Cancellation** is checked before every Attempt and every backoff delay, and is passed into the `HttpClient` call.
 
 ## 5. Circuit breakers
 
-There is one breaker per Provider Model per instance (ADR-0005). It is built on Polly's circuit breaker state machine and fed manually by `Report(outcome)`.
+There is one breaker per Provider Model per instance (ADR-0005), behind `IProviderHealth` (Registry). It is built on Polly's circuit breaker state machine. The breaker gates the call itself (`IProviderHealth.ExecuteAsync`): an open circuit rejects without calling the Provider, and a half-open one admits a single probe, which Polly guarantees only for calls that run through it. Polly does not expose its sampling window, so the breaker also keeps a small window of outcomes for the health snapshot.
 
 | Setting (deployment config) | Default |
 |---|---|
@@ -167,10 +171,14 @@ There is one breaker per Provider Model per instance (ADR-0005). It is built on 
 | Break duration | 30 s, doubling on each consecutive re-open up to 5 min |
 | Half-open | 1 probe Attempt at a time. Other requests treat the breaker as open |
 
-**Counted as failures:** transient, ambiguous, and Provider 401/403.
+The settings are deployment configuration: `Circuit:SamplingWindowSeconds`, `Circuit:MinimumCalls`, `Circuit:FailureRatio`, `Circuit:BreakSeconds`, `Circuit:MaxBreakSeconds`, `Circuit:SnapshotIntervalSeconds`, `Circuit:InstanceId` (env: `MODELSWITCH__Circuit__*`). Invalid values fall back to the defaults.
+
+**Counted as failures:** transient, ambiguous, and Provider 401/403 and billing/quota failures (402, billing 429).
 **Not counted:** permanent request errors (400/404/413/422), client cancellations, and content filters. Counting these would let one tenant's bad requests trip the breaker for everyone.
 
 Every state transition emits a structured log line, a metric (`modelswitch.circuit.transitions`) and a span event.
+
+**Health snapshot.** Each api instance upserts `registry.provider_health_snapshot` every 15 s (`ProviderHealthSnapshotService`, a hosted service in the host that owns the breakers). It cannot run in the worker: the circuits live in the api process's memory. Rows are keyed by `(instance_id, provider_model_id)`; `instance_id` defaults to the machine (container) name.
 
 ## 6. Streaming specifics
 

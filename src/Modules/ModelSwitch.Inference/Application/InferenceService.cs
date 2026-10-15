@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
-using ModelSwitch.Adapters.Abstractions;
 using ModelSwitch.Inference.Contracts;
 using ModelSwitch.Registry.Contracts;
+using ModelSwitch.Routing.Contracts;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Errors;
 using ModelSwitch.Usage.Contracts;
@@ -10,18 +10,17 @@ using ModelSwitch.Usage.Contracts;
 namespace ModelSwitch.Inference.Application;
 
 /// <summary>
-/// Phase 1 stub of <see cref="IInferenceService"/>: resolves the alias from <see cref="InferenceOptions.StaticAliases"/>,
-/// binds one Adapter and makes exactly one Attempt. Temporary until Phase 2 replaces the alias lookup with Routing and
-/// adds the Attempt loop and limits. It does record the request: one <c>inference_request</c> opened before the Attempt
-/// and settled after it, with the Attempt(s) in between, so the history is the same shape the full executor will write.
+/// <see cref="IInferenceService"/> with a static candidate source: the alias is resolved from
+/// <see cref="InferenceOptions.StaticAliases"/> into an ordered Candidate list (temporary, until Routing and the runtime
+/// configuration snapshot replace it) and run by the <see cref="AttemptExecutor"/>. The request is recorded: one
+/// <c>inference_request</c> opened before the first Attempt and settled after the last, with every Attempt in between.
 /// It never logs or persists content (ADR-0010).
 /// </summary>
 internal sealed partial class InferenceService(
     InferenceOptions options,
     IProviderCatalog catalog,
-    IAdapterFactory adapters,
+    AttemptExecutor executor,
     IUsageLedger ledger,
-    IInputTokenEstimator estimator,
     TimeProvider time,
     ILogger<InferenceService> logger) : IInferenceService
 {
@@ -83,124 +82,45 @@ internal sealed partial class InferenceService(
 
     private async Task<Result<InferenceResult>> ExecuteAsync(InferenceRequest request, List<AttemptRecord> attempts, CancellationToken cancellationToken)
     {
+        var received = time.GetUtcNow();
         var binding = options.StaticAliases.FirstOrDefault(a => string.Equals(a.Alias, request.Alias, StringComparison.Ordinal));
         if (binding is null)
         {
             return new Error(ErrorCode.ModelNotFound, "The requested model does not exist.");
         }
 
-        var target = await catalog.FindEnabledAsync(binding.ProviderName, binding.ProviderModelIdentifier, cancellationToken);
-        if (target is null)
+        var candidates = new List<RankedCandidate>();
+        foreach (var (providerName, identifier) in binding.Targets)
+        {
+            // Skipped, not fatal, when disabled or unknown: the next Candidate can still serve the request.
+            var target = await catalog.FindEnabledAsync(providerName, identifier, cancellationToken);
+            if (target is not null)
+            {
+                candidates.Add(new RankedCandidate(target.ProviderModelId, target.ProviderId, target.ProviderName, target.ProviderModelIdentifier, WorstCaseEstimatedCost: 0m));
+            }
+        }
+
+        if (candidates.Count == 0)
         {
             return new Error(ErrorCode.NoEligibleModel, "No eligible model can serve this request.");
         }
 
-        var bound = await adapters.BindAsync(target, cancellationToken);
-        if (bound.IsFailure)
+        var settings = ExecutionSettings.Default;
+        var deadline = received + TimeSpan.FromMilliseconds(settings.DeadlineMs);
+        if (request.Timeout is { } requested && received + requested < deadline)
         {
-            return bound.Error;
+            deadline = received + requested;
         }
 
-        var startedAt = time.GetUtcNow();
-        CompletionOutcome outcome;
-        try
+        var executed = await executor.ExecuteAsync(new ExecutionPlan(candidates, settings, deadline), request.Chat, attempts, cancellationToken);
+        if (executed.IsFailure)
         {
-            outcome = await bound.Value.Adapter.CompleteAsync(bound.Value.Context, request.Chat, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            attempts.Add(Ambiguous(request, target, startedAt, ProviderErrorTypes.ClientCancelled, httpStatus: null, errorCode: null));
-            throw;
+            return executed.Error;
         }
 
-        switch (outcome)
-        {
-            case CompletionOutcome.Success success:
-                attempts.Add(Succeeded(target, startedAt, success.Usage));
-                return new InferenceResult(request.RequestId, request.Alias, success.Text, success.FinishReason, success.Usage, 1);
-
-            case CompletionOutcome.Failure failure:
-                var error = ProviderFailureMapper.ToError(failure.Error);
-                attempts.Add(
-                    failure.Error.Class == FailureClass.Ambiguous
-                        ? Ambiguous(request, target, startedAt, failure.Error.Code, failure.Error.HttpStatus, error.Code.Value)
-                        : Failed(target, startedAt, failure.Error, error.Code.Value));
-                return error;
-
-            default:
-                return new Error(ErrorCode.InternalError, "An internal error occurred.");
-        }
+        var success = executed.Value;
+        return new InferenceResult(request.RequestId, request.Alias, success.Text, success.FinishReason, success.Usage, attempts.Count(a => a.Status != AttemptStatus.SkippedCircuitOpen));
     }
-
-    private AttemptRecord Succeeded(ProviderModelTarget target, DateTimeOffset startedAt, NeutralUsage? usage)
-        => Record(
-            target,
-            startedAt,
-            AttemptStatus.Succeeded,
-            errorClass: null,
-            errorCode: null,
-            httpStatus: null,
-            providerErrorType: null,
-            inputTokens: usage?.InputTokens,
-            outputTokens: usage?.OutputTokens,
-            usage is null ? UsageSource.Unavailable : UsageSource.Reported);
-
-    // A definite failure cost nothing: the Provider refused the call, so zero tokens are the known truth, not a guess.
-    private AttemptRecord Failed(ProviderModelTarget target, DateTimeOffset startedAt, ProviderFailure failure, string errorCode)
-        => Record(
-            target,
-            startedAt,
-            AttemptStatus.Failed,
-            failure.Class == FailureClass.Transient ? AttemptErrorClass.Transient : AttemptErrorClass.Permanent,
-            errorCode,
-            failure.HttpStatus,
-            failure.Code,
-            inputTokens: 0,
-            outputTokens: 0,
-            UsageSource.Reported);
-
-    // Ambiguous: possibly billed. Input is the estimate and output is unknown (usage-and-budgets.md section 4). The Phase 1
-    // target carries no tokenizer name, so the pessimistic byte estimate applies until the catalog snapshot supplies one.
-    private AttemptRecord Ambiguous(InferenceRequest request, ProviderModelTarget target, DateTimeOffset startedAt, string providerErrorType, int? httpStatus, string? errorCode)
-        => Record(
-            target,
-            startedAt,
-            AttemptStatus.Ambiguous,
-            AttemptErrorClass.Ambiguous,
-            errorCode,
-            httpStatus,
-            providerErrorType,
-            inputTokens: estimator.Estimate([.. request.Chat.Messages.Select(m => m.Text)], tokenizer: null).Tokens,
-            outputTokens: null,
-            UsageSource.Unavailable);
-
-    private AttemptRecord Record(
-        ProviderModelTarget target,
-        DateTimeOffset startedAt,
-        AttemptStatus status,
-        AttemptErrorClass? errorClass,
-        string? errorCode,
-        int? httpStatus,
-        string? providerErrorType,
-        int? inputTokens,
-        int? outputTokens,
-        UsageSource usageSource)
-        => new(
-            AttemptNumber: 1,
-            target.ProviderId,
-            target.ProviderModelId,
-            AttemptKind.Primary,
-            status,
-            errorClass,
-            errorCode,
-            httpStatus,
-            providerErrorType,
-            startedAt,
-            time.GetUtcNow(),
-            TtftMs: null,
-            inputTokens,
-            outputTokens,
-            usageSource);
 
     /// <summary>
     /// Step 11. Runs on its own short-timeout token, never the client's, so an aborted request is still recorded. Retried
@@ -262,9 +182,4 @@ internal sealed partial class InferenceService(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Settling request {RequestId} timed out; it stays 'running' until the sweeper recovers it.")]
     private static partial void LogSettleGaveUp(ILogger logger, Guid requestId);
-
-    private static class ProviderErrorTypes
-    {
-        public const string ClientCancelled = "client_cancelled";
-    }
 }

@@ -8,5 +8,5 @@ Each gateway instance keeps its own circuit breaker per Provider Model, based on
 
 ## Consequences
 
-- Instances may briefly disagree about Provider Health. The dashboard shows health per instance plus an aggregate, and the worker periodically writes each instance's snapshot to PostgreSQL.
+- Instances may briefly disagree about Provider Health. The dashboard shows health per instance plus an aggregate, and each instance periodically writes its own snapshot to PostgreSQL (the breakers live in the api process, so the api host runs the job, not the worker).
 - Circuit tests run against one instance. Cross-instance tests apply only to Rate Limits and Concurrency Limits.

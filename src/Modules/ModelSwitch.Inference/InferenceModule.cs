@@ -15,6 +15,8 @@ public static class InferenceModule
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton(provider => InferenceOptions.From(provider.GetRequiredService<IConfiguration>()));
+        services.TryAddSingleton<IJitterSource, RandomJitterSource>();
+        services.TryAddSingleton<AttemptExecutor>();
         services.TryAddSingleton<IInferenceService, InferenceService>();
         services.TryAddSingleton<ChatCompletionsService>();
         services.TryAddSingleton<ModelListService>();

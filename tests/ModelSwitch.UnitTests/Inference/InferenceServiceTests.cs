@@ -22,9 +22,15 @@ public sealed class InferenceServiceTests
     private InferenceService Service() => new(
         new InferenceOptions { StaticAliases = [new StaticAliasBinding("balanced", "p", "m1")] },
         _catalog,
-        _adapters,
+        new AttemptExecutor(
+            _catalog,
+            _adapters,
+            new ModelSwitch.Registry.Infrastructure.Health.ProviderHealth(new ModelSwitch.Registry.Infrastructure.Health.CircuitOptions(), _time, Microsoft.Extensions.Logging.Abstractions.NullLogger<ModelSwitch.Registry.Infrastructure.Health.ProviderHealth>.Instance),
+            new ModelSwitch.Usage.Domain.InputTokenEstimator(),
+            new RandomJitterSource(),
+            _time,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AttemptExecutor>.Instance),
         _ledger,
-        new ModelSwitch.Usage.Domain.InputTokenEstimator(),
         _time,
         Microsoft.Extensions.Logging.Abstractions.NullLogger<InferenceService>.Instance);
 
@@ -75,13 +81,26 @@ public sealed class InferenceServiceTests
         result.Value.ToString().ShouldNotContain("hello");
     }
 
+    // A transient failure is retried after a backoff wait on the fake clock, so the clock has to be driven.
+    private async Task<Result<InferenceResult>> CompleteDrivingTimeAsync(InferenceRequest request)
+    {
+        var pending = Service().CompleteAsync(request, CancellationToken.None);
+        while (!pending.IsCompleted)
+        {
+            _time.Advance(TimeSpan.FromMilliseconds(500));
+            await Task.Yield();
+        }
+
+        return await pending;
+    }
+
     [Fact]
     public async Task Provider_failure_is_mapped_to_a_client_error()
     {
         _catalog.Target = _target;
         _adapters.Adapter.Outcome = new CompletionOutcome.Failure(new ProviderFailure(FailureClass.Transient, ProviderFailureCodes.ServerError, 503, null, true));
 
-        var result = await Service().CompleteAsync(Request(), CancellationToken.None);
+        var result = await CompleteDrivingTimeAsync(Request());
 
         result.Error.Code.ShouldBe(ErrorCode.ProviderUnavailable);
     }
@@ -119,13 +138,17 @@ public sealed class InferenceServiceTests
         {
             ["Inference:StaticAliases:balanced"] = "ollama/llama3.2:1b",
             ["Inference:StaticAliases:broken"] = "noslash",
+            ["Inference:StaticAliases:resilient"] = "a/m1, b/m2",
+            ["Inference:StaticAliases:half-broken"] = "a/m1,noslash",
             ["Limits:MaxRequestBodyBytes"] = "2048",
             ["Limits:MaxMessages"] = "not-a-number",
         }).Build();
 
         var options = InferenceOptions.From(configuration);
 
-        options.StaticAliases.ShouldBe([new StaticAliasBinding("balanced", "ollama", "llama3.2:1b")]);
+        options.StaticAliases.Select(a => a.Alias).ShouldBe(["balanced", "resilient"], ignoreOrder: true);
+        options.StaticAliases.Single(a => a.Alias == "balanced").Targets.ShouldBe([("ollama", "llama3.2:1b")]);
+        options.StaticAliases.Single(a => a.Alias == "resilient").Targets.ShouldBe([("a", "m1"), ("b", "m2")], "Candidates are in listed order");
         options.MaxRequestBodyBytes.ShouldBe(2048);
         options.MaxMessages.ShouldBe(InferenceOptions.DefaultMaxMessages);
     }
@@ -175,9 +198,11 @@ public sealed class InferenceServiceTests
         _catalog.Target = _target;
         _adapters.Adapter.Outcome = new CompletionOutcome.Failure(new ProviderFailure(FailureClass.Transient, ProviderFailureCodes.ServerError, 503, null, true));
 
-        await Service().CompleteAsync(Request(), CancellationToken.None);
+        await CompleteDrivingTimeAsync(Request());
 
-        var attempt = _ledger.Settled.Single().Attempts.Single();
+        var attempts = _ledger.Settled.Single().Attempts;
+        attempts.Count.ShouldBe(2, "a transient failure is retried once on the same model");
+        var attempt = attempts[0];
         attempt.Status.ShouldBe(AttemptStatus.Failed);
         attempt.ErrorClass.ShouldBe(AttemptErrorClass.Transient);
         attempt.HttpStatus.ShouldBe(503);
@@ -204,9 +229,8 @@ public sealed class InferenceServiceTests
     public async Task Client_abort_settles_a_cancelled_request_on_a_fresh_token_and_rethrows()
     {
         _catalog.Target = _target;
-        _adapters.Adapter.Throw = true;
         using var aborted = new CancellationTokenSource();
-        await aborted.CancelAsync();
+        _adapters.Adapter.CancelOnCall = aborted;
 
         await Should.ThrowAsync<OperationCanceledException>(() => Service().CompleteAsync(Request(), aborted.Token));
 
@@ -285,12 +309,21 @@ public sealed class InferenceServiceTests
     {
         public CompletionOutcome Outcome { get; set; } = new CompletionOutcome.Success("ok", FinishReason.Stop, null);
 
-        public bool Throw { get; set; }
+        /// <summary>Simulates the client aborting while the call is in flight.</summary>
+        public CancellationTokenSource? CancelOnCall { get; set; }
 
         public string AdapterType => "fake";
 
         public Task<CompletionOutcome> CompleteAsync(AdapterContext ctx, NeutralChatRequest request, CancellationToken ct)
-            => Throw ? throw new OperationCanceledException(ct) : Task.FromResult(Outcome);
+        {
+            if (CancelOnCall is { } source)
+            {
+                source.Cancel();
+                throw new OperationCanceledException(ct);
+            }
+
+            return Task.FromResult(Outcome);
+        }
 
         public IAsyncEnumerable<StreamEvent> StreamAsync(AdapterContext ctx, NeutralChatRequest request, CancellationToken ct) => throw new NotSupportedException();
 

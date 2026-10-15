@@ -176,6 +176,19 @@ public abstract partial class AdapterContract<TAdapter>
         events.Any(e => e is StreamEvent.Finish).ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task A_non_streaming_body_cut_mid_way_fails_ambiguous_connection_reset()
+    {
+        // The response headers arrived, so the request was sent and may have been billed: ambiguous, never retried on the same model.
+        await using var raw = new RawStreamServer("application/json", ["{\"id\":\"cut\",\"choices\":[{\"index\":0,"], StreamEnding.Cut);
+
+        var failure = FailureOf(await Adapter.CompleteAsync(ContextFor(raw.BaseAddress), ChatRequest(), TestToken));
+
+        failure.Class.ShouldBe(FailureClass.Ambiguous);
+        failure.Code.ShouldBe(ProviderFailureCodes.ConnectionReset);
+        failure.RequestSent.ShouldBeTrue();
+    }
+
     // ---- malformed and embedded errors ----------------------------------------------------------------------------
 
     [Fact]

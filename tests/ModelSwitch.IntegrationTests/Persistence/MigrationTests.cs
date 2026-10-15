@@ -22,7 +22,9 @@ public sealed class MigrationTests(PostgresFixture postgres)
         var second = await ApplyAllAsync(services);
 
         first["identity"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
-        first["registry"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
+        first["registry"].Count.ShouldBe(2);
+        first["registry"][0].ShouldEndWith("_Initial");
+        first["registry"][1].ShouldEndWith("_ProviderHealthSnapshot");
         first["routing"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         first["config"].ShouldBe(["config_version"]);
         second["identity"].ShouldBeEmpty();
@@ -77,6 +79,7 @@ public sealed class MigrationTests(PostgresFixture postgres)
             "registry.__ef_migrations_history",
             "registry.model_price",
             "registry.provider",
+            "registry.provider_health_snapshot",
             "registry.provider_model",
             "routing.__ef_migrations_history",
             "routing.model_alias",

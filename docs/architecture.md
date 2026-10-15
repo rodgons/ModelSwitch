@@ -34,7 +34,7 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
 | `Microsoft.EntityFrameworkCore.Design` + `dotnet-ef` (local tool, `.config/dotnet-tools.json`) | Dev-only: scaffolds the EF Core migrations that the Migrator applies (`dotnet ef migrations add`). `Design` is referenced with `PrivateAssets=all`, so it never ships. Central transitive pinning keeps `Microsoft.EntityFrameworkCore*` on one patch version across Npgsql and Design | Hand-written migration SQL: no model snapshot, so drift goes unnoticed |
 | ASP.NET Core Identity | Password hashing, lockout and cookie sessions for Administrators (ADR-0011) | Hand-rolled auth: security-sensitive code we should not own |
 | `StackExchange.Redis` | Client for Valkey, which holds the shared Rate and Concurrency Limit counters (ADR-0003) | None. It is the standard .NET Redis-protocol client |
-| Polly v8 | Circuit-breaker state machine and backoff-with-jitter maths (ADR-0004, ADR-0005) | Writing our own breaker: more code to test for no gain |
+| Polly v8 (`Polly.Core`) | Circuit-breaker state machine (ADR-0004, ADR-0005). Backoff-with-jitter is a few lines of our own (`Polly.Core` exposes no standalone backoff calculator) | Writing our own breaker: more code to test for no gain |
 | `Microsoft.ML.Tokenizers` | Estimates input tokens for Reservations when the Provider does not report usage | A chars/4 heuristic: underestimates and lets Budgets be exceeded |
 | `Microsoft.ML.Tokenizers.Data.O200kBase`, `Microsoft.ML.Tokenizers.Data.Cl100kBase` | The vocabulary files `Microsoft.ML.Tokenizers` needs for the `o200k_base` and `cl100k_base` encodings. They embed the data, so no download happens at runtime | Fetching vocabularies at startup: needs network access and breaks air-gapped deployments |
 | OpenTelemetry .NET SDK + OTLP exporter | Traces, metrics and logs in a vendor-neutral format (FR-08, NFR-05) | Vendor SDKs: tie the product to one backend |
@@ -70,8 +70,8 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
                  └─────────────────────────────────────────────────────────────┘
 ```
 
-- **api** is stateless apart from in-memory caches (configuration snapshot, verified API keys, circuit breakers), so it can be scaled horizontally. Compose runs one replica by default. The multi-instance tests run two.
-- **worker** runs the outbox relay, usage aggregation, Reservation sweeping, Evaluation Run execution, Provider Health snapshots and retention jobs. More than one replica is safe because all work is claimed with `SKIP LOCKED`.
+- **api** is stateless apart from in-memory caches (configuration snapshot, verified API keys, circuit breakers), so it can be scaled horizontally. Each instance writes its own Provider Health snapshot, because the breakers live in its memory ([routing-and-resilience.md §5](routing-and-resilience.md#5-circuit-breakers)). Compose runs one replica by default. The multi-instance tests run two.
+- **worker** runs the outbox relay, usage aggregation, Reservation sweeping, Evaluation Run execution and retention jobs. More than one replica is safe because all work is claimed with `SKIP LOCKED`.
 - **migrator** applies every module's EF Core migrations in a fixed order and exits. api and worker never migrate on startup.
 - **proxy** gives the browser one origin (ADR-0011) and terminates TLS when it is configured.
 
