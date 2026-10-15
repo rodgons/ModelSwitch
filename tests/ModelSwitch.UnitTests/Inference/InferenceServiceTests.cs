@@ -81,6 +81,8 @@ public sealed class InferenceServiceTests
     [InlineData(FailureClass.Ambiguous, ProviderFailureCodes.Timeout, "deadline_exceeded")]
     [InlineData(FailureClass.Transient, ProviderFailureCodes.EdgeTimeout, "deadline_exceeded")]
     [InlineData(FailureClass.Transient, ProviderFailureCodes.RateLimited, "provider_unavailable")]
+    // A Provider answering HTTP 408 is a transient Provider failure, not the request Deadline (routing-and-resilience.md section 3).
+    [InlineData(FailureClass.Transient, ProviderFailureCodes.RequestTimeout, "provider_unavailable")]
     [InlineData(FailureClass.Permanent, ProviderFailureCodes.Unauthorized, "provider_error")]
     [InlineData(FailureClass.Ambiguous, ProviderFailureCodes.ConnectionReset, "provider_error")]
     public void Failure_classes_map_to_error_codes(FailureClass failureClass, string code, string expected)

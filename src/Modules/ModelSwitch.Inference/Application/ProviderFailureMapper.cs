@@ -18,7 +18,7 @@ internal static class ProviderFailureMapper
             return new Error(ErrorCode.ContextLengthExceeded, "The request exceeds the model's context length.");
         }
 
-        if (failure.Code is ProviderFailureCodes.Timeout or ProviderFailureCodes.EdgeTimeout or ProviderFailureCodes.RequestTimeout)
+        if (failure.Code is ProviderFailureCodes.Timeout or ProviderFailureCodes.EdgeTimeout)
         {
             return new Error(ErrorCode.DeadlineExceeded, "The Provider did not answer in time.");
         }
