@@ -89,6 +89,14 @@ Scenarios (each one runs for every Adapter):
 
 A new Adapter is "done" when it passes the whole suite unchanged (FR-02 acceptance).
 
+### Wire fixtures
+
+**OpenAI is the reference Provider** for the OpenAI-compatible Adapter: its fixtures in `fixtures/openai-compatible/` are the canonical contract. Other hosted Providers' deviations (see [research/hosted-providers.md](research/hosted-providers.md)) are added as extra fixtures, never by changing the reference ones.
+
+- **Recorded** from the real API: non-streaming and streaming text, streaming with `stream_options.include_usage`, `finish_reason=length`, `json_object` and `json_schema` responses, 400 `invalid_request_error`, 400 context length exceeded, 401, and 404 unknown model.
+- **Synthetic** for everything that can't be provoked on demand (429 rate limit with `Retry-After` as seconds and as an HTTP date, 429 `insufficient_quota`, 5xx, malformed bodies). They are hand-written from OpenAI's documented error body and carry `"_source": "synthetic"`, so nobody mistakes them for recordings. The billing 429 sits next to the rate-limit 429 because the two must be classified differently.
+- **Recording** is a manual script, `scripts/record-fixtures`, run with `OPENAI_API_KEY` and **never in CI**. It sends synthetic prompts only, strips `authorization`, `openai-organization`, `openai-project`, `x-request-id`, `cookie` and `set-cookie`, and stamps each fixture with its capture date and model. It is re-run only when the Adapter changes or wire drift is suspected.
+
 ## 5. Mock Provider (`tools/ModelSwitch.MockProvider`)
 
 This is a small ASP.NET Core app that implements **both** wire protocols. Tests, load tests and the demo all use it. Its behaviour is set per request through the model id or a control header, so a test can script faults without restarting it:
