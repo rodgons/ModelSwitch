@@ -10,11 +10,15 @@
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Shouldly" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ModelSwitch.Api/ModelSwitch.Api.csproj" />
     <ProjectReference Include="../../src/ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
     <ProjectReference Include="../../src/Modules/ModelSwitch.Identity/ModelSwitch.Identity.csproj" />
     <ProjectReference Include="../../src/Modules/ModelSwitch.Registry/ModelSwitch.Registry.csproj" />

@@ -31,6 +31,7 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
 | Dependency | Why it is needed | Alternative rejected |
 |---|---|---|
 | EF Core 10 + Npgsql | Mandated by the constitution (PostgreSQL via EF Core). Npgsql is the PostgreSQL driver | Dapper: we would hand-write migrations and change tracking |
+| `Microsoft.EntityFrameworkCore.Design` + `dotnet-ef` (local tool, `.config/dotnet-tools.json`) | Dev-only: scaffolds the EF Core migrations that the Migrator applies (`dotnet ef migrations add`). `Design` is referenced with `PrivateAssets=all`, so it never ships. Central transitive pinning keeps `Microsoft.EntityFrameworkCore*` on one patch version across Npgsql and Design | Hand-written migration SQL: no model snapshot, so drift goes unnoticed |
 | ASP.NET Core Identity | Password hashing, lockout and cookie sessions for Administrators (ADR-0011) | Hand-rolled auth: security-sensitive code we should not own |
 | `StackExchange.Redis` | Client for Valkey, which holds the shared Rate and Concurrency Limit counters (ADR-0003) | None. It is the standard .NET Redis-protocol client |
 | Polly v8 | Circuit-breaker state machine and backoff-with-jitter maths (ADR-0004, ADR-0005) | Writing our own breaker: more code to test for no gain |

@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <InternalsVisibleTo Include="ModelSwitch.UnitTests" />
+    <InternalsVisibleTo Include="ModelSwitch.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
     <ProjectReference Include="../Modules/ModelSwitch.Identity/ModelSwitch.Identity.csproj" />
     <ProjectReference Include="../Modules/ModelSwitch.Registry/ModelSwitch.Registry.csproj" />

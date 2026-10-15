@@ -55,7 +55,9 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 | `MODELSWITCH__ConnectionStrings__PostgresMigrator` | ✔ | migrator | `modelswitch_migrator` role |
 | `MODELSWITCH__ConnectionStrings__Valkey` | ✔ | api | |
 | `MODELSWITCH__Security__MasterKey` | ✔ if any `db:` credential | api, worker | 32 bytes base64 |
-| `MODELSWITCH__Security__ApiKeyPepper` | ✔ | api | ≥32 bytes base64 |
+| `MODELSWITCH__Security__ApiKeyPepper` | ✔ | api, migrator (`seed` only) | ≥32 bytes base64 |
+| `MODELSWITCH__Seed__TenantName` | for `seed` | migrator | Tenant to find or create. Also `seed --tenant <name>` |
+| `MODELSWITCH__Seed__KeyName` | | migrator | Name of the new API Key, default `seed`. Also `seed --key-name <name>` |
 | `MODELSWITCH__Bootstrap__OwnerEmail` / `OwnerPassword` | first run | migrator | ignored once an Administrator exists |
 | `MODELSWITCH__Hosting__EndpointGroups` | | api | `inference,admin` |
 | `MODELSWITCH__Hosting__PublicBaseUrl` | ✔ | api | used for cookie and CSP settings |
@@ -72,7 +74,9 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 ## 4. Database initialization
 
 - `migrator` connects as the migrator role, creates the schemas and roles if they are missing, applies every module's migrations in order (`identity, registry, routing, config, usage, evaluation, jobs`), then bootstraps the Owner. It is idempotent: a second run applies nothing and exits 0.
-- Development: `dotnet run --project src/ModelSwitch.Migrator`. Adding a migration: `dotnet ef migrations add <Name> --project src/Modules/ModelSwitch.<Module> --context <Module>DbContext`.
+- Commands: `migrate` (default) and `seed`. `seed` migrates, finds or creates the Tenant, creates a new API Key with every Scope, and prints the plaintext key **once, alone on stdout** (logs go to stderr), so `KEY=$(migrator seed --tenant acme)` works. The key cannot be shown again. Run it again for another key. An unknown command exits 64.
+- Not yet implemented: creating the `modelswitch_app` and `modelswitch_retention` roles and their grants (the migrator currently runs every migration as the connection string's role); this lands with the first migration that needs a restricted table.
+- Development: `dotnet run --project src/ModelSwitch.Migrator`. Adding a migration: `dotnet ef migrations add <Name> --project src/Modules/ModelSwitch.<Module> --context <Module>DbContext --output-dir Infrastructure/Migrations` (after `dotnet tool restore`).
 - Migrations must be backward-compatible with the previous app version, so they can be applied before api/worker are rolled (expand → migrate → contract).
 
 ## 5. Production notes (documented, not automated)

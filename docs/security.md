@@ -16,10 +16,10 @@ This document covers FR-01, NFR-03 and the PRD §10.4 security tests.
 
 ## 2. API Keys
 
-- Format: `msk_` + 8-char base32 prefix + `_` + 43-char base64url secret (32 random bytes from `RandomNumberGenerator`).
+- Format: `msk_` + 8-char base32 prefix + `_` + 43-char base64url secret (32 random bytes from `RandomNumberGenerator`). The prefix uses the lower-case Crockford alphabet `0123456789abcdefghjkmnpqrstvwxyz` (40 random bits), and a key is exactly 56 characters.
 - Stored: `key_prefix`, `key_hash = HMAC-SHA256(pepper, full_key)`. The pepper comes from `MODELSWITCH__Security__ApiKeyPepper` (≥ 32 bytes, base64) and is never stored in the DB.
 - Verify: parse → look up by prefix → `CryptographicOperations.FixedTimeEquals` → check `revoked_at`, `expires_at`, tenant status.
-- Cache: positive results for ≤ 30 s, keyed by the hash, never the raw key. Revocation also broadcasts through `NOTIFY config_changed`, so in practice it takes effect in well under 30 s (the 30 s cap is the documented worst case).
+- Cache: positive results for ≤ 30 s (and never past the key's own `expires_at`), keyed by the hash, never the raw key. Failures are not cached. The cache is in-process and driven by `TimeProvider`. Revocation also broadcasts through `NOTIFY config_changed`, so in practice it takes effect in well under 30 s (the 30 s cap is the documented worst case).
 - Abuse: repeated 401s from one IP are throttled with ASP.NET Core's in-process rate limiter (per instance, best effort).
 - The raw key appears only in the creation response, and that response has `Cache-Control: no-store`.
 

@@ -22,7 +22,7 @@ These are the coding standards the code-review process checks against (NFR-04, D
 - Expected failures return `Result<T>` with an error code from the closed set. Exceptions are for bugs and infrastructure faults.
 - Use `TimeProvider` instead of `DateTime.UtcNow`, and `IGuidGenerator` (UUIDv7) instead of `Guid.NewGuid()`, so tests are deterministic.
 - Logging uses `[LoggerMessage]` source-generated methods only. String interpolation in log calls is never allowed.
-- EF Core: `AsNoTracking()` for reads, explicit `Include` (no lazy loading), migrations reviewed as SQL (`dotnet ef migrations script`) in the PR.
+- EF Core: one `DbContext` per module in `Infrastructure/`, explicit snake_case table and column names (no naming-convention package), migrations in `Infrastructure/Migrations` with the history table `<schema>.__ef_migrations_history`. EF scaffolds migration classes as `public`; they are exempt from the "only Contracts is public" architecture rule and from analyzers (`generated_code` in `.editorconfig`). `AsNoTracking()` for reads, explicit `Include` (no lazy loading), migrations reviewed as SQL (`dotnet ef migrations script`) in the PR.
 - No `HttpClient` resilience handlers on Adapter clients (ADR-0004).
 
 ## TypeScript / Vue

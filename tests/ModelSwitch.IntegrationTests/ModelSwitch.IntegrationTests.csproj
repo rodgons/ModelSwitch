@@ -10,10 +10,13 @@
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Shouldly" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../../src/ModelSwitch.Api/ModelSwitch.Api.csproj" />
+    <ProjectReference Include="../../src/ModelSwitch.Migrator/ModelSwitch.Migrator.csproj" />
     <ProjectReference Include="../../tools/ModelSwitch.MockProvider/ModelSwitch.MockProvider.csproj" />
   </ItemGroup>
 

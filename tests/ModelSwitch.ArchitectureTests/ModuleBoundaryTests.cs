@@ -89,6 +89,9 @@ public sealed class ModuleBoundaryTests
             .That()
             .DoNotResideInNamespaceMatching(@"\.Contracts(\.|$)")
             .And()
+            // EF Core scaffolds migrations as public classes; they are generated, so they are exempt.
+            .DoNotResideInNamespaceMatching(@"\.Infrastructure\.Migrations(\.|$)")
+            .And()
             .DoNotHaveName($"{module}Module")
             .ShouldNot()
             .BePublic()
