@@ -134,36 +134,36 @@ Every error response is an RFC 9457 Problem Details document (`Content-Type: app
 
 ## 2. Error codes
 
-Every error has one code from this closed set. The `type` groups codes and maps to OpenAI's `type` values where those exist.
+Every error has one code from this closed set. The `type` groups codes and maps to OpenAI's `type` values where those exist. The `Title` is the Problem Details `title` for that code (`ErrorCode.Title`; a test keeps this table and the code in step).
 
-| Code | HTTP | Type | Retry by client? |
-|---|---|---|---|
-| `invalid_request` | 400 | `invalid_request_error` | No |
-| `unsupported_parameter` | 400 | `invalid_request_error` | No |
-| `context_length_exceeded` | 400 | `invalid_request_error` | No |
-| `invalid_api_key` | 401 | `authentication_error` | No |
-| `budget_exceeded` | 402 | `budget_error` | No (until the period resets) |
-| `request_cost_limit_exceeded` | 402 | `budget_error` | No |
-| `insufficient_scope` | 403 | `permission_error` | No |
-| `tenant_suspended` | 403 | `permission_error` | No |
-| `model_not_allowed` | 403 | `permission_error` | No |
-| `model_not_found` | 404 | `invalid_request_error` | No |
-| `payload_too_large` | 413 | `invalid_request_error` | No |
-| `unsupported_media_type` | 415 | `invalid_request_error` | No |
-| `no_eligible_model` | 422 | `routing_error` | No (capability or cost constraints cannot be met) |
-| `rate_limit_exceeded` | 429 | `rate_limit_error` | Yes, after `Retry-After` |
-| `concurrency_limit_exceeded` | 429 | `rate_limit_error` | Yes, after `Retry-After` |
-| `provider_error` | 502 | `provider_error` | Maybe |
-| `provider_unavailable` | 503 | `provider_error` | Yes (all eligible circuits open, or Fallbacks exhausted) |
-| `limits_unavailable` | 503 | `api_error` | Yes (Valkey down, fail-closed) |
-| `deadline_exceeded` | 504 | `timeout_error` | Maybe |
-| `stream_interrupted` | — (SSE event) | `provider_error` | Maybe, but the output may be partial |
-| `run_cost_cap_reached` | — (Evaluation Run `error`) | `budget_error` | No. The run's `maxEstimatedCost` would be exceeded; remaining Cases are `skipped` |
-| `internal_error` | 500 | `api_error` | Maybe |
-| `validation_failed` | 400 | `invalid_request_error` | No. Admin API only (policy, dataset, limits… bodies) |
-| `forbidden` | 403 | `permission_error` | No. Admin API only |
-| `not_found` | 404 | `invalid_request_error` | No. Admin API only |
-| `conflict` | 409 | `invalid_request_error` | No. Admin API only (stale `expectedVersion`) |
+| Code | HTTP | Type | Title | Retry by client? |
+|---|---|---|---|---|
+| `invalid_request` | 400 | `invalid_request_error` | Invalid request | No |
+| `unsupported_parameter` | 400 | `invalid_request_error` | Unsupported parameter | No |
+| `context_length_exceeded` | 400 | `invalid_request_error` | Context length exceeded | No |
+| `invalid_api_key` | 401 | `authentication_error` | Invalid api key | No |
+| `budget_exceeded` | 402 | `budget_error` | Budget exceeded | No (until the period resets) |
+| `request_cost_limit_exceeded` | 402 | `budget_error` | Request cost limit exceeded | No |
+| `insufficient_scope` | 403 | `permission_error` | Insufficient scope | No |
+| `tenant_suspended` | 403 | `permission_error` | Tenant suspended | No |
+| `model_not_allowed` | 403 | `permission_error` | Model not allowed | No |
+| `model_not_found` | 404 | `invalid_request_error` | Model not found | No |
+| `payload_too_large` | 413 | `invalid_request_error` | Payload too large | No |
+| `unsupported_media_type` | 415 | `invalid_request_error` | Unsupported media type | No |
+| `no_eligible_model` | 422 | `routing_error` | No eligible model | No (capability or cost constraints cannot be met) |
+| `rate_limit_exceeded` | 429 | `rate_limit_error` | Rate limit exceeded | Yes, after `Retry-After` |
+| `concurrency_limit_exceeded` | 429 | `rate_limit_error` | Concurrency limit exceeded | Yes, after `Retry-After` |
+| `provider_error` | 502 | `provider_error` | Provider error | Maybe |
+| `provider_unavailable` | 503 | `provider_error` | Provider unavailable | Yes (all eligible circuits open, or Fallbacks exhausted) |
+| `limits_unavailable` | 503 | `api_error` | Limits unavailable | Yes (Valkey down, fail-closed) |
+| `deadline_exceeded` | 504 | `timeout_error` | Deadline exceeded | Maybe |
+| `stream_interrupted` | — (SSE event) | `provider_error` | Stream interrupted | Maybe, but the output may be partial |
+| `run_cost_cap_reached` | — (Evaluation Run `error`) | `budget_error` | Run cost cap reached | No. The run's `maxEstimatedCost` would be exceeded; remaining Cases are `skipped` |
+| `internal_error` | 500 | `api_error` | Internal error | Maybe |
+| `validation_failed` | 400 | `invalid_request_error` | Validation failed | No. Admin API only (policy, dataset, limits… bodies) |
+| `forbidden` | 403 | `permission_error` | Forbidden | No. Admin API only |
+| `not_found` | 404 | `invalid_request_error` | Not found | No. Admin API only |
+| `conflict` | 409 | `invalid_request_error` | Conflict | No. Admin API only (stale `expectedVersion`) |
 
 `budget_exceeded` uses **402, not 429**, because OpenAI SDKs automatically retry 429, and retrying cannot help when the budget is exhausted.
 

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using ModelSwitch.SharedKernel.Errors;
 
@@ -47,17 +46,10 @@ public static class ProblemResults
 
         return Results.Problem(
             statusCode: status,
-            title: Title(error.Code),
+            title: error.Code.Title,
             detail: error.Message,
             type: $"/errors/{error.Code.Value}",
             instance: context.Request.Path,
             extensions: extensions);
-    }
-
-    // "no_eligible_model" -> "No eligible model".
-    private static string Title(ErrorCode code)
-    {
-        var words = code.Value.Replace('_', ' ');
-        return string.Concat(char.ToUpper(words[0], CultureInfo.InvariantCulture).ToString(), words.AsSpan(1));
     }
 }

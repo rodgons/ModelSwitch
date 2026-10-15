@@ -80,6 +80,24 @@ public sealed class ErrorCodeTests
     }
 
     [Fact]
+    public void Api_doc_titles_match_the_error_code_titles()
+    {
+        var doc = File.ReadAllText(FindRepoFile("docs/api.md"));
+        var section = doc[doc.IndexOf("## 2. Error codes", StringComparison.Ordinal)..];
+        section = section[..section.IndexOf("## 3.", StringComparison.Ordinal)];
+        var rows = section.Split('\n')
+            .Where(l => l.StartsWith("| `", StringComparison.Ordinal))
+            .Select(l => l.Split('|'))
+            .ToDictionary(c => c[1].Trim().Trim('`'), c => c[4].Trim());
+
+        foreach (var code in ErrorCode.All)
+        {
+            code.Title.ShouldNotBeNullOrWhiteSpace();
+            rows[code.Value].ShouldBe(code.Title);
+        }
+    }
+
+    [Fact]
     public void Unknown_code_does_not_parse()
     {
         ErrorCode.TryParse("nope", out _).ShouldBeFalse();
