@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modelswitch.local/schemas/routing-policy-definition.json",
+  "title": "Routing Policy definition",
+  "description": "Structure of routing.routing_policy_version.definition (docs/routing-and-resilience.md section 2). Semantic rules that a schema cannot express (referenced models exist, rules are reachable, no duplicate candidates, timing relations) are checked by PolicyDefinitionValidator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["strategy"],
+  "properties": {
+    "strategy": { "enum": ["static", "rules", "cost"] },
+    "candidates": { "$ref": "#/$defs/candidateList" },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["when", "candidates"],
+        "properties": {
+          "when": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "taskType": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "type": "string", "pattern": "^[a-z0-9_-]{1,64}$" }
+              },
+              "requires": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+              }
+            }
+          },
+          "candidates": { "$ref": "#/$defs/candidateList" }
+        }
+      }
+    },
+    "default": { "$ref": "#/$defs/candidateList" },
+    "allowedProviders": {
+      "type": ["array", "null"],
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "maxRequestCost": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]+(\\.[0-9]{1,10})?$",
+      "description": "Decimal USD, as a string to keep it exact."
+    },
+    "defaultMaxOutputTokens": { "type": "integer", "minimum": 1, "default": 1024 },
+    "maxCandidates": { "type": ["integer", "null"], "minimum": 1 },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deadlineMs": { "type": "integer", "minimum": 1, "default": 60000 },
+        "attemptTimeoutMs": { "type": "integer", "minimum": 1, "default": 30000 },
+        "maxAttempts": { "type": "integer", "minimum": 1, "default": 4 },
+        "maxRetriesPerCandidate": { "type": "integer", "minimum": 0, "default": 1 },
+        "backoff": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "baseMs": { "type": "integer", "minimum": 0, "default": 200 },
+            "maxMs": { "type": "integer", "minimum": 0, "default": 2000 },
+            "jitter": { "enum": ["full", "none"], "default": "full" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "candidateList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[^/\\s]+/\\S+$", "description": "<providerName>/<providerModelId>" }
+    }
+  }
+}

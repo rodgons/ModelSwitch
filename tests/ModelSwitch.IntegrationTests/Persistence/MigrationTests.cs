@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ModelSwitch.Identity.Infrastructure;
 using ModelSwitch.IntegrationTests.Infrastructure;
 using ModelSwitch.Registry.Infrastructure;
+using ModelSwitch.Routing.Infrastructure;
 using ModelSwitch.SharedKernel.Persistence;
 using Npgsql;
 using Shouldly;
@@ -22,16 +23,18 @@ public sealed class MigrationTests(PostgresFixture postgres)
 
         first["identity"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         first["registry"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
+        first["routing"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         second["identity"].ShouldBeEmpty();
         second["registry"].ShouldBeEmpty();
+        second["routing"].ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task Migrations_apply_in_the_fixed_order_identity_then_registry()
+    public async Task Migrations_apply_in_the_fixed_order_identity_then_registry_then_routing()
     {
         await using var services = ModuleServices.ForMigrator(await postgres.CreateDatabaseAsync());
 
-        services.GetServices<IModuleMigrator>().Select(m => m.Schema).ShouldBe(["identity", "registry"]);
+        services.GetServices<IModuleMigrator>().Select(m => m.Schema).ShouldBe(["identity", "registry", "routing"]);
     }
 
     [Fact]
@@ -43,9 +46,11 @@ public sealed class MigrationTests(PostgresFixture postgres)
 
         await using var identity = new IdentityDbContext(new DbContextOptionsBuilder<IdentityDbContext>().UseNpgsql(connectionString).Options);
         await using var registry = new RegistryDbContext(new DbContextOptionsBuilder<RegistryDbContext>().UseNpgsql(connectionString).Options);
+        await using var routing = new RoutingDbContext(new DbContextOptionsBuilder<RoutingDbContext>().UseNpgsql(connectionString).Options);
 
         identity.Database.HasPendingModelChanges().ShouldBeFalse("a model change needs a new Identity migration");
         registry.Database.HasPendingModelChanges().ShouldBeFalse("a model change needs a new Registry migration");
+        routing.Database.HasPendingModelChanges().ShouldBeFalse("a model change needs a new Routing migration");
     }
 
     [Fact]
@@ -57,7 +62,7 @@ public sealed class MigrationTests(PostgresFixture postgres)
 
         var tables = await QueryAsync<string>(
             connectionString,
-            "select table_schema || '.' || table_name from information_schema.tables where table_schema in ('identity','registry') order by 1");
+            "select table_schema || '.' || table_name from information_schema.tables where table_schema in ('identity','registry','routing') order by 1");
 
         tables.ShouldBe(
         [
@@ -68,6 +73,10 @@ public sealed class MigrationTests(PostgresFixture postgres)
             "registry.model_price",
             "registry.provider",
             "registry.provider_model",
+            "routing.__ef_migrations_history",
+            "routing.model_alias",
+            "routing.routing_policy",
+            "routing.routing_policy_version",
         ]);
     }
 

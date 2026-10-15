@@ -36,8 +36,8 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 
 ## Phase 2: Routing and resilience (≈2 weeks)
 
-- [ ] `routing` schema: policies, versions, aliases; definition JSON Schema + semantic validation
-- [ ] `IRouter` pure implementation: eligibility filters + three ranking strategies + table-driven tests
+- [x] `routing` schema: policies, versions, aliases; definition JSON Schema + semantic validation
+- [x] `IRouter` pure implementation: eligibility filters + three ranking strategies + table-driven tests
 - [ ] Tokenizer-based input estimation and worst-case cost
 - [ ] `AttemptExecutor`: deadlines, retries with backoff+jitter, Retry-After, Fallback, cancellation
 - [ ] Failure classification in both Adapters (contract-tested)

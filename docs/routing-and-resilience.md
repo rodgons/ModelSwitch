@@ -70,7 +70,7 @@ Every tie-break is deterministic. Ranking never uses randomness, and in the MVP 
 
 ## 2. Routing Policy definition
 
-Stored as `routing_policy_version.definition`. It is validated against a JSON Schema plus semantic checks: referenced models exist, at least one candidate, rules are reachable, and `maxAttempts ≥ 1`. A failing definition is rejected with `400 validation_failed` (Problem Details, one entry per problem in `errors`).
+Stored as `routing_policy_version.definition`. It is validated against a JSON Schema (`src/Modules/ModelSwitch.Routing/Domain/PolicyDefinition.schema.json`, embedded; the validator enforces it directly, so no JSON Schema library is added, and a unit test keeps the two in sync) plus semantic checks: referenced models exist, at least one candidate, rules are reachable, and `maxAttempts ≥ 1`, no duplicate Candidates, `attemptTimeoutMs ≤ deadlineMs`, `backoff.baseMs ≤ maxMs`. A rule is unreachable when an earlier rule matches every request it would match (its `when` conditions are all implied by this rule's). `when` needs at least one of `taskType` / `requires`; a rule matches when all present conditions hold (`requires`: the request needs every listed Capability). A failing definition is rejected with `400 validation_failed` (Problem Details, one entry per problem in `errors`).
 
 ```json
 {

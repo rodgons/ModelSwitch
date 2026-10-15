@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ModelSwitch.Identity;
 using ModelSwitch.Registry;
+using ModelSwitch.Routing;
 using ModelSwitch.SharedKernel;
 
 namespace ModelSwitch.IntegrationTests.Infrastructure;
@@ -17,6 +18,7 @@ public static class ModuleServices
         var services = Base(connectionString, time);
         services.AddIdentityMigrations();
         services.AddRegistryMigrations();
+        services.AddRoutingMigrations();
         services.AddIdentitySeeding();
         return services.BuildServiceProvider();
     }
@@ -26,6 +28,14 @@ public static class ModuleServices
     {
         var services = Base(connectionString, time);
         services.AddIdentityModule();
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>Services the api host registers for routing: the router, the validator and the policy store.</summary>
+    public static ServiceProvider ForRouting(string connectionString)
+    {
+        var services = Base(connectionString, time: null);
+        services.AddRoutingModule();
         return services.BuildServiceProvider();
     }
 

@@ -13,7 +13,7 @@ internal sealed partial class DatabaseRoles(ILogger<DatabaseRoles> logger)
     public const string RetentionRole = "modelswitch_retention";
 
     // Append-only by design: the app role may INSERT and SELECT but never UPDATE or DELETE these.
-    private static readonly string[] _appendOnlyTables = ["audit_record", "model_price"];
+    private static readonly string[] _appendOnlyTables = ["audit_record", "model_price", "routing_policy_version"];
 
     // Tables the worker's retention job deletes from (data-model.md "Retention").
     private static readonly string[] _retentionTables =

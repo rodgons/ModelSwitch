@@ -60,7 +60,7 @@ The PostgreSQL schema, module by module. Every module owns one schema and is the
 
 **routing_policy**: `id`, `name unique`, `latest_version int`, `created_at`
 
-**routing_policy_version**: `policy_id`, `version int`, `definition jsonb`, `created_at`, `created_by_admin_id`, pk `(policy_id, version)`. Immutable. The `definition` schema is in [routing-and-resilience.md](routing-and-resilience.md#2-routing-policy-definition).
+**routing_policy_version**: `policy_id`, `version int`, `definition jsonb`, `resolved_candidates jsonb` (authored `provider/model` name to Provider Model id, fixed when the version is saved), `created_at`, `created_by_admin_id`, pk `(policy_id, version)`. Immutable: the app role has no `UPDATE`/`DELETE` grant. The `definition` schema is in [routing-and-resilience.md](routing-and-resilience.md#2-routing-policy-definition).
 
 **model_alias**: `alias text pk` (`[a-z0-9][a-z0-9._-]{0,63}`), `policy_id fk`, `description`, `updated_at`. An alias always resolves to the policy's **latest** version at request time. The Policy Version actually used is recorded on the request.
 
@@ -154,7 +154,7 @@ Indexes: `(tenant_id, started_at desc)`, `(started_at desc)`, `(status, started_
 ## Database roles (least privilege, NFR-03)
 
 - `modelswitch_migrator`: owns the schemas and runs DDL. Used only by the migrator.
-- `modelswitch_app`: DML on all module tables except `UPDATE`/`DELETE` on `audit_record` and `model_price`. Used by api and worker.
+- `modelswitch_app`: DML on all module tables except `UPDATE`/`DELETE` on `audit_record`, `model_price` and `routing_policy_version`. Used by api and worker.
 - `modelswitch_retention`: `DELETE` on retention-managed tables. Used only by the worker's retention job.
 
 The migrator creates the runtime roles and re-applies these grants after every migration run ([deployment.md](deployment.md#4-database-initialization)). The EF migrations history table is not granted to `modelswitch_app`.

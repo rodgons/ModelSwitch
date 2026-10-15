@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using ModelSwitch.Identity;
 using ModelSwitch.Migrator;
 using ModelSwitch.Registry;
+using ModelSwitch.Routing;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Hosting;
 
@@ -40,6 +41,7 @@ return await StartupExit.RunAsync(
         // The fixed migration order (docs/deployment.md section 4). Each module appends itself here.
         builder.Services.AddIdentityMigrations();
         builder.Services.AddRegistryMigrations();
+        builder.Services.AddRoutingMigrations();
 
         if (command == MigratorCommand.Seed)
         {
