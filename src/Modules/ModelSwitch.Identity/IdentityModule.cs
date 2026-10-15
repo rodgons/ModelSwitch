@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using ModelSwitch.Identity.Application;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Identity.Domain;
@@ -30,6 +31,8 @@ public static class IdentityModule
         services.AddApiKeyHasher();
         services.TryAddSingleton<IApiKeyStore, EfApiKeyStore>();
         services.TryAddSingleton<VerifiedKeyCache>();
+        services.TryAddSingleton<ApiKeyUsageRecorder>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, ApiKeyUsageWriter>());
         services.TryAddSingleton<IApiKeyAuthenticator, ApiKeyAuthenticator>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IReadinessCheck, PostgresReadinessCheck>());
         return services;

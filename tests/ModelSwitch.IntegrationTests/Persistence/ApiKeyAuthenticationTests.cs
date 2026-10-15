@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Time.Testing;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.IntegrationTests.Infrastructure;
@@ -31,6 +32,40 @@ public sealed class ApiKeyAuthenticationTests(PostgresFixture postgres)
         stored.Length.ShouldBe(64);
         seeded.PlaintextKey.ShouldNotContain(stored);
         (await ScalarAsync(connectionString, "select count(*) from identity.api_key where name like 'msk_%'")).ShouldBe("0");
+    }
+
+    [Fact]
+    public async Task Last_used_at_is_written_in_the_background_at_most_once_a_minute()
+    {
+        var (connectionString, seeded) = await SeedAsync();
+        await using var api = ModuleServices.ForApi(connectionString, _time);
+        var hosted = api.GetServices<IHostedService>().ToList();
+        foreach (var service in hosted)
+        {
+            await service.StartAsync(CancellationToken.None);
+        }
+
+        try
+        {
+            var authenticator = api.GetRequiredService<IApiKeyAuthenticator>();
+            (await ScalarAsync(connectionString, "select last_used_at is null from identity.api_key")).ShouldBe("True");
+
+            (await authenticator.AuthenticateAsync(seeded.PlaintextKey, CancellationToken.None)).IsSuccess.ShouldBeTrue();
+            await WaitForLastUsedAsync(connectionString, "2026-10-15 12:00:00+00");
+
+            _time.Advance(TimeSpan.FromSeconds(40));
+            (await authenticator.AuthenticateAsync(seeded.PlaintextKey, CancellationToken.None)).IsSuccess.ShouldBeTrue();
+            _time.Advance(TimeSpan.FromSeconds(30));
+            (await authenticator.AuthenticateAsync(seeded.PlaintextKey, CancellationToken.None)).IsSuccess.ShouldBeTrue();
+            await WaitForLastUsedAsync(connectionString, "2026-10-15 12:01:10+00");
+        }
+        finally
+        {
+            foreach (var service in hosted)
+            {
+                await service.StopAsync(CancellationToken.None);
+            }
+        }
     }
 
     [Fact]
@@ -117,6 +152,17 @@ public sealed class ApiKeyAuthenticationTests(PostgresFixture postgres)
 
         var seeded = await services.GetRequiredService<IIdentitySeeder>().SeedAsync("acme", "test", CancellationToken.None);
         return (connectionString, seeded);
+    }
+
+    private static async Task WaitForLastUsedAsync(string connectionString, string expectedUtc)
+    {
+        var sql = $"select last_used_at = timestamptz '{expectedUtc}' from identity.api_key";
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (await ScalarAsync(connectionString, sql) != "True")
+        {
+            (DateTime.UtcNow < deadline).ShouldBeTrue($"last_used_at never became {expectedUtc}");
+            await Task.Delay(50);
+        }
     }
 
     private static async Task ExecuteAsync(string connectionString, string sql)

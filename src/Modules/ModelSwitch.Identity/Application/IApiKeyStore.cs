@@ -6,6 +6,12 @@ namespace ModelSwitch.Identity.Application;
 internal interface IApiKeyStore
 {
     Task<ApiKeyRecord?> FindByPrefixAsync(string keyPrefix, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sets <c>last_used_at</c> to <paramref name="at"/> unless it was already set within the last
+    /// <see cref="ApiKeyUsageRecorder.Interval"/> (so several instances still write at most once a minute per key).
+    /// </summary>
+    Task MarkUsedAsync(Guid apiKeyId, DateTimeOffset at, CancellationToken cancellationToken);
 }
 
 internal sealed record ApiKeyRecord(

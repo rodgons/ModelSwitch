@@ -13,6 +13,7 @@ public sealed class ApiKeyAuthenticatorTests
     private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero));
     private readonly ApiKeyHasher _hasher = new(_pepper);
     private readonly FakeApiKeyStore _store = new();
+    private readonly ApiKeyUsageRecorder _usage;
     private readonly ApiKeyAuthenticator _authenticator;
     private readonly GeneratedApiKey _key = ApiKeyFormat.Generate();
     private readonly Guid _tenantId = Guid.NewGuid();
@@ -20,7 +21,8 @@ public sealed class ApiKeyAuthenticatorTests
 
     public ApiKeyAuthenticatorTests()
     {
-        _authenticator = new ApiKeyAuthenticator(_store, _hasher, new VerifiedKeyCache(_time), _time);
+        _usage = new ApiKeyUsageRecorder(_time);
+        _authenticator = new ApiKeyAuthenticator(_store, _hasher, new VerifiedKeyCache(_time), _usage, _time);
         Store();
     }
 
@@ -236,6 +238,45 @@ public sealed class ApiKeyAuthenticatorTests
         result.Error.Code.ShouldBe(ErrorCode.InvalidApiKey);
     }
 
+    [Fact]
+    public async Task Successful_authentication_notes_the_key_as_used_at_most_once_a_minute()
+    {
+        for (var i = 0; i < 5; i++)
+        {
+            await _authenticator.AuthenticateAsync(_key.Plaintext, CancellationToken.None);
+            _time.Advance(TimeSpan.FromSeconds(10));
+        }
+
+        Drain().ShouldBe([_apiKeyId], "five uses in 50 s are one note");
+
+        _time.Advance(TimeSpan.FromSeconds(10));
+        await _authenticator.AuthenticateAsync(_key.Plaintext, CancellationToken.None);
+        await _authenticator.AuthenticateAsync(_key.Plaintext, CancellationToken.None);
+
+        Drain().ShouldBe([_apiKeyId], "the next use after a full minute is noted once more");
+    }
+
+    [Fact]
+    public async Task Failed_authentication_does_not_note_use()
+    {
+        await _authenticator.AuthenticateAsync(ApiKeyFormat.Generate().Plaintext, CancellationToken.None);
+        Store(revokedAt: _time.GetUtcNow().AddMinutes(-1));
+        await _authenticator.AuthenticateAsync(_key.Plaintext, CancellationToken.None);
+
+        Drain().ShouldBeEmpty();
+    }
+
+    private List<Guid> Drain()
+    {
+        var ids = new List<Guid>();
+        while (_usage.Reader.TryRead(out var use))
+        {
+            ids.Add(use.ApiKeyId);
+        }
+
+        return ids;
+    }
+
     private void Store(DateTimeOffset? revokedAt = null, DateTimeOffset? expiresAt = null, TenantStatus tenantStatus = TenantStatus.Active)
         => _store.Record = new ApiKeyRecord(
             _apiKeyId,
@@ -252,6 +293,8 @@ public sealed class ApiKeyAuthenticatorTests
         public ApiKeyRecord? Record { get; set; }
 
         public int Lookups { get; private set; }
+
+        public Task MarkUsedAsync(Guid apiKeyId, DateTimeOffset at, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task<ApiKeyRecord?> FindByPrefixAsync(string keyPrefix, CancellationToken cancellationToken)
         {

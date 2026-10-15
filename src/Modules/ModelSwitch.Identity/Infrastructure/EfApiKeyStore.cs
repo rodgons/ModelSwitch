@@ -27,4 +27,13 @@ internal sealed class EfApiKeyStore(IDbContextFactory<IdentityDbContext> context
                 row.key.RevokedAt,
                 row.Status);
     }
+
+    public async Task MarkUsedAsync(Guid apiKeyId, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var staleBefore = at - ApiKeyUsageRecorder.Interval;
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        await db.ApiKeys
+            .Where(key => key.Id == apiKeyId && (key.LastUsedAt == null || key.LastUsedAt <= staleBefore))
+            .ExecuteUpdateAsync(set => set.SetProperty(key => key.LastUsedAt, at), cancellationToken);
+    }
 }

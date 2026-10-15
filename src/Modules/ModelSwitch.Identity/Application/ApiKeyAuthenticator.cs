@@ -13,6 +13,7 @@ internal sealed class ApiKeyAuthenticator(
     IApiKeyStore store,
     ApiKeyHasher hasher,
     VerifiedKeyCache cache,
+    ApiKeyUsageRecorder usage,
     TimeProvider time) : IApiKeyAuthenticator
 {
     private static readonly Error _invalidKey = new(ErrorCode.InvalidApiKey, "The API key is missing or invalid.");
@@ -28,6 +29,7 @@ internal sealed class ApiKeyAuthenticator(
         var presentedHash = hasher.Hash(presentedKey!);
         if (cache.TryGet(presentedHash, out var cached))
         {
+            usage.Record(cached.ApiKeyId);
             return cached;
         }
 
@@ -55,6 +57,7 @@ internal sealed class ApiKeyAuthenticator(
 
         var authenticated = new AuthenticatedApiKey(record.ApiKeyId, record.TenantId, record.KeyPrefix, record.Scopes);
         cache.Set(presentedHash, authenticated, record.ExpiresAt);
+        usage.Record(authenticated.ApiKeyId);
         return authenticated;
     }
 }
