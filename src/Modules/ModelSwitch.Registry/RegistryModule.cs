@@ -35,6 +35,7 @@ public static class RegistryModule
                 provider.GetRequiredService<IConfiguration>()[_appConnection],
                 npgsql => npgsql.MigrationsHistoryTable(RegistryDbContext.MigrationsHistoryTable, RegistryDbContext.Schema)));
         services.TryAddSingleton<IProviderCatalog, EfProviderCatalog>();
+        services.TryAddSingleton<ICatalogSnapshotSource, EfCatalogSnapshotSource>();
         services.TryAddSingleton<IAdapterFactory, AdapterFactory>();
         return services;
     }

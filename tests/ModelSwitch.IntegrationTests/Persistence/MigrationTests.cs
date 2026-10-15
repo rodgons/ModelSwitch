@@ -24,19 +24,21 @@ public sealed class MigrationTests(PostgresFixture postgres)
         first["identity"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         first["registry"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         first["routing"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
+        first["config"].ShouldBe(["config_version"]);
         second["identity"].ShouldBeEmpty();
         second["registry"].ShouldBeEmpty();
         second["routing"].ShouldBeEmpty();
         first["usage"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         second["usage"].ShouldBeEmpty();
+        second["config"].ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task Migrations_apply_in_the_fixed_order_identity_registry_routing_usage()
+    public async Task Migrations_apply_in_the_fixed_order_identity_registry_routing_usage_config()
     {
         await using var services = ModuleServices.ForMigrator(await postgres.CreateDatabaseAsync());
 
-        services.GetServices<IModuleMigrator>().Select(m => m.Schema).ShouldBe(["identity", "registry", "routing", "usage"]);
+        services.GetServices<IModuleMigrator>().Select(m => m.Schema).ShouldBe(["identity", "registry", "routing", "usage", "config"]);
     }
 
     [Fact]
@@ -64,10 +66,11 @@ public sealed class MigrationTests(PostgresFixture postgres)
 
         var tables = await QueryAsync<string>(
             connectionString,
-            "select table_schema || '.' || table_name from information_schema.tables where table_schema in ('identity','registry','routing') order by 1");
+            "select table_schema || '.' || table_name from information_schema.tables where table_schema in ('config','identity','registry','routing') order by 1");
 
         tables.ShouldBe(
         [
+            "config.config_version",
             "identity.__ef_migrations_history",
             "identity.api_key",
             "identity.tenant",

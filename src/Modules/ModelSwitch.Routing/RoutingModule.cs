@@ -22,7 +22,9 @@ public static class RoutingModule
         services.TryAddSingleton<Contracts.IRouter, Router>();
         services.TryAddSingleton<IPolicyDefinitionValidator, PolicyDefinitionValidator>();
         services.AddRoutingContext(_appConnection);
-        services.TryAddSingleton<IPolicyStore, EfPolicyStore>();
+        services.TryAddSingleton<EfPolicyStore>();
+        services.TryAddSingleton<IPolicyStore>(provider => provider.GetRequiredService<EfPolicyStore>());
+        services.TryAddSingleton<IPolicyCatalogSource>(provider => provider.GetRequiredService<EfPolicyStore>());
         return services;
     }
 

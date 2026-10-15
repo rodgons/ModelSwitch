@@ -66,7 +66,9 @@ The PostgreSQL schema, module by module. Every module owns one schema and is the
 
 ## `config`
 
-**config_version**: a single row, `version bigint`. Incremented in the same transaction as any write to runtime configuration, followed by `NOTIFY config_changed`.
+Owned by `ModelSwitch.Configuration` (infrastructure, not a domain module), created by plain idempotent DDL in the Migrator rather than an EF Core migration. The app role gets the usual table grants.
+
+**config_version**: a single row (`id boolean pk default true check (id)`, `version bigint`, starts at 0). Incremented in the same transaction as any write to runtime configuration, followed by `NOTIFY config_changed`.
 
 ## `usage`
 

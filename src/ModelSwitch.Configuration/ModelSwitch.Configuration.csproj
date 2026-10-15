@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- Hosting abstractions (BackgroundService, logging) only. Npgsql flows in through the module projects. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ModelSwitch.UnitTests" />
+    <InternalsVisibleTo Include="ModelSwitch.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+    <ProjectReference Include="../ModelSwitch.SharedKernel.Http/ModelSwitch.SharedKernel.Http.csproj" />
+    <!-- Contracts namespaces only; the loaders below never touch another module's internals. -->
+    <ProjectReference Include="../Modules/ModelSwitch.Identity/ModelSwitch.Identity.csproj" />
+    <ProjectReference Include="../Modules/ModelSwitch.Registry/ModelSwitch.Registry.csproj" />
+    <ProjectReference Include="../Modules/ModelSwitch.Routing/ModelSwitch.Routing.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -44,7 +44,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [ ] Per-instance circuit breakers + health snapshot job
 - [ ] SSE streaming end-to-end: first-token rule, keep-alives, mid-stream error event, disconnect cancellation
 - [x] `usage` schema: `inference_request`, `provider_attempt` (+ partitions); request/attempt recording
-- [ ] Runtime configuration snapshot + NOTIFY/poll refresh
+- [x] Runtime configuration snapshot + NOTIFY/poll refresh
 - [ ] Failure-injection test project with the first scenarios (503 retry, hang, stream cut, circuit opens)
 
 **Exit:** a resilient gateway with inspectable execution history. FR-03, FR-04 and FR-05 are covered and DoD #3 and #4 are met.

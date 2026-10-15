@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ModelSwitch.Configuration;
 using ModelSwitch.Identity;
 using ModelSwitch.Migrator;
 using ModelSwitch.Registry;
@@ -44,6 +45,7 @@ return await StartupExit.RunAsync(
         builder.Services.AddRegistryMigrations();
         builder.Services.AddRoutingMigrations();
         builder.Services.AddUsageMigrations();
+        builder.Services.AddConfigurationMigrations();
 
         if (command == MigratorCommand.Seed)
         {
