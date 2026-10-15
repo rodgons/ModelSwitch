@@ -1,0 +1,34 @@
+# Reference deployment (docs/deployment.md §1). Phase 0 ships only the stateful services;
+# migrator, api, worker, web and proxy are added as their images exist.
+# Run from the repository root: `docker compose up -d postgres valkey` (see ../compose.yaml).
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-modelswitch}
+      # The migrator role owns the schemas and creates the app/retention roles (docs/data-model.md).
+      POSTGRES_USER: modelswitch_migrator
+      POSTGRES_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?set POSTGRES_MIGRATOR_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U modelswitch_migrator -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  valkey:
+    image: valkey/valkey:8
+    restart: unless-stopped
+    # Valkey holds only Rate and Concurrency Limit counters, so it needs no persistence (ADR-0003).
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres-data:

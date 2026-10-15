@@ -1,0 +1,7 @@
+# Lets `docker compose …` run from the repository root with the root `.env`.
+# The services live in deploy/docker-compose.yml (docs/deployment.md §1).
+name: modelswitch
+
+include:
+  - path: deploy/docker-compose.yml
+    env_file: .env

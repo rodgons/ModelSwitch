@@ -4,7 +4,7 @@ This document covers FR-10 and NFR-05. The README quick-start is derived from it
 
 ## 1. Compose services
 
-`deploy/docker-compose.yml`:
+`deploy/docker-compose.yml`, included by the root `compose.yaml` so that `docker compose …` runs from the repository root and reads the root `.env`:
 
 | Service | Image | Profile | Depends on |
 |---|---|---|---|
@@ -19,7 +19,7 @@ This document covers FR-10 and NFR-05. The README quick-start is derived from it
 | `ollama` | `ollama/ollama` | `ollama` | — |
 | `otel-lgtm` | `grafana/otel-lgtm` | `observability` | — |
 
-Only `proxy` publishes a host port (default `8080`). PostgreSQL and Valkey publish ports only in `docker-compose.override.yml` for local development.
+Only `proxy` publishes a host port (default `8080`). PostgreSQL and Valkey publish ports (on `127.0.0.1`) only in a local `compose.override.yaml`: copy `deploy/compose.override.example.yaml` to the repository root, where it is gitignored and merged automatically.
 
 The images are .NET 10 multi-stage builds. Runtime images use `mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled` and run as a non-root user. `HEALTHCHECK` uses `/health`.
 
@@ -48,6 +48,9 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 
 | Variable | Req | Used by | Default / notes |
 |---|---|---|---|
+| `POSTGRES_MIGRATOR_PASSWORD` | ✔ | postgres container | Password of `modelswitch_migrator`, the bootstrap superuser that owns the schemas |
+| `POSTGRES_APP_PASSWORD` | ✔ | migrator | Password the migrator gives `modelswitch_app` when it creates the role |
+| `POSTGRES_DB` | | postgres container | `modelswitch` |
 | `MODELSWITCH__ConnectionStrings__Postgres` | ✔ | api, worker | `modelswitch_app` role |
 | `MODELSWITCH__ConnectionStrings__PostgresMigrator` | ✔ | migrator | `modelswitch_migrator` role |
 | `MODELSWITCH__ConnectionStrings__Valkey` | ✔ | api | |

@@ -1,0 +1,9 @@
+# Local development only: publishes PostgreSQL and Valkey on localhost.
+# Copy to the repository root as `compose.override.yaml` (gitignored); Compose merges it automatically.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+  valkey:
+    ports:
+      - "127.0.0.1:6379:6379"
