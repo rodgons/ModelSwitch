@@ -143,20 +143,25 @@ public sealed class MockProviderEndpointTests : IAsyncLifetime
     [Fact]
     public async Task Cut_after_drops_the_connection_after_n_chunks()
     {
-        using var response = await PostAsync("/v1/chat/completions", Chat("mock-fixed?tokens=10", stream: true), fault: "cut-after=3");
-        var lines = new List<string>();
-
-        await Should.ThrowAsync<IOException>(async () =>
+        // Repeated because the original defect was a race between the cut and delivery of the chunks written before it
+        // (a reset discards bytes the peer has not read yet), which showed up in roughly one run in ten under load.
+        for (var attempt = 0; attempt < 20; attempt++)
         {
-            using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken));
-            while (await reader.ReadLineAsync(TestContext.Current.CancellationToken) is { } line)
-            {
-                lines.Add(line);
-            }
-        });
+            using var response = await PostAsync("/v1/chat/completions", Chat("mock-fixed?tokens=10", stream: true), fault: "cut-after=3");
+            var lines = new List<string>();
 
-        lines.Count(l => l.Contains("\"content\":\"token", StringComparison.Ordinal) || l.Contains("\"content\":\" token", StringComparison.Ordinal)).ShouldBe(3);
-        lines.ShouldNotContain("data: [DONE]");
+            await Should.ThrowAsync<IOException>(async () =>
+            {
+                using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken));
+                while (await reader.ReadLineAsync(TestContext.Current.CancellationToken) is { } line)
+                {
+                    lines.Add(line);
+                }
+            });
+
+            lines.Count(l => l.Contains("\"content\":\"token", StringComparison.Ordinal) || l.Contains("\"content\":\" token", StringComparison.Ordinal)).ShouldBe(3);
+            lines.ShouldNotContain("data: [DONE]");
+        }
     }
 
     [Fact]

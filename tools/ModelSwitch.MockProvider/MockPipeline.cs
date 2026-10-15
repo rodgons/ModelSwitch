@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Connections.Features;
+
 namespace ModelSwitch.MockProvider;
 
 /// <summary>One wire protocol's way of writing the planned response.</summary>
@@ -12,6 +14,8 @@ internal interface IMockProtocol
 
 internal static class MockPipeline
 {
+    private static readonly TimeSpan _clientHangupGrace = TimeSpan.FromSeconds(5);
+
     /// <summary>Applies latency, hang and status faults common to both protocols, then hands over to the protocol writer.</summary>
     public static async Task RunAsync(HttpContext http, MockPlan plan, IMockProtocol protocol, TimeProvider time)
     {
@@ -54,5 +58,32 @@ internal static class MockPipeline
     {
         await http.Response.WriteAsync(text, ct);
         await http.Response.Body.FlushAsync(ct);
+    }
+
+    /// <summary>
+    /// Drops the connection mid-response (the <c>cut-after</c> fault). Aborting right away would close the socket with a
+    /// reset while the chunks written so far may still be queued in Kestrel's output pipe or unread by the peer, so they
+    /// raced with the reset and sometimes never reached the client (even the response headers could be lost). Completing
+    /// the transport's output pipe instead makes the socket send loop drain everything queued and then shut the sending
+    /// side down (a FIN): the peer reads the chunks and then sees the stream end without the chunked terminator, which is
+    /// what a Provider dying mid-stream looks like. The abort afterwards waits for the client to hang up and is only a
+    /// backstop for one that never does.
+    /// </summary>
+    public static async Task CutConnectionAsync(HttpContext http, CancellationToken ct)
+    {
+        if (http.Features.Get<IConnectionTransportFeature>()?.Transport is { } transport)
+        {
+            await transport.Output.CompleteAsync();
+            try
+            {
+                await Task.Delay(_clientHangupGrace, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                // The client hung up, which is exactly the end this fault simulates.
+            }
+        }
+
+        http.Abort();
     }
 }

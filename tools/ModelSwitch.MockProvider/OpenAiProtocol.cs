@@ -136,7 +136,7 @@ internal sealed class OpenAiProtocol(TimeProvider time) : IMockProtocol
         {
             if (plan.Fault is { CutAfter: { } cut } && sent >= cut)
             {
-                http.Abort();
+                await MockPipeline.CutConnectionAsync(http, ct);
                 return;
             }
 
@@ -152,7 +152,7 @@ internal sealed class OpenAiProtocol(TimeProvider time) : IMockProtocol
 
         if (plan.Fault is { CutAfter: { } finalCut } && sent >= finalCut)
         {
-            http.Abort();
+            await MockPipeline.CutConnectionAsync(http, ct);
             return;
         }
 
