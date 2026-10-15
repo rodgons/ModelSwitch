@@ -11,13 +11,13 @@ namespace ModelSwitch.IntegrationTests.Persistence;
 /// <summary>The Migrator's least-privilege roles (data-model.md "Database roles", NFR-03), checked as the roles themselves.</summary>
 public sealed class DatabaseRolesTests(PostgresFixture postgres)
 {
-    private const string AppPassword = "app-secret-with-'quote";
+    private const string _appPassword = "app-secret-with-'quote";
 
     [Fact]
     public async Task App_role_can_read_and_write_module_tables_but_not_update_model_price()
     {
         var admin = await MigratedAndGrantedAsync();
-        var app = AsRole(admin, DatabaseRoles.AppRole, AppPassword);
+        var app = AsRole(admin, DatabaseRoles.AppRole, _appPassword);
 
         await ExecuteAsync(app, "insert into identity.tenant (id, name, status, created_at, updated_at) values (gen_random_uuid(), 'acme', 'active', now(), now())");
         await ExecuteAsync(app, "update identity.tenant set name = 'acme2'");
@@ -33,7 +33,7 @@ public sealed class DatabaseRolesTests(PostgresFixture postgres)
     public async Task App_role_cannot_touch_migration_history_or_run_ddl()
     {
         var admin = await MigratedAndGrantedAsync();
-        var app = AsRole(admin, DatabaseRoles.AppRole, AppPassword);
+        var app = AsRole(admin, DatabaseRoles.AppRole, _appPassword);
 
         (await Should.ThrowAsync<PostgresException>(() => ExecuteAsync(app, "select * from identity.__ef_migrations_history")))
             .SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
@@ -49,7 +49,7 @@ public sealed class DatabaseRolesTests(PostgresFixture postgres)
 
         await ApplyAsync(admin); // the second run picks up the new table and is a no-op for the rest
         await ApplyAsync(admin);
-        var app = AsRole(admin, DatabaseRoles.AppRole, AppPassword);
+        var app = AsRole(admin, DatabaseRoles.AppRole, _appPassword);
 
         await ExecuteAsync(app, "insert into identity.audit_record values (1, 'api_key.created')");
         (await Should.ThrowAsync<PostgresException>(() => ExecuteAsync(app, "update identity.audit_record set action = 'x'")))
@@ -87,7 +87,7 @@ public sealed class DatabaseRolesTests(PostgresFixture postgres)
 
     private static Task ApplyAsync(string admin)
         => new DatabaseRoles(NullLogger<DatabaseRoles>.Instance)
-            .ApplyAsync(admin, ["identity", "registry"], AppPassword, retentionPassword: null, CancellationToken.None);
+            .ApplyAsync(admin, ["identity", "registry"], _appPassword, retentionPassword: null, CancellationToken.None);
 
     private static string AsRole(string admin, string role, string password)
         => new NpgsqlConnectionStringBuilder(admin) { Username = role, Password = password }.ConnectionString;
