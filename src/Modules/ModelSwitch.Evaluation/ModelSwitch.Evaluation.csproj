@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ModelSwitch.UnitTests" />
+    <InternalsVisibleTo Include="ModelSwitch.IntegrationTests" />
+    <InternalsVisibleTo Include="ModelSwitch.ArchitectureTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+    <ProjectReference Include="../ModelSwitch.Inference/ModelSwitch.Inference.csproj" />
+    <ProjectReference Include="../ModelSwitch.Usage/ModelSwitch.Usage.csproj" />
+  </ItemGroup>
+
+</Project>

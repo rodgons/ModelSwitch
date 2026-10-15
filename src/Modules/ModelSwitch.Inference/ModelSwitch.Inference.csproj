@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ModelSwitch.UnitTests" />
+    <InternalsVisibleTo Include="ModelSwitch.IntegrationTests" />
+    <InternalsVisibleTo Include="ModelSwitch.ArchitectureTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+    <ProjectReference Include="../ModelSwitch.Routing/ModelSwitch.Routing.csproj" />
+    <ProjectReference Include="../ModelSwitch.Registry/ModelSwitch.Registry.csproj" />
+    <ProjectReference Include="../ModelSwitch.Usage/ModelSwitch.Usage.csproj" />
+    <ProjectReference Include="../ModelSwitch.Identity/ModelSwitch.Identity.csproj" />
+    <ProjectReference Include="../../Adapters/ModelSwitch.Adapters.Abstractions/ModelSwitch.Adapters.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

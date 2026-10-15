@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Adapters/ModelSwitch.Adapters.Abstractions/ModelSwitch.Adapters.Abstractions.csproj" />
+    <ProjectReference Include="../../src/Adapters/ModelSwitch.Adapters.OpenAICompatible/ModelSwitch.Adapters.OpenAICompatible.csproj" />
+    <ProjectReference Include="../../src/Adapters/ModelSwitch.Adapters.Ollama/ModelSwitch.Adapters.Ollama.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

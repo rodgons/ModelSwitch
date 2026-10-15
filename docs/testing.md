@@ -22,6 +22,8 @@ Rules from the [constitution](constitution.md), which apply to every task:
 - **Validation errors return 400 Problem Details.** Each validator has an integration test asserting the status, `Content-Type: application/problem+json` and the `errors` extension.
 - **Every bug fix comes with a regression test** that fails before the fix and passes after it, at the lowest layer that reproduces the bug.
 
+Test runner: xUnit v3 on Microsoft.Testing.Platform (`global.json` `test.runner`), run with `dotnet test ModelSwitch.slnx`. `tests/Directory.Build.props` passes `--ignore-exit-code 8`, so a test project that has no tests yet does not fail the run; real failures still do.
+
 Other rules: no test calls a real external Provider. Testcontainers are shared per collection (one Postgres per test assembly, with a fresh database per test class via template DB clone) to keep the suite fast. Time is controlled with `FakeTimeProvider`, never `Thread.Sleep`.
 
 ## 2. Integration test catalogue (minimum)

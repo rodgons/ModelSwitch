@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ModelSwitch.UnitTests" />
+    <InternalsVisibleTo Include="ModelSwitch.IntegrationTests" />
+    <InternalsVisibleTo Include="ModelSwitch.ArchitectureTests" />
+    <InternalsVisibleTo Include="ModelSwitch.AdapterContractTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

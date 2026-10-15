@@ -1,0 +1,32 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ModelSwitch.Api/ModelSwitch.Api.csproj" />
+    <Project Path="src/ModelSwitch.Migrator/ModelSwitch.Migrator.csproj" />
+    <Project Path="src/ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+    <Project Path="src/ModelSwitch.Worker/ModelSwitch.Worker.csproj" />
+  </Folder>
+  <Folder Name="/src/Adapters/">
+    <Project Path="src/Adapters/ModelSwitch.Adapters.Abstractions/ModelSwitch.Adapters.Abstractions.csproj" />
+    <Project Path="src/Adapters/ModelSwitch.Adapters.Ollama/ModelSwitch.Adapters.Ollama.csproj" />
+    <Project Path="src/Adapters/ModelSwitch.Adapters.OpenAICompatible/ModelSwitch.Adapters.OpenAICompatible.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/ModelSwitch.Admin/ModelSwitch.Admin.csproj" />
+    <Project Path="src/Modules/ModelSwitch.Evaluation/ModelSwitch.Evaluation.csproj" />
+    <Project Path="src/Modules/ModelSwitch.Identity/ModelSwitch.Identity.csproj" />
+    <Project Path="src/Modules/ModelSwitch.Inference/ModelSwitch.Inference.csproj" />
+    <Project Path="src/Modules/ModelSwitch.Registry/ModelSwitch.Registry.csproj" />
+    <Project Path="src/Modules/ModelSwitch.Routing/ModelSwitch.Routing.csproj" />
+    <Project Path="src/Modules/ModelSwitch.Usage/ModelSwitch.Usage.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ModelSwitch.AdapterContractTests/ModelSwitch.AdapterContractTests.csproj" />
+    <Project Path="tests/ModelSwitch.ArchitectureTests/ModelSwitch.ArchitectureTests.csproj" />
+    <Project Path="tests/ModelSwitch.FailureInjectionTests/ModelSwitch.FailureInjectionTests.csproj" />
+    <Project Path="tests/ModelSwitch.IntegrationTests/ModelSwitch.IntegrationTests.csproj" />
+    <Project Path="tests/ModelSwitch.UnitTests/ModelSwitch.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/ModelSwitch.MockProvider/ModelSwitch.MockProvider.csproj" />
+  </Folder>
+</Solution>

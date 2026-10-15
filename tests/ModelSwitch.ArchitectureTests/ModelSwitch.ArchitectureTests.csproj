@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="NetArchTest.Rules" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+    <ProjectReference Include="../../src/Modules/ModelSwitch.Identity/ModelSwitch.Identity.csproj" />
+    <ProjectReference Include="../../src/Modules/ModelSwitch.Registry/ModelSwitch.Registry.csproj" />
+    <ProjectReference Include="../../src/Modules/ModelSwitch.Routing/ModelSwitch.Routing.csproj" />
+    <ProjectReference Include="../../src/Modules/ModelSwitch.Inference/ModelSwitch.Inference.csproj" />
+    <ProjectReference Include="../../src/Modules/ModelSwitch.Usage/ModelSwitch.Usage.csproj" />
+    <ProjectReference Include="../../src/Modules/ModelSwitch.Evaluation/ModelSwitch.Evaluation.csproj" />
+    <ProjectReference Include="../../src/Modules/ModelSwitch.Admin/ModelSwitch.Admin.csproj" />
+    <ProjectReference Include="../../src/Adapters/ModelSwitch.Adapters.Abstractions/ModelSwitch.Adapters.Abstractions.csproj" />
+    <ProjectReference Include="../../src/Adapters/ModelSwitch.Adapters.OpenAICompatible/ModelSwitch.Adapters.OpenAICompatible.csproj" />
+    <ProjectReference Include="../../src/Adapters/ModelSwitch.Adapters.Ollama/ModelSwitch.Adapters.Ollama.csproj" />
+    <ProjectReference Include="../../src/ModelSwitch.Api/ModelSwitch.Api.csproj" />
+    <ProjectReference Include="../../src/ModelSwitch.Worker/ModelSwitch.Worker.csproj" />
+    <ProjectReference Include="../../src/ModelSwitch.Migrator/ModelSwitch.Migrator.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

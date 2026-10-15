@@ -47,6 +47,7 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
 | ECharts (`vue-echarts`) | Time-series and scatter charts in the dashboard and comparisons | Chart.js: weaker large time-series support |
 | `openapi-typescript` + `openapi-fetch` | Generates the TypeScript client from the OpenAPI document, so response shapes are never hand-written | Hand-written DTOs: drift from the server |
 | Vitest, Playwright, `axe-core` | Web unit tests, E2E smoke tests, accessibility checks | — |
+| Web build tooling: Vite + `@vitejs/plugin-vue`, TypeScript, `vue-tsc`, ESLint (`@eslint/js`, `eslint-plugin-vue`, `@vue/eslint-config-typescript`, `@vue/eslint-config-prettier`, `eslint-config-prettier`), Prettier, `@vue/test-utils`, jsdom, `jiti`, `@types/node` | Dev-only: build, typecheck, lint and format the dashboard, and run component tests in a DOM ([conventions.md](conventions.md#typescript--vue)). `jiti` loads the TypeScript ESLint config. TypeScript stays on 6.0.x until typescript-eslint supports 7 | — (the standard Vue 3 toolchain) |
 | k6 | Load tests that produce the gateway-overhead benchmark (NFR-01, DoD #10) | — |
 | Caddy | One browser origin for api + web (ADR-0011), plus TLS termination | nginx: more configuration for automatic TLS |
 
@@ -73,7 +74,8 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
 ## 3. Solution layout
 
 ```
-ModelSwitch.sln
+ModelSwitch.slnx                 # XML solution format (.NET 10 default)
+compose.yaml                     # includes deploy/docker-compose.yml with the root .env
 Directory.Build.props            # net10.0, nullable, warnings-as-errors, analyzers
 Directory.Packages.props         # central package management
 src/
