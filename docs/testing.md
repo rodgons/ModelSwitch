@@ -62,6 +62,8 @@ Each one asserts **bounded attempts**, **a recorded outcome** and **consistent a
 | Worker killed during evaluation | Resumed, no duplicates |
 | OTLP backend killed | No change in success rate |
 
+**Implementation status.** `ModelSwitch.FailureInjectionTests` holds the first eight scenarios (503 x2, both 429 cases, hang, 401, invalid JSON, stream cut, circuit opens). It references `ModelSwitch.IntegrationTests` to reuse `GatewayFixture` and `PostgresFixture` (re-declaring the assembly fixture, which xunit only honours on the entry assembly). Each scenario class has its own fixture, so circuits and fault scripts do not leak, and installs a Routing Policy with small timeouts. Classes carry `[Slow]` (trait `Category=slow`). They run in the normal `dotnet test` of the `dotnet` CI job; filter with `--filter-trait "Category=slow"` to run or split them out. Assertions on `usage_record` and `budget_period` are marked `TODO(Phase 3)` because those tables do not exist yet. Provider calls are counted by the Mock Provider, and `AmplificationReport` collects each scenario's ratio (test output now, benchmark report in Phase 6).
+
 **Retry amplification** is measured as `provider_calls / client_requests` per scenario and reported in the benchmark report (PRD §13).
 
 ## 4. Security tests (PRD §10.4)

@@ -15,6 +15,10 @@
   <ItemGroup>
     <ProjectReference Include="../../src/ModelSwitch.Api/ModelSwitch.Api.csproj" />
     <ProjectReference Include="../../tools/ModelSwitch.MockProvider/ModelSwitch.MockProvider.csproj" />
+    <!-- Reuses GatewayFixture and PostgresFixture. The integration project is referenced rather than split into a shared
+         support project: its fixtures are public and its assembly name already has InternalsVisibleTo access to the modules.
+         This project declares its own AssemblyFixture, because xunit only honours that attribute on the entry assembly. -->
+    <ProjectReference Include="../ModelSwitch.IntegrationTests/ModelSwitch.IntegrationTests.csproj" />
   </ItemGroup>
 
   <ItemGroup>
