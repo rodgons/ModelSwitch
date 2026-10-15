@@ -46,9 +46,9 @@ public abstract partial class AdapterContract<TAdapter> : IAsyncLifetime
 
     private static CancellationToken TestToken => TestContext.Current.CancellationToken;
 
-    public ValueTask InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
-        Server = WireMockServer.Start();
+        Server = await StartServerAsync();
         _http = new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
         {
             Timeout = Timeout.InfiniteTimeSpan,
@@ -56,7 +56,30 @@ public abstract partial class AdapterContract<TAdapter> : IAsyncLifetime
         _logs = new CapturingLoggerProvider();
         _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(_logs));
         Adapter = CreateAdapter(new AdapterTestEnvironment(_http, _loggerFactory, TimeProvider.System));
-        return ValueTask.CompletedTask;
+    }
+
+    // WireMock picks a free port and binds it a moment later, and the suite's other tests (ClosedPortEndpoint, RawStreamServer)
+    // grab and release ephemeral ports at the same time in the same process, so under a fully parallel run a start can lose that
+    // race, or a test can connect before the listener is accepting. A start is therefore retried, and only counts once the port
+    // accepts connections, so a test never fails (in milliseconds, before its own timeout could elapse) on its fixture.
+    private static async Task<WireMockServer> StartServerAsync()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            WireMockServer? server = null;
+            try
+            {
+                server = WireMockServer.Start();
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                using var probe = new TcpClient();
+                await probe.ConnectAsync(IPAddress.Loopback, server.Port, timeout.Token);
+                return server;
+            }
+            catch (Exception) when (attempt < 5)
+            {
+                server?.Dispose();
+            }
+        }
     }
 
     public ValueTask DisposeAsync()
