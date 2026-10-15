@@ -7,6 +7,7 @@ using ModelSwitch.Adapters.Abstractions;
 using ModelSwitch.Registry.Contracts;
 using ModelSwitch.Registry.Infrastructure;
 using ModelSwitch.Registry.Infrastructure.Credentials;
+using ModelSwitch.Registry.Infrastructure.Health;
 using ModelSwitch.Registry.Infrastructure.Outbound;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Persistence;
@@ -36,6 +37,19 @@ public static class RegistryModule
                 npgsql => npgsql.MigrationsHistoryTable(RegistryDbContext.MigrationsHistoryTable, RegistryDbContext.Schema)));
         services.TryAddSingleton<IProviderCatalog, EfProviderCatalog>();
         services.TryAddSingleton<IAdapterFactory, AdapterFactory>();
+        services.TryAddSingleton(provider => CircuitOptions.From(provider.GetRequiredService<IConfiguration>()));
+        services.TryAddSingleton<IProviderHealth, ProviderHealth>();
+        return services;
+    }
+
+    /// <summary>
+    /// Runs the job that writes this instance's Provider Health to <c>registry.provider_health_snapshot</c> every 15 s.
+    /// Add it to the host that serves inference (the api), because the circuit breakers live in that process.
+    /// </summary>
+    public static IServiceCollection AddProviderHealthSnapshots(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddHostedService<ProviderHealthSnapshotService>();
         return services;
     }
 

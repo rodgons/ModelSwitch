@@ -93,7 +93,7 @@ Scenarios (each one runs for every Adapter):
 | Failures | 400, 401, 403, 404, 408, 413, 422, 429 (+`Retry-After` seconds and HTTP-date), 500, 502, 503, 504 → expected class + code |
 | | Connection refused → transient, `RequestSent=false` |
 | | Response headers never arrive within timeout → ambiguous, `RequestSent=true` |
-| | Stream cut mid-way (socket closed) → `Failed` ambiguous after deltas |
+| | Stream cut mid-way (socket closed) → `Failed` ambiguous after deltas; non-streaming body cut mid-way → `Failure` ambiguous `connection_reset` |
 | | Malformed JSON body, malformed SSE line → transient `invalid_provider_response` |
 | | Error object in a 200 stream → `Failed`; in a 200 non-streaming body → `Failure`, classified by the inner code |
 | | 429 with a billing/quota `error.code`, and 402 → permanent; 524 → ambiguous; unlisted 5xx → transient; unlisted 4xx → permanent |

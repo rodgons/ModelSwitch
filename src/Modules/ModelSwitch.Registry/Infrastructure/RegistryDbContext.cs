@@ -15,10 +15,24 @@ internal sealed class RegistryDbContext(DbContextOptions<RegistryDbContext> opti
 
     public DbSet<ModelPrice> ModelPrices => Set<ModelPrice>();
 
+    public DbSet<ProviderHealthSnapshot> ProviderHealthSnapshots => Set<ProviderHealthSnapshot>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
         modelBuilder.HasDefaultSchema(Schema);
+
+        modelBuilder.Entity<ProviderHealthSnapshot>(snapshot =>
+        {
+            snapshot.ToTable("provider_health_snapshot", t => t.HasCheckConstraint("ck_provider_health_snapshot_circuit_state", "circuit_state in ('closed', 'half_open', 'open')"));
+            snapshot.HasKey(x => new { x.InstanceId, x.ProviderModelId });
+            snapshot.Property(x => x.InstanceId).HasColumnName("instance_id");
+            snapshot.Property(x => x.ProviderModelId).HasColumnName("provider_model_id");
+            snapshot.Property(x => x.CircuitState).HasColumnName("circuit_state").IsRequired();
+            snapshot.Property(x => x.WindowFailureRate).HasColumnName("window_failure_rate");
+            snapshot.Property(x => x.WindowCalls).HasColumnName("window_calls");
+            snapshot.Property(x => x.CapturedAt).HasColumnName("captured_at");
+        });
 
         var adapterType = new ValueConverter<AdapterType, string>(
             type => type == AdapterType.OpenAiCompatible ? "openai_compatible" : "ollama",

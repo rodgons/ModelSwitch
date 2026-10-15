@@ -25,6 +25,7 @@ return await StartupExit.RunAsync(
         builder.Services.AddSharedKernel();
         builder.Services.AddIdentityModule();
         builder.Services.AddRegistryModule();
+        builder.Services.AddProviderHealthSnapshots();
         builder.Services.AddProviderAdapter<OllamaAdapter>(OllamaAdapter.TypeName);
         // Per-Provider OpenAICompatibleOptions are not in the registry schema yet, so the Adapter runs with its defaults.
         builder.Services.AddProviderAdapter<OpenAICompatibleAdapter>(OpenAICompatibleAdapter.TypeName);
