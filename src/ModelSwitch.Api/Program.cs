@@ -4,6 +4,7 @@ using ModelSwitch.Adapters.OpenAICompatible;
 using ModelSwitch.Admin;
 using ModelSwitch.Api.Authentication;
 using ModelSwitch.Api.Endpoints;
+using ModelSwitch.Configuration;
 using ModelSwitch.Evaluation;
 using ModelSwitch.Identity;
 using ModelSwitch.Identity.Contracts;
@@ -29,6 +30,7 @@ return await StartupExit.RunAsync(
         // Per-Provider OpenAICompatibleOptions are not in the registry schema yet, so the Adapter runs with its defaults.
         builder.Services.AddProviderAdapter<OpenAICompatibleAdapter>(OpenAICompatibleAdapter.TypeName);
         builder.Services.AddRoutingModule();
+        builder.Services.AddConfigurationSnapshot();
         builder.Services.AddInferenceModule();
         builder.Services.AddUsageModule();
         builder.Services.AddEvaluationModule();

@@ -34,6 +34,7 @@ public static class IdentityModule
         services.TryAddSingleton<ApiKeyUsageRecorder>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, ApiKeyUsageWriter>());
         services.TryAddSingleton<IApiKeyAuthenticator, ApiKeyAuthenticator>();
+        services.TryAddSingleton<ITenantLimitsSource, NoTenantLimitsSource>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IReadinessCheck, PostgresReadinessCheck>());
         return services;
     }

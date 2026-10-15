@@ -88,6 +88,7 @@ src/
   ModelSwitch.SharedKernel/      # ids (UUIDv7), Money, Clock, Result, error codes, outbox primitives (no ASP.NET Core)
   ModelSwitch.SharedKernel.Http/ # ASP.NET Core half: Problem Details writer, X-Request-Id middleware, readiness check contract.
                                  # Referenced only by the Api host and modules that have Endpoints or readiness checks
+  ModelSwitch.Configuration/     # owns schema `config`; builds the ConfigurationSnapshot from the modules' Contracts loaders; LISTEN/poll refresh
   Modules/
     ModelSwitch.Identity/        # tenants, API keys, administrators, roles, audit
     ModelSwitch.Registry/        # providers, provider models, prices, secrets, health
@@ -193,6 +194,13 @@ There are two kinds of configuration with different lifecycles.
 | **Runtime configuration**: Providers, Provider Models, Prices, Routing Policies, Tenants, limits, Budgets | PostgreSQL, edited through the admin API | Nothing; picked up live |
 
 **Runtime configuration propagation.** Each api instance holds an immutable `ConfigurationSnapshot` (catalog + policies + tenant limits). Every admin write increments `config.config_version` and issues `NOTIFY config_changed`. Each instance `LISTEN`s and also polls the version every 5 seconds as a fallback. When the version changes, the instance builds a new snapshot and swaps it in atomically. In-flight requests finish on the snapshot they started with. Their Routing Decision records the Policy Version it used, so a request never mixes two versions.
+
+Implementation (`ModelSwitch.Configuration`, infrastructure that owns the `config` schema rather than a domain module; its migrator is plain idempotent DDL, registered last in the Migrator order):
+
+- **Write side:** `SharedKernel.Configuration.ConfigVersion.BumpAsync(connection, transaction)` increments `config.config_version` and calls `pg_notify('config_changed', version)` on the caller's own connection and transaction, so the bump and the notification commit or roll back with the change. Every admin write calls it.
+- **Loaders:** each module exposes a bulk read in its `Contracts/` (`ICatalogSnapshotSource` in Registry, `IPolicyCatalogSource` in Routing, `ITenantLimitsSource` in Identity). `SnapshotBuilder` assembles them into the `RoutingSnapshot` that `IRouter` takes (candidate models with parsed Capabilities and the Price in force, alias to policy, latest Policy Versions) plus Tenant limits. `ITenantLimitsSource` is a placeholder returning no limits until `identity.tenant_limits` exists (Phase 3).
+- **Refresh:** `ConfigChangeListener` holds a dedicated, unpooled `LISTEN` connection (reconnect with 1 s to 30 s exponential backoff; each connect also signals a refresh). `ConfigurationRefreshService` refreshes on every signal and at least every 5 s. A refresh reads the version, builds, re-reads the version (a write during the build repeats the build, at most three times) and swaps with a compare-and-exchange that never moves the version backwards. A failed refresh keeps the previous snapshot. The first load runs during host start; `GET /ready` reports `configuration` as `ok` once `IConfigurationSnapshotProvider.IsLoaded`.
+- **Read side:** `IConfigurationSnapshotProvider.Current`. A request reads it once and keeps that instance.
 
 **Startup validation.** A missing or invalid mandatory setting makes the process exit with code 78 (`EX_CONFIG`) and log one line per problem, naming the environment variable to set (FR-10).
 

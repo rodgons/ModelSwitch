@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/ModelSwitch.Api/ModelSwitch.Api.csproj" />
+    <Project Path="src/ModelSwitch.Configuration/ModelSwitch.Configuration.csproj" />
     <Project Path="src/ModelSwitch.Migrator/ModelSwitch.Migrator.csproj" />
     <Project Path="src/ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
     <Project Path="src/ModelSwitch.SharedKernel.Http/ModelSwitch.SharedKernel.Http.csproj" />

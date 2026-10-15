@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ModelSwitch.Configuration;
 using ModelSwitch.Identity;
 using ModelSwitch.Registry;
 using ModelSwitch.Routing;
@@ -19,6 +20,7 @@ public static class ModuleServices
         services.AddIdentityMigrations();
         services.AddRegistryMigrations();
         services.AddRoutingMigrations();
+        services.AddConfigurationMigrations();
         services.AddIdentitySeeding();
         return services.BuildServiceProvider();
     }
