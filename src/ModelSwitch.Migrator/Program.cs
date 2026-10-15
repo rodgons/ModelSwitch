@@ -8,6 +8,7 @@ using ModelSwitch.Registry;
 using ModelSwitch.Routing;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Hosting;
+using ModelSwitch.Usage;
 
 // Commands: `migrate` (default) and `seed`. Everything after the command is configuration, e.g.
 //   dotnet run --project src/ModelSwitch.Migrator -- seed --tenant acme --key-name ci
@@ -42,6 +43,7 @@ return await StartupExit.RunAsync(
         builder.Services.AddIdentityMigrations();
         builder.Services.AddRegistryMigrations();
         builder.Services.AddRoutingMigrations();
+        builder.Services.AddUsageMigrations();
 
         if (command == MigratorCommand.Seed)
         {

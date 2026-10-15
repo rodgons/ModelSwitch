@@ -4,6 +4,7 @@ using ModelSwitch.Identity;
 using ModelSwitch.Registry;
 using ModelSwitch.Routing;
 using ModelSwitch.SharedKernel;
+using ModelSwitch.Usage;
 
 namespace ModelSwitch.IntegrationTests.Infrastructure;
 
@@ -19,6 +20,7 @@ public static class ModuleServices
         services.AddIdentityMigrations();
         services.AddRegistryMigrations();
         services.AddRoutingMigrations();
+        services.AddUsageMigrations();
         services.AddIdentitySeeding();
         return services.BuildServiceProvider();
     }
