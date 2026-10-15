@@ -43,7 +43,7 @@ Each Evaluator has a kind, a semantic **version** (bumped whenever its scoring c
 Rules:
 - An unparseable output is a **failed** Case (score 0, `status=failed`) and is counted in aggregates. It is never dropped.
 - Provider errors make a Case **errored** (no score). Aggregates report quality over scored Cases **and** the errored rate, as two separate numbers (FR-09: failed cases included in failure stats).
-- `llm_judge` results are labelled as model-judged in the UI. Judge calls are made through the same `IInferenceService` and count toward the run's usage under a separate `judge` cost line.
+- `llm_judge` results are labelled as model-judged in the UI. Judge calls are made through the same `IInferenceService`. Each one is its own Inference Request (Request Origin `evaluation`, same `evaluation_run_id`), so it has ordinary Usage Records and counts toward the Budget and the run's cost cap. Its tokens and cost are stored on the Case Result in separate `judge_*` columns. Run aggregates report `cost.candidate`, `cost.judge` and `cost.total`. The Comparison view lines configurations up on **candidate** cost, the comparable number, and shows judge cost as a separate labelled column. The request detail page shows "judge for Case X of run Y" by following the Case Result's link.
 - All metric code lives in the Evaluation module's `Domain/Metrics` as pure functions with golden-value unit tests (e.g. scikit-learn-computed fixtures for P/R/F1).
 
 ## 4. Runs and Comparisons
@@ -57,17 +57,19 @@ Rules:
       "params": { "temperature": 0, "seed": 7, "maxOutputTokens": 256 },
       "evaluator": { "kind": "json_fields", "version": "1", "config": { … } } },
     { "target": { "providerModelId": "…" }, … } ],
-  "concurrency": 4 }
+  "concurrency": 4, "maxEstimatedCost": 5.00 }
 ```
 
 This creates one Comparison and one Evaluation Run per configuration. Each run's `run_configuration` is frozen at creation, with every reference resolved:
 - `alias` targets also record the Policy Version that was current **at run creation**. The run uses that version for its whole duration, not later edits, so it can be reproduced.
-- `providerModelId` targets bypass routing (`IInferenceService` "pinned" mode), but still apply the Tenant's limits and Budget.
+- `providerModelId` targets bypass routing (`IInferenceService` "pinned" mode), but still apply the Tenant's Budget, per-request cost cap and allowed aliases.
 - The Price ids in force are captured on each Case Result's usage.
+
+**Spend.** Evaluation spend counts against the Tenant's **one** Budget: there is no separate evaluation Budget. To stop a large Comparison from draining the month and failing production traffic with `budget_exceeded`, each run takes an optional `maxEstimatedCost` (per run, not per Comparison). Before each Case starts, the worker checks the run's Estimated Cost so far (candidate + judge) plus that Case's worst case against the cap. Once it would be exceeded, no new Case starts, the remaining Cases are `skipped`, and the run ends `failed` with `error = run_cost_cap_reached`. The run builder shows a worst-case estimate (Cases × per-Case worst case) before the run is created.
 
 ## 5. Execution
 
-- Creating a run enqueues one `evaluation.run` job. The worker claims it and processes Cases with `concurrency` parallelism (cap 16), calling `IInferenceService` with the Tenant's identity and `X-ModelSwitch-Task = dataset.task_kind`.
+- Creating a run enqueues one `evaluation.run` job. The worker claims it and processes Cases with `concurrency` parallelism (cap 16), calling `IInferenceService` with the Tenant's identity and `X-ModelSwitch-Task = dataset.task_kind`. There is no API Key: each Inference Request is recorded with Request Origin `evaluation`, `api_key_id = null` and the run's `evaluation_run_id`. The Budget, the per-request cost cap (`max_request_cost`) and `allowed_aliases` apply. The Tenant's Rate and Concurrency Limits do **not**, so a run can't starve production traffic of its slots; the run's own `concurrency` (cap 16) throttles it instead.
 - Each Case Result is written as soon as it completes. `unique(run_id, case_id)` lets a run that was interrupted by a worker crash be resumed by re-claiming the job: completed Cases are skipped (NFR-02).
 - Cancellation sets `status=cancelled`. In-flight Cases finish, and nothing new starts.
 - Aggregates are computed **only from stored Case Results** at the end, and can be recomputed on demand (FR-09).

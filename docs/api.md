@@ -57,7 +57,7 @@ The response never reveals *why* a key is invalid, so revoked and unknown keys l
 | `response_format` | `{type:"text"}`, `{type:"json_object"}`, `{type:"json_schema", json_schema:{…}}`. Requires the matching Capability |
 | `user` | Accepted but **not stored** (it may be personal data) |
 
-**Rejected with `400 unsupported_parameter`:** `tools`, `tool_choice`, `functions`, `n` ≠ 1, `logprobs`, `audio`, `modalities`, `prediction`, image or audio content parts, and any unknown top-level field. Rejecting unknown fields is deliberate (FR-02): it stops a request from silently meaning something different than the client intended.
+**Rejected with `400 unsupported_parameter`:** `tools`, `tool_choice`, `functions`, `n` ≠ 1, `logprobs`, `audio`, `modalities`, `prediction`, image or audio content parts, and any unknown top-level field. Rejecting unknown fields is deliberate (FR-02): it stops a request from silently meaning something different than the client intended. **Tools / function calling are post-MVP.** Supporting them would mean normalizing streaming tool-call deltas in both Adapters, a `tools` Capability with its eligibility rule, and contract-suite coverage. The demo's "connect an application" works with plain chat.
 
 **Limits (configurable, defaults):** body ≤ 1 MiB, ≤ 256 messages, `Content-Type: application/json` only.
 
@@ -158,6 +158,7 @@ Every error has one code from this closed set. The `type` groups codes and maps 
 | `limits_unavailable` | 503 | `api_error` | Yes (Valkey down, fail-closed) |
 | `deadline_exceeded` | 504 | `timeout_error` | Maybe |
 | `stream_interrupted` | — (SSE event) | `provider_error` | Maybe, but the output may be partial |
+| `run_cost_cap_reached` | — (Evaluation Run `error`) | `budget_error` | No. The run's `maxEstimatedCost` would be exceeded; remaining Cases are `skipped` |
 | `internal_error` | 500 | `api_error` | Maybe |
 | `validation_failed` | 400 | `invalid_request_error` | No. Admin API only (policy, dataset, limits… bodies) |
 | `forbidden` | 403 | `permission_error` | No. Admin API only |
@@ -228,7 +229,7 @@ Lists use cursor pagination, `?limit=50&cursor=<opaque>`, and return `{ items, n
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/admin/requests` | Filters: `from`, `to`, `tenantId`, `alias`, `providerId`, `modelId`, `status`, `errorCode`, `hadFallback`. Sort by `startedAt` (default desc) or `durationMs` |
+| GET | `/admin/requests` | Filters: `from`, `to`, `tenantId`, `origin` (`api`, `evaluation`), `alias`, `providerId`, `modelId`, `status`, `errorCode`, `hadFallback`. Sort by `startedAt` (default desc) or `durationMs` |
 | GET | `/admin/requests/{requestId}` | Request + RoutingDecision + Attempts timeline + Usage Records |
 | GET | `/admin/usage` | `groupBy=tenant\|provider\|model\|alias` (multi), `interval=hour\|day\|month`, filters as above. Returns tokens, Estimated Cost, request and error counts |
 | GET | `/admin/overview` | Dashboard tiles + time series: volume, error rate, p50/p95 latency, p50/p95 TTFT, tokens, cost, fallback rate |

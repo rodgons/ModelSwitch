@@ -1,6 +1,6 @@
 # Research: hosted OpenAI-compatible Providers
 
-Research ticket [#3](https://github.com/rodgons/ModelSwitch/issues/3), feeding open question 6 in [open-questions.md](../open-questions.md) (which hosted Provider is the reference for the demo and the benchmark). The pick itself is decided in [#4](https://github.com/rodgons/ModelSwitch/issues/4), not here.
+Research ticket [#3](https://github.com/rodgons/ModelSwitch/issues/3), feeding open question 6 of the since-retired `open-questions.md` (which hosted Provider is the reference for the demo and the benchmark). The pick itself is decided in [#4](https://github.com/rodgons/ModelSwitch/issues/4), not here.
 
 - **Retrieved:** 2026-10-14, from official docs and pricing pages only. No account was created and no Provider API was called.
 - **Scope:** OpenAI, Groq, Together, OpenRouter. For each one: Chat Completions compatibility for the fields the gateway uses ([api.md §1](../api.md#1-inference-api), [provider-adapters.md §2](../provider-adapters.md#2-openai-compatible-adapter)), the Price of small and medium Provider Models, free-tier and rate limits, and what an account needs for demo and benchmark use.

@@ -1,6 +1,6 @@
 # Research: cached-input token pricing
 
-Ticket: [#5](https://github.com/rodgons/ModelSwitch/issues/5). Feeds open question OQ2 in [`docs/open-questions.md`](../open-questions.md) (decision: ticket #6).
+Ticket: [#5](https://github.com/rodgons/ModelSwitch/issues/5). Feeds open question OQ2 of the since-retired `docs/open-questions.md` (decision: ticket #6).
 All sources were retrieved on **2026-10-14**. No Provider API was called. Everything below comes from documentation, SDK type definitions generated from the vendors' OpenAPI specs, or open source code.
 
 This note answers the factual question only: do the Providers report cached input tokens, under which usage fields, at what discount, and on streaming final usage chunks too? It also estimates the cost of ignoring them. It does not decide how ModelSwitch should model this.

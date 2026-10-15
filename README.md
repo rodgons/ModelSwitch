@@ -26,7 +26,6 @@ A self-hosted AI gateway: one OpenAI-compatible API in front of multiple LLM Pro
 | [docs/deployment.md](docs/deployment.md) | Compose services, quick start, environment variables, migrations |
 | [docs/conventions.md](docs/conventions.md) | Coding standards and CI |
 | [docs/roadmap.md](docs/roadmap.md) | Phased, issue-sized implementation plan |
-| [docs/open-questions.md](docs/open-questions.md) | Assumptions to confirm and undecided questions |
 | [docs/adr/](docs/adr/) | Architecture Decision Records |
 
 ## Stack at a glance

@@ -113,6 +113,10 @@ The moment the first piece of generated content is forwarded to a streaming clie
 
 ### Usage and money
 
+**Request Origin**:
+Whether an Inference Request came from a client's API Key or from an Evaluation Run.
+_Avoid_: Source (that's Usage Source), caller type
+
 **Usage Record**:
 The authoritative record of tokens consumed and cost estimated for one Attempt.
 _Avoid_: Usage event, billing record

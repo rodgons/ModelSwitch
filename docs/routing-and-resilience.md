@@ -108,11 +108,15 @@ Each Adapter maps every failure to a `ProviderFailure { Class, Code, HttpStatus?
 | Connect failure, DNS failure, TLS handshake failure (nothing was sent) | transient | yes | yes |
 | HTTP 408, 409 (conflict/lock), 425 | transient | yes | yes |
 | HTTP 429 | transient | only if `Retry-After` ≤ remaining Deadline − attemptTimeout, and ≤ 5 s | yes |
-| HTTP 500, 502, 503, 504, 529 | transient | yes | yes |
+| HTTP 429 whose `error.code` is a billing/quota code (`insufficient_quota`, `credit_balance_exhausted`, `organization_spend_limit_exceeded`), and HTTP 402 | permanent (provider misconfigured) | no | yes. Counts toward the circuit, like 401/403 |
+| HTTP 500, 502, 503, 504, 529, and any other unlisted 5xx | transient | yes | yes |
+| HTTP 524 (edge timeout after the request was sent) | **ambiguous** | no | yes (same conditions as other ambiguous outcomes) |
 | Per-Attempt timeout **before** response headers were received | **ambiguous** | no | yes (non-streaming, or streaming before the First Token) |
 | Connection reset after the request body was sent | **ambiguous** | no | yes (same conditions) |
 | HTTP 400 (invalid request), 404 (unknown model), 413, 422 | permanent | no | **no**. The request itself is the problem. Exception: provider `context_length_exceeded` → fall back to the next model (its window may be larger) |
 | HTTP 401, 403 | permanent (provider misconfigured) | no | yes. Counts toward the circuit, because an operator problem should not fail every request |
+| Any other unlisted 4xx (e.g. 424, 498, 499) | permanent | no | no |
+| An error object in a 200 body, streaming or not | classified by the inner error's `code`/status like the rows above. With nothing usable inside: transient | | |
 | Malformed or unparseable success body | transient | yes | yes |
 | Content filter / refusal reported by the Provider | not a failure | — | — (returned as `finish_reason: content_filter`) |
 | Client cancellation | cancelled | no | no |
@@ -177,7 +181,7 @@ Every state transition emits a structured log line, a metric (`modelswitch.circu
 
 ## 7. Rate and concurrency limits
 
-These are enforced before routing, using Valkey (ADR-0003).
+These are enforced before routing, using Valkey (ADR-0003). They apply to Request Origin `api` only. Evaluation traffic is throttled by the run's `concurrency` instead ([evaluation.md §5](evaluation.md#5-execution)).
 
 - **Rate Limit**: GCRA (generic cell rate algorithm) per tenant, key `rl:{tenantId}`, one Lua `EVALSHA`, `requests_per_minute` with a burst of `max(1, rpm/10)`.
 - **Concurrency Limit**: a sorted set `cc:{tenantId}` of lease ids scored by expiry, which is the Deadline plus 5 s. Acquire is Lua: remove expired leases, check `ZCARD < max`, then `ZADD`. Release is `ZREM` in a `finally` block. A lease from a crashed instance expires by itself.

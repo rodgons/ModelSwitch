@@ -29,7 +29,7 @@ This document covers FR-01, NFR-03 and the PRD §10.4 security tests.
 - **First Owner bootstrap:** the migrator creates an Owner from `MODELSWITCH__Bootstrap__OwnerEmail` + `…__OwnerPassword` **only if no Administrator exists**, and logs that it did. The variables can be removed afterwards.
 - Session: cookie `__Host-ms_session`, `HttpOnly`, `Secure`, `SameSite=Strict`, sliding expiry of 8 h with an absolute limit of 24 h. Sessions are server-side (`ITicketStore` in PostgreSQL), so sign-out and deactivation revoke them immediately.
 - Antiforgery: double-submit token in the `X-XSRF-TOKEN` header, required on every non-GET admin request.
-- Authorization: endpoint policies by Role, plus a `TenantGrant` check in every query or command that takes a tenant id. Foreign resources return 404.
+- Authorization: endpoint policies by Role, plus a `TenantGrant` check in every query or command that takes a tenant id. Foreign resources return 404. Three Roles (Owner, Operator, Viewer) plus Tenant Grants are the whole MVP model; custom roles and per-permission grants are post-MVP.
 - Audited actions: sign-in success/failure, Administrator create/modify, Tenant create/suspend, API key create/revoke, Provider create/modify/secret replace, Provider Model and Price changes, Routing Policy versions, alias binding, limit/Budget changes, Dataset deletion, evaluation start/cancel.
 
 ## 4. Tenant isolation
@@ -40,7 +40,7 @@ The tenant id always comes from the authenticated principal (`ITenantContext`) a
 2. **Data access**: EF Core global query filters on tenant-owned entities in the Evaluation and Usage modules, applied when the scope is tenant-bound. Raw SQL views take the grant as a parameter.
 3. **Tests**: a dedicated integration test class creates two Tenants and an Administrator granted only Tenant A. It then tries every tenant-scoped endpoint against Tenant B's ids and expects 404 (PRD §10.4, DoD #5).
 
-PostgreSQL row-level security was considered and deferred. It is valuable defence in depth, but it needs per-connection session variables that complicate pooling. It is listed in [open-questions.md](open-questions.md).
+**PostgreSQL row-level security is deferred past the MVP.** It is valuable defence in depth, but three layers plus the test matrix already enforce and prove isolation, and RLS would add: a session variable set per transaction (Npgsql pooling makes it safe only with `SET LOCAL` inside explicit transactions), a bypass role for the worker's cross-tenant jobs (rollups, the sweeper, retention), and an audit of every raw-SQL view. How it would be added later: an EF Core `DbTransaction` interceptor that runs `SET LOCAL app.tenant_id = @t`, `CREATE POLICY tenant_isolation … USING (tenant_id = current_setting('app.tenant_id')::uuid)` on tenant-owned tables, and a separate `BYPASSRLS` role for the worker's system jobs.
 
 ## 5. Outbound requests (SSRF)
 

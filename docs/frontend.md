@@ -1,6 +1,6 @@
 # Admin Dashboard (Frontend)
 
-This document covers PRD §9. The dashboard is an administrative tool, not a chat UI.
+This document covers PRD §9. The dashboard is an administrative tool, not a chat UI. The UI is English-only in the MVP: strings live in components, with no i18n layer.
 
 ## 1. Stack and structure
 

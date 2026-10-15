@@ -51,7 +51,9 @@ Rules every Adapter must follow:
 - `CachedInputTokens` is read from `usage.prompt_tokens_details.cached_tokens`, falling back to a top-level `usage.cached_tokens` (some Together models use the flat shape).
 - Maps `response_format` 1:1. `max_tokens` is sent as `max_completion_tokens`, falling back to `max_tokens` for endpoints that reject the newer field (a per-Provider flag).
 - Parses SSE line by line from a `PipeReader`. `data: [DONE]` ends the stream.
-- An error object inside a 200 stream maps to `Failed`.
+- An error object inside a 200 response maps to a failure: `Failed` in a stream, `Failure` for a non-streaming body. It is classified by the inner error's `code`/status ([routing-and-resilience.md §3](routing-and-resilience.md#3-failure-classification)).
+- A 429 is classified by `error.code`: billing/quota codes are permanent, never retried.
+- **Before adding another hosted Provider** ([research/hosted-providers.md](research/hosted-providers.md) §4): Groq needs a separate `jsonSchemaStreaming` Capability (it can't stream JSON-schema output); OpenRouter needs each Provider Model to pin one upstream (`provider.only`, `allow_fallbacks: false`) so an Attempt's Price is known; Together reports context-length errors as 403.
 - `CheckAsync`: `GET {endpoint}/models` with a 5 s timeout.
 
 ## 3. Ollama Adapter
@@ -84,7 +86,8 @@ Scenarios (each one runs for every Adapter):
 | | Response headers never arrive within timeout → ambiguous, `RequestSent=true` |
 | | Stream cut mid-way (socket closed) → `Failed` ambiguous after deltas |
 | | Malformed JSON body, malformed SSE line → transient `invalid_provider_response` |
-| | Error object in a 200 stream → `Failed` |
+| | Error object in a 200 stream → `Failed`; in a 200 non-streaming body → `Failure`, classified by the inner code |
+| | 429 with a billing/quota `error.code`, and 402 → permanent; 524 → ambiguous; unlisted 5xx → transient; unlisted 4xx → permanent |
 | Behaviour | Cancellation mid-stream stops reading within 100 ms and aborts the connection |
 | | No request/response body appears in captured logs |
 | | Secret appears only in the auth header, never in the URL |
@@ -96,7 +99,7 @@ A new Adapter is "done" when it passes the whole suite unchanged (FR-02 acceptan
 **OpenAI is the reference Provider** for the OpenAI-compatible Adapter: its fixtures in `fixtures/openai-compatible/` are the canonical contract. Other hosted Providers' deviations (see [research/hosted-providers.md](research/hosted-providers.md)) are added as extra fixtures, never by changing the reference ones.
 
 - **Recorded** from the real API: non-streaming and streaming text, streaming with `stream_options.include_usage`, `finish_reason=length`, `json_object` and `json_schema` responses, 400 `invalid_request_error`, 400 context length exceeded, 401, and 404 unknown model.
-- **Synthetic** for everything that can't be provoked on demand (429 rate limit with `Retry-After` as seconds and as an HTTP date, 429 `insufficient_quota`, 5xx, malformed bodies). They are hand-written from OpenAI's documented error body and carry `"_source": "synthetic"`, so nobody mistakes them for recordings. The billing 429 sits next to the rate-limit 429 because the two must be classified differently.
+- **Synthetic** for everything that can't be provoked on demand (429 rate limit with `Retry-After` as seconds and as an HTTP date, 429 `insufficient_quota`, 402, 524, 5xx, a 200 non-streaming body carrying an error object, malformed bodies). They are hand-written from OpenAI's documented error body and carry `"_source": "synthetic"`, so nobody mistakes them for recordings. The billing 429 sits next to the rate-limit 429 because the two must be classified differently.
 - **Recording** is a manual script, `scripts/record-fixtures`, run with `OPENAI_API_KEY` and **never in CI**. It sends synthetic prompts only, strips `authorization`, `openai-organization`, `openai-project`, `x-request-id`, `cookie` and `set-cookie`, and stamps each fixture with its capture date and model. It is re-run only when the Adapter changes or wire drift is suspected.
 
 ## 5. Mock Provider (`tools/ModelSwitch.MockProvider`)

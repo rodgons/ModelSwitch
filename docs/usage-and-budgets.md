@@ -21,7 +21,7 @@ The request-level `usage_status` is the worst of its Attempts' values (`reported
 
 ## 3. Budget enforcement (Reservation model)
 
-Budgets are monthly (calendar month, UTC) and checked against **reserved + spent** (FR-07: "account for pending and completed requests").
+Budgets are monthly (calendar month, UTC; daily and weekly periods are post-MVP) and checked against **reserved + spent** (FR-07: "account for pending and completed requests"). Evaluation Runs reserve and settle against the same Budget as API traffic. Their protection against draining it is a per-run cost cap ([evaluation.md §4](evaluation.md#4-runs-and-comparisons)), not a separate Budget.
 
 **Reserve** (request step 8, one transaction):
 

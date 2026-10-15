@@ -32,13 +32,15 @@ cp .env.example .env
 # set MODELSWITCH__Bootstrap__OwnerEmail / OwnerPassword in .env
 docker compose --profile demo up -d
 open http://localhost:8080             # sign in as the Owner
-./scripts/seed-demo.sh                 # optional: mock provider, models, prices, alias "balanced", tenant + key
+./scripts/seed-demo.sh                 # optional: mock + Ollama providers, models, prices, alias "balanced", tenant + key
 curl http://localhost:8080/v1/chat/completions -H "Authorization: Bearer $KEY" -d '{"model":"balanced","messages":[{"role":"user","content":"hi"}]}'
 ```
 
 The "setup time from a clean checkout" metric (PRD §13) is measured by timing this script on a clean machine.
 
-`./scripts/seed-demo.sh --with-openai` also seeds the reference hosted Provider: an `openai` Provider with `credential_reference = env:OPENAI_API_KEY`, the Provider Models `gpt-5-nano` and `gpt-4o-mini`, and their input, cached-input and output Prices (cached $0.005 and $0.075 per 1M tokens, 0.1× and 0.5× of input) with `effective_from` set to the seed date. The seeded Prices are a snapshot, so check them against OpenAI's pricing page before relying on Estimated Cost. Without the flag, only the mock Provider is seeded and nothing calls a paid API.
+`./scripts/seed-demo.sh --with-openai` also seeds the reference hosted Provider: an `openai` Provider with `credential_reference = env:OPENAI_API_KEY`, the Provider Models `gpt-5-nano` and `gpt-4o-mini`, and their input, cached-input and output Prices (cached $0.005 and $0.075 per 1M tokens, 0.1× and 0.5× of input) with `effective_from` set to the seed date. The seeded Prices are a snapshot, so check them against OpenAI's pricing page before relying on Estimated Cost. Without the flag, only the mock and Ollama Providers are seeded and nothing calls a paid API.
+
+**The demo (PRD §15) needs no paid account.** The baseline runs on the Mock Provider and Ollama: failures are injected through the mock's `/__scenarios`, the Fallback goes from a mock model to Ollama, usage comes from both, and the Comparison gets real quality numbers from Ollama. The seed pulls one **≤ 3B instruct model that supports Ollama's JSON-schema `format`**, pinned by exact tag (the tag is chosen and verified when `seed-demo.sh` is written). Its Prices are `0`, so its Estimated Cost is $0, which is correct for a local model. The reviewer downloads about 2 GB and runs it on CPU. An optional extended section uses `--with-openai` for a Comparison against a hosted model.
 
 ## 3. Environment variables
 
