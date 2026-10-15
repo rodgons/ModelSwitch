@@ -36,3 +36,7 @@ A self-hosted AI gateway: one OpenAI-compatible API in front of multiple LLM Pro
 ## Quick start
 
 Not available yet. The target experience is described in [docs/deployment.md §2](docs/deployment.md#2-quick-start-target-experience-dod-1).
+
+## License
+
+[Apache License 2.0](LICENSE). It covers the whole repository, documentation included. See [NOTICE](NOTICE).

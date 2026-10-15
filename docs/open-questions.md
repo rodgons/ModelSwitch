@@ -26,4 +26,3 @@ These are decisions taken while writing the design docs that the PRD did not set
 4. **Latency-aware ranking**: when the PRD says "explicitly configured dynamic health or load signals", is circuit state enough for the MVP (current design), or is an EWMA latency strategy expected?
 5. **Admin API tokens** for automation (CI that pushes Routing Policies): post-MVP (current) or needed for the demo?
 6. **Which hosted OpenAI-compatible Provider** is the reference for the demo and the benchmark (OpenAI, Groq, Together, OpenRouter)? It affects fixtures and pricing seeds.
-7. **License** for the repository (MIT / Apache-2.0)? This should be decided before the first public push.
