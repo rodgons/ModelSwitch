@@ -30,6 +30,7 @@
     <ProjectReference Include="../../src/Adapters/ModelSwitch.Adapters.Abstractions/ModelSwitch.Adapters.Abstractions.csproj" />
     <ProjectReference Include="../../src/Adapters/ModelSwitch.Adapters.OpenAICompatible/ModelSwitch.Adapters.OpenAICompatible.csproj" />
     <ProjectReference Include="../../src/Adapters/ModelSwitch.Adapters.Ollama/ModelSwitch.Adapters.Ollama.csproj" />
+    <ProjectReference Include="../../tools/ModelSwitch.MockProvider/ModelSwitch.MockProvider.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -22,9 +22,9 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [x] SharedKernel: ids, `Result`, error codes, Money, `TimeProvider` wiring
 - [x] Migrator host + `identity` (tenant, api_key), `registry` (provider, provider_model, model_price) migrations; seed command
 - [x] API key authentication handler (HMAC, prefix lookup, cache) + unit tests
-- [ ] Adapters.Abstractions neutral contract
-- [ ] Mock Provider (both protocols, fault scripting)
-- [ ] Adapter contract test suite
+- [x] Adapters.Abstractions neutral contract
+- [x] Mock Provider (both protocols, fault scripting)
+- [x] Adapter contract test suite
 - [ ] OpenAI-compatible Adapter (non-streaming + streaming) passing the suite, with fixtures recorded from OpenAI ([provider-adapters.md §4](provider-adapters.md#wire-fixtures))
 - [ ] Ollama Adapter passing the suite
 - [ ] Registry: env-based credential resolution, outbound destination policy
