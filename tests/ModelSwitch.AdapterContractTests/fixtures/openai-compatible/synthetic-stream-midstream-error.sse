@@ -1,0 +1,15 @@
+: _source: synthetic
+: _captured: null
+: _model: openai/gpt-4.1-nano
+: _note: OpenRouter reports a failure after the first token as an error chunk with finish_reason=error.
+
+: OPENROUTER PROCESSING
+
+data: {"id":"gen-1760000000-Xk3Provisional0002","provider":"OpenAI","model":"openai/gpt-4.1-nano","object":"chat.completion.chunk","created":1760000000,"choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-1760000000-Xk3Provisional0002","provider":"OpenAI","model":"openai/gpt-4.1-nano","object":"chat.completion.chunk","created":1760000000,"choices":[{"index":0,"delta":{"role":"assistant","content":"Par"},"finish_reason":null,"native_finish_reason":null,"logprobs":null}]}
+
+data: {"id":"gen-1760000000-Xk3Provisional0003","provider":"OpenAI","model":"openai/gpt-4.1-nano","error":{"code":"server_error","message":"Provider disconnected unexpectedly"},"choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":"error","native_finish_reason":"error"}]}
+
+data: [DONE]
+

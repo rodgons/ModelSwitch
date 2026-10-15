@@ -1,0 +1,11 @@
+{
+  "_source": "synthetic",
+  "_captured": null,
+  "_model": "openai/gpt-4.1-nano",
+  "_note": "Hand-written from the documented error body; carries no real data.",
+  "status": 524,
+  "headers": {
+    "content-type": "text/plain; charset=UTF-8"
+  },
+  "body_text": "error code: 524"
+}

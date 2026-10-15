@@ -25,7 +25,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [x] Adapters.Abstractions neutral contract
 - [x] Mock Provider (both protocols, fault scripting)
 - [x] Adapter contract test suite
-- [ ] OpenAI-compatible Adapter (non-streaming + streaming) passing the suite, with fixtures recorded from OpenAI ([provider-adapters.md §4](provider-adapters.md#wire-fixtures))
+- [x] OpenAI-compatible Adapter (non-streaming + streaming) passing the suite, with fixtures recorded from OpenAI through OpenRouter ([provider-adapters.md §4](provider-adapters.md#wire-fixtures), [ADR-0013](adr/0013-wire-fixtures-recorded-through-openrouter.md)). The "recorded" fixtures are stamped `provisional` until someone runs `OPENROUTER_API_KEY=... scripts/record-fixtures`
 - [ ] Ollama Adapter passing the suite
 - [x] Registry: env-based credential resolution, outbound destination policy
 - [ ] `POST /v1/chat/completions` non-streaming with a **static alias → single model** stub, request validation, Problem Details error body with the OpenAI `error` member (ADR-0012), `X-Request-Id`
