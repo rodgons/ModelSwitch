@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Approved specimen for docs/design-system.md (2026-10-14). Example data only. -->
+<title>ModelSwitch Specimen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;500&family=Atkinson+Hyperlegible+Next:wght@400;500;600&display=swap">
+<style>
+/* Layout: one left-aligned column on the canvas; surfaces only where content needs an edge (strip, tables). Tokens mirror docs/design-system.md §2–§6. */
+:root {
+  --canvas:#f8f7fa; --surface:#ffffff; --raised:#ffffff; --subtle:#f1f0f5;
+  --border:#d4d0dc; --border-strong:#b4b0bf; --border-control:#766f85;
+  --fg-muted:#554f63; --fg-secondary:#3c3749; --fg-strong:#282334; --fg:#14101e;
+  --accent-solid:#7139c6; --accent-solid-hover:#5f2da9; --accent-fg:#5a2ba1; --accent-subtle:#f3edfd; --focus:#7139c6;
+  --success:#115f38; --success-subtle:#e5f5ed;
+  --warning:#814203; --warning-subtle:#fdefd8;
+  --danger:#a51c18; --danger-subtle:#fce9e8; --danger-solid:#a51c18;
+  --info:#035172; --info-subtle:#e5f5fa;
+  --on-solid-border:transparent;
+  --shadow-overlay:0 1px 2px rgb(20 16 30 / .08), 0 12px 32px -8px rgb(20 16 30 / .22);
+
+  --font-sans:"Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:"Atkinson Hyperlegible Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --r-hair:2px; --r-control:6px; --r-surface:8px; --r-dialog:12px;
+  --motion-fast:120ms; --motion-base:200ms; --ease:cubic-bezier(0.2,0,0,1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas:#1a1821; --surface:#221f29; --raised:#292631; --subtle:#302c37;
+    --border:#3d3a45; --border-strong:#54515d; --border-control:#777382;
+    --fg-muted:#9e9ba6; --fg-secondary:#bdbbc4; --fg-strong:#dad8df; --fg:#f2f0f4;
+    --accent-solid:#7139c6; --accent-solid-hover:#824ed0; --accent-fg:#bd94f9; --accent-subtle:#34244c; --focus:#bd94f9;
+    --success:#5ec994; --success-subtle:#203c2e;
+    --warning:#f0b042; --warning-subtle:#40331c;
+    --danger:#f1827e; --danger-subtle:#41211f; --danger-solid:#a72925;
+    --info:#5abee2; --info-subtle:#1c3640;
+    --on-solid-border:rgb(255 255 255 / .15);
+    --shadow-overlay:0 0 0 1px rgb(255 255 255 / .08), 0 12px 32px -8px rgb(0 0 0 / .55);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"] {
+  --canvas:#1a1821; --surface:#221f29; --raised:#292631; --subtle:#302c37;
+  --border:#3d3a45; --border-strong:#54515d; --border-control:#777382;
+  --fg-muted:#9e9ba6; --fg-secondary:#bdbbc4; --fg-strong:#dad8df; --fg:#f2f0f4;
+  --accent-solid:#7139c6; --accent-solid-hover:#824ed0; --accent-fg:#bd94f9; --accent-subtle:#34244c; --focus:#bd94f9;
+  --success:#5ec994; --success-subtle:#203c2e;
+  --warning:#f0b042; --warning-subtle:#40331c;
+  --danger:#f1827e; --danger-subtle:#41211f; --danger-solid:#a72925;
+  --info:#5abee2; --info-subtle:#1c3640;
+  --on-solid-border:rgb(255 255 255 / .15);
+  --shadow-overlay:0 0 0 1px rgb(255 255 255 / .08), 0 12px 32px -8px rgb(0 0 0 / .55);
+  color-scheme:dark;
+}
+
+* { box-sizing:border-box; }
+body { margin:0;
+  background:var(--canvas); color:var(--fg);
+  font:400 14px/20px var(--font-sans);
+  -webkit-font-smoothing:antialiased;
+}
+.page {
+  max-width:1200px; margin:0 auto;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:32px 64px;
+  display:flex; flex-direction:column; gap:48px;
+}
+@media (min-width:768px) { .page { padding-left:max(24px, env(safe-area-inset-left, 0px)); padding-right:max(24px, env(safe-area-inset-right, 0px)); } }
+@media (min-width:1280px) { .page { padding-left:max(40px, env(safe-area-inset-left, 0px)); padding-right:max(40px, env(safe-area-inset-right, 0px)); } }
+
+/* type tokens */
+.t-caption { font-size:12px; line-height:16px; font-weight:500; letter-spacing:.01em; }
+.t-lede { font-size:16px; line-height:24px; }
+.t-title { font-size:18px; line-height:24px; font-weight:600; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+.t-heading { font-size:24px; line-height:32px; font-weight:600; letter-spacing:-.015em; margin:0; text-wrap:balance; }
+.t-readout { font-size:24px; line-height:32px; font-weight:500; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+.num { font-variant-numeric:tabular-nums; }
+.mono { font-family:var(--font-mono); font-feature-settings:"zero"; }
+.muted { color:var(--fg-muted); }
+.secondary { color:var(--fg-secondary); }
+.prose { max-width:68ch; }
+p { margin:0; }
+
+/* page header */
+.page-header { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:16px 24px; }
+.page-header > div { display:flex; flex-direction:column; gap:8px; min-width:0; }
+
+/* sections */
+.section { display:flex; flex-direction:column; gap:16px; min-width:0; }
+.section-head { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px 16px; }
+.section-head p { max-width:68ch; }
+.surface { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-surface); }
+.example-note { font-size:12px; line-height:16px; color:var(--fg-muted); }
+
+/* buttons */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  height:32px; padding:0 12px; border-radius:var(--r-control);
+  border:1px solid transparent; font:500 14px/20px var(--font-sans);
+  cursor:pointer; white-space:nowrap; text-decoration:none;
+  transition:background-color var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease);
+}
+.btn:active:not(:disabled) { transform:scale(.98); transition-duration:50ms; }
+.btn:focus-visible, .link:focus-visible, .seg:focus-visible, .tabs button:focus-visible, .scroll:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+.btn svg { width:16px; height:16px; flex:none; }
+.btn-sm { height:28px; padding:0 8px; }
+.btn-sm svg { width:14px; height:14px; }
+.btn-lg { height:40px; padding:0 16px; font-size:16px; line-height:24px; gap:8px; }
+.btn-lg svg { width:18px; height:18px; }
+.btn-primary { background:var(--accent-solid); color:#fff; border-color:var(--on-solid-border); }
+.btn-primary:hover:not(:disabled) { background:var(--accent-solid-hover); }
+.btn-secondary { background:var(--subtle); color:var(--fg); border-color:var(--border); }
+.btn-secondary:hover:not(:disabled) { border-color:var(--border-strong); }
+.btn-ghost { background:transparent; color:var(--fg-secondary); }
+.btn-ghost:hover:not(:disabled) { background:var(--subtle); color:var(--fg); }
+.btn-danger { background:var(--danger-solid); color:#fff; border-color:var(--on-solid-border); }
+.btn-danger:hover:not(:disabled) { filter:brightness(.92); }
+.btn-secondary.is-danger { color:var(--danger); }
+.btn-icon { width:32px; padding:0; }
+.btn[aria-busy="true"] .spin { animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* theme switch */
+.tabs { display:inline-flex; padding:2px; gap:2px; background:var(--subtle); border:1px solid var(--border); border-radius:var(--r-control); }
+.tabs button { height:26px; padding:0 10px; border:0; border-radius:4px; background:transparent; color:var(--fg-secondary); font:500 13px/16px var(--font-sans); cursor:pointer; }
+.tabs button[aria-pressed="true"] { background:var(--surface); color:var(--fg); box-shadow:0 0 0 1px var(--border); }
+
+/* links */
+.link { color:var(--accent-fg); text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:3px; border-radius:2px; }
+.link:hover { text-decoration-thickness:2px; }
+.link-quiet { color:var(--fg-secondary); text-decoration:none; }
+.link-quiet:hover { color:var(--fg); text-decoration:underline; text-decoration-thickness:1px; }
+.link-section { color:var(--accent-fg); text-decoration:none; font-weight:500; }
+.link-section:hover { text-decoration:underline; }
+.ext { display:inline-flex; align-items:center; gap:4px; }
+.ext svg { width:12px; height:12px; }
+
+/* badges */
+.badge { display:inline-flex; align-items:center; gap:6px; height:20px; padding:0 6px; border-radius:var(--r-hair); font-size:12px; line-height:16px; font-weight:500; white-space:nowrap; }
+.badge::before { content:""; width:6px; height:6px; border-radius:999px; background:currentColor; }
+.b-success { color:var(--success); background:var(--success-subtle); }
+.b-warning { color:var(--warning); background:var(--warning-subtle); }
+.b-danger { color:var(--danger); background:var(--danger-subtle); }
+.b-info { color:var(--info); background:var(--info-subtle); }
+.b-info::before { display:none; }
+
+/* facts */
+.facts { display:flex; flex-wrap:wrap; gap:8px 24px; margin:0; }
+.facts div { display:flex; gap:6px; align-items:baseline; min-width:0; }
+.facts dt { color:var(--fg-muted); }
+.facts dd { margin:0; color:var(--fg); }
+
+/* ROUTE STRIP — the signature element (§10) */
+.rs-wrap { padding:20px 20px 16px; display:flex; flex-direction:column; gap:20px; }
+.rs-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 16px; }
+.rs-id { display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0; }
+.rs-id .t-title { font-family:var(--font-mono); font-feature-settings:"zero"; font-weight:500; overflow-wrap:anywhere; }
+.rs-scroll { overflow-x:auto; padding-bottom:4px; }
+.rs { position:relative; min-width:560px; height:74px; }
+.rs-list { position:absolute; inset:0; list-style:none; margin:0; padding:0; }
+.rs-axis { position:absolute; left:0; right:0; top:44px; height:1px; background:var(--border); }
+.rs li { position:absolute; top:0; height:100%; }
+.rs-seg { position:absolute; top:40px; left:0; right:0; height:8px; border-radius:var(--r-hair); background:var(--c); transform-origin:left center; outline:none; }
+.rs-label { position:absolute; top:6px; left:0; max-width:100%; display:flex; align-items:center; gap:6px; font-family:var(--font-mono); font-feature-settings:"zero"; font-size:12px; line-height:16px; color:var(--fg-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rs-glyph { position:absolute; top:32px; right:-11px; width:22px; height:22px; border-radius:999px; display:grid; place-items:center; background:var(--surface); color:var(--c); font-size:13px; line-height:1; font-weight:600; box-shadow:0 0 0 1.5px var(--c); }
+.rs-gap { position:absolute; top:43px; height:0; border-top:2px dotted var(--border-strong); }
+.rs-tick { position:absolute; top:58px; transform:translateX(-50%); font-size:12px; line-height:16px; color:var(--fg-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.rs-tick.start { transform:none; }
+.rs-tick.end { transform:translateX(-100%); }
+.rs-skip .rs-seg { left:-1px; right:auto; width:2px; background:var(--border-strong); }
+.rs-skip .rs-glyph { right:auto; left:-11px; color:var(--fg-muted); box-shadow:0 0 0 1.5px var(--border-strong); }
+.rs-skip .rs-label { left:14px; color:var(--fg-muted); }
+.rs li.is-hot .rs-seg { box-shadow:0 0 0 2px var(--surface), 0 0 0 4px var(--c); }
+.rs li.rs-skip.is-hot .rs-seg { box-shadow:0 0 0 2px var(--surface), 0 0 0 4px var(--border-strong); }
+.rs li:focus-visible { outline:none; }
+.rs li:focus-visible .rs-seg { box-shadow:0 0 0 2px var(--surface), 0 0 0 4px var(--focus); }
+.c-success { --c:var(--success); } .c-warning { --c:var(--warning); } .c-danger { --c:var(--danger); }
+
+@media (prefers-reduced-motion:no-preference) {
+  .rs.draw .rs-seg { animation:draw 260ms var(--ease) backwards; animation-delay:var(--d, 0ms); }
+  .rs.draw .rs-glyph, .rs.draw .rs-label { animation:appear 160ms var(--ease) backwards; animation-delay:calc(var(--d, 0ms) + 200ms); }
+  .rs.draw .rs-gap { animation:draw 160ms linear backwards; animation-delay:var(--d, 0ms); transform-origin:left; }
+}
+@keyframes draw { from { transform:scaleX(0); } }
+@keyframes appear { from { opacity:0; } }
+
+/* mini strip in tables */
+.mini { position:relative; display:block; width:120px; height:14px; }
+.mini i { position:absolute; top:4px; height:6px; border-radius:var(--r-hair); background:var(--c); }
+.mini b { position:absolute; top:6px; height:0; border-top:2px dotted var(--border-strong); }
+.mini span { position:absolute; top:-1px; font-size:12px; line-height:16px; font-weight:600; color:var(--c); }
+.mini .skip { width:2px; top:2px; height:10px; background:var(--border-strong); }
+
+/* tables */
+.scroll { overflow-x:auto; border-radius:var(--r-surface); }
+table { width:100%; border-collapse:collapse; min-width:720px; }
+th { text-align:left; font-size:12px; line-height:16px; font-weight:500; letter-spacing:.01em; color:var(--fg-muted); padding:10px 12px; border-bottom:1px solid var(--border); white-space:nowrap; }
+td { padding:8px 12px; border-bottom:1px solid var(--border); vertical-align:middle; white-space:nowrap; }
+tr:last-child td { border-bottom:0; }
+tbody tr { transition:background-color var(--motion-fast) var(--ease); }
+tbody tr:hover, tbody tr.is-hot { background:var(--subtle); }
+td.r, th.r { text-align:right; }
+
+/* readout */
+.readout { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.readout > div { padding:16px 16px 12px; display:flex; flex-direction:column; gap:4px; min-width:0; border-bottom:1px solid var(--border); }
+.readout > div:nth-child(odd) { padding-left:0; }
+.readout > div:nth-child(even) { border-left:1px solid var(--border); }
+@media (min-width:640px) {
+  .readout { grid-template-columns:repeat(3, minmax(0,1fr)); }
+  .readout > div:nth-child(n) { padding-left:16px; border-left:1px solid var(--border); }
+  .readout > div:nth-child(3n+1) { padding-left:0; border-left:0; }
+}
+@media (min-width:1024px) {
+  .readout { grid-template-columns:repeat(6, minmax(0,1fr)); }
+  .readout > div:nth-child(n) { padding-left:16px; border-left:1px solid var(--border); border-bottom:0; }
+  .readout > div:first-child { padding-left:0; border-left:0; }
+}
+.readout .delta { font-size:12px; line-height:16px; color:var(--fg-muted); font-variant-numeric:tabular-nums; }
+.spark { width:100%; height:24px; display:block; margin-top:4px; overflow:visible; }
+
+/* swatches */
+.swatches { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(176px,100%), 1fr)); gap:16px 16px; }
+.swatch { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.chip { height:48px; border-radius:var(--r-control); border:1px solid var(--border); }
+.swatch .meta { display:flex; flex-direction:column; gap:2px; }
+.swatch .meta .mono { font-size:12px; line-height:16px; color:var(--fg-muted); }
+.group-title { font-size:14px; font-weight:600; margin:8px 0 0; }
+
+/* type specimen */
+.type-rows { display:flex; flex-direction:column; }
+.type-row { display:grid; grid-template-columns:1fr; gap:4px 24px; padding:16px 0; border-bottom:1px solid var(--border); align-items:baseline; }
+.type-row:last-child { border-bottom:0; }
+@media (min-width:768px) { .type-row { grid-template-columns:200px minmax(0,1fr); } }
+.type-row .spec { display:flex; flex-direction:column; gap:2px; }
+.glyph-test { font-size:24px; line-height:32px; font-family:var(--font-mono); font-feature-settings:"zero"; letter-spacing:.02em; overflow-wrap:anywhere; }
+
+/* button matrix */
+.matrix { display:flex; flex-direction:column; gap:16px; }
+.matrix-row { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.matrix-row .label { width:100%; }
+@media (min-width:768px) { .matrix-row .label { width:96px; } }
+
+/* scales */
+.scale { display:flex; flex-wrap:wrap; align-items:flex-end; gap:16px 20px; }
+.scale figure { margin:0; display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+.space-bar { height:12px; background:var(--accent-subtle); border:1px solid var(--accent-fg); border-radius:1px; }
+.radius-box { width:72px; height:48px; background:var(--surface); border:1px solid var(--border-strong); }
+
+/* split / states */
+.two { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(340px,100%), 1fr)); gap:24px; }
+.state { padding:24px; display:flex; flex-direction:column; gap:12px; min-width:0; }
+.state.empty { align-items:center; text-align:center; padding-block:40px; }
+.state.empty svg { width:24px; height:24px; color:var(--fg-muted); }
+.alert { display:flex; gap:12px; padding:12px 16px; border-radius:var(--r-surface); background:var(--danger-subtle); color:var(--fg); border:1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
+.alert svg { width:18px; height:18px; color:var(--danger); flex:none; margin-top:1px; }
+.alert .stack { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.dialog { background:var(--raised); border-radius:var(--r-dialog); box-shadow:var(--shadow-overlay); padding:24px; display:flex; flex-direction:column; gap:16px; max-width:440px; }
+.dialog .actions { display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.field { display:flex; flex-direction:column; gap:6px; }
+.field label { font-weight:500; }
+.field input { height:32px; padding:0 10px; border-radius:var(--r-control); border:1px solid var(--border-control); background:var(--surface); color:var(--fg); font:400 14px/20px var(--font-mono); font-feature-settings:"zero"; }
+.field input:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }
+.field .help { font-size:12px; line-height:16px; color:var(--fg-muted); }
+
+.footer { color:var(--fg-muted); font-size:12px; line-height:16px; border-top:1px solid var(--border); padding-top:16px; }
+</style>
+</head>
+<body>
+
+<main class="page">
+
+  <header class="page-header">
+    <div>
+      <h1 class="t-heading">ModelSwitch design specimen</h1>
+      <p class="t-lede secondary prose">The tokens, type and primitives from <span class="mono">docs/design-system.md</span>, drawn in the browser. Switch themes to check both.</p>
+    </div>
+    <div class="tabs" role="group" aria-label="Theme">
+      <button type="button" id="theme-system" data-theme-choice="system" aria-pressed="true">System</button>
+      <button type="button" id="theme-light" data-theme-choice="light" aria-pressed="false">Light</button>
+      <button type="button" id="theme-dark" data-theme-choice="dark" aria-pressed="false">Dark</button>
+    </div>
+  </header>
+
+  <!-- ROUTE STRIP -->
+  <section class="section" aria-labelledby="rs-title">
+    <div class="section-head">
+      <h2 class="t-title" id="rs-title">Route Strip</h2>
+      <p class="example-note">Example request, not real traffic</p>
+    </div>
+
+    <div class="surface rs-wrap">
+      <div class="rs-head">
+        <div class="rs-id">
+          <span class="t-title">req_01J8ZQ0K4V7M2N5S1O9f3a</span>
+          <button class="btn btn-ghost btn-sm" type="button" id="copy-id" data-copy="req_01J8ZQ0K4V7M2N5S1O9f3a">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg>
+            <span>Copy id</span>
+          </button>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" type="button" id="replay">Replay drawing</button>
+          <a class="link ext" href="https://opentelemetry.io/docs/concepts/signals/traces/" target="_blank" rel="noopener noreferrer">Open trace
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4.5 2.5h5v5M9.5 2.5 3 9"/></svg></a>
+        </div>
+      </div>
+
+      <dl class="facts">
+        <div><dt>Model Alias</dt><dd class="mono">balanced</dd></div>
+        <div><dt>Attempts</dt><dd class="num">3</dd></div>
+        <div><dt>Served by</dt><dd class="mono">ollama/llama3.1:8b</dd></div>
+        <div><dt>Total</dt><dd class="num">2,404 ms</dd></div>
+        <div><dt>Cost</dt><dd><span class="num">$0.0021</span> <span class="badge b-info">Estimated</span></dd></div>
+      </dl>
+
+      <div class="rs-scroll">
+        <div class="rs draw" id="strip">
+          <span class="rs-axis" aria-hidden="true"></span>
+          <ol class="rs-list" aria-label="Attempts for this request, in time order">
+          <li class="c-warning" data-attempt="1" tabindex="0" style="left:0%; width:33.78%; --d:0ms"
+              aria-label="Attempt 1, openai/gpt-4o-mini, failed with 503 after 812 ms, fell back">
+            <span class="rs-label">openai/gpt-4o-mini</span>
+            <span class="rs-seg"></span>
+            <span class="rs-glyph" aria-hidden="true">⤳</span>
+          </li>
+          <li class="rs-skip" data-attempt="2" tabindex="0" style="left:42.01%; width:14%; --d:300ms"
+              aria-label="Attempt 2, azure-eastus/gpt-4o-mini, skipped because the circuit is open">
+            <span class="rs-label">azure-eastus/gpt-4o-mini</span>
+            <span class="rs-seg"></span>
+            <span class="rs-glyph" aria-hidden="true">⊘</span>
+          </li>
+          <li class="c-success" data-attempt="3" tabindex="0" style="left:42.10%; width:57.90%; --d:340ms"
+              aria-label="Attempt 3, ollama/llama3.1:8b, succeeded after 1,392 ms">
+            <span class="rs-label" style="left:auto; right:16px;">ollama/llama3.1:8b</span>
+            <span class="rs-seg"></span>
+            <span class="rs-glyph" aria-hidden="true">✓</span>
+          </li>
+          </ol>
+          <span class="rs-gap" aria-hidden="true" style="left:calc(33.78% + 13px); width:calc(8.24% - 13px); --d:240ms"></span>
+          <span class="rs-tick start" style="left:0%">0 ms</span>
+          <span class="rs-tick" style="left:33.78%">812</span>
+          <span class="rs-tick" style="left:42.10%">1,012</span>
+          <span class="rs-tick end" style="left:100%">2,404 ms</span>
+        </div>
+      </div>
+
+      <div class="scroll" tabindex="0" role="region" aria-label="Attempts table">
+        <table>
+          <thead><tr><th>#</th><th>Provider Model</th><th>Outcome</th><th class="r">Started</th><th class="r">Duration</th><th>Error code</th></tr></thead>
+          <tbody>
+            <tr data-attempt="1"><td class="num">1</td><td class="mono">openai/gpt-4o-mini</td><td><span class="badge b-warning">Fell back</span></td><td class="r num">0 ms</td><td class="r num">812 ms</td><td class="mono secondary">provider_unavailable</td></tr>
+            <tr data-attempt="2"><td class="num">2</td><td class="mono">azure-eastus/gpt-4o-mini</td><td><span class="badge" style="color:var(--fg-muted); background:var(--subtle)">Skipped, circuit open</span></td><td class="r num">1,010 ms</td><td class="r num">0 ms</td><td class="muted">None</td></tr>
+            <tr data-attempt="3"><td class="num">3</td><td class="mono">ollama/llama3.1:8b</td><td><span class="badge b-success">Succeeded</span></td><td class="r num">1,012 ms</td><td class="r num">1.39 s</td><td class="muted">None</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="muted prose">Hover or focus a segment to find its row. Segment length is the Attempt's duration, the dotted line is the backoff wait, and the end symbol repeats the outcome so color is never the only signal.</p>
+  </section>
+
+  <!-- OVERVIEW READOUT -->
+  <section class="section" aria-labelledby="ro-title">
+    <div class="section-head">
+      <h2 class="t-title" id="ro-title">Readout</h2>
+      <p class="example-note">Example figures, last 24 hours</p>
+    </div>
+    <div class="readout" id="readout"></div>
+  </section>
+
+  <!-- REQUESTS TABLE WITH MINI STRIPS -->
+  <section class="section" aria-labelledby="rq-title">
+    <div class="section-head">
+      <h2 class="t-title" id="rq-title">Recent failed requests</h2>
+      <a class="link-section" href="#rq-title">All failed requests</a>
+    </div>
+    <div class="surface scroll" tabindex="0" role="region" aria-label="Recent failed requests">
+      <table>
+        <thead><tr><th>Request</th><th>Model Alias</th><th>Route</th><th>Error code</th><th class="r">Duration</th><th class="r">Estimated Cost</th><th class="r">When</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><a class="link-quiet mono" href="#rs-title">req_01J8Z…7c1e</a></td><td class="mono">balanced</td>
+            <td><span class="mini" role="img" aria-label="2 Attempts: fell back, then timed out">
+              <i class="c-warning" style="left:0; width:30px"></i><span class="c-warning" style="left:31px">⤳</span>
+              <b style="left:42px; width:8px"></b>
+              <i class="c-danger" style="left:52px; width:56px"></i><span class="c-danger" style="left:109px">◷</span></span></td>
+            <td class="mono secondary">deadline_exceeded</td><td class="r num">30.00 s</td><td class="r num">$0.0000</td><td class="r muted">2 min ago</td>
+          </tr>
+          <tr>
+            <td><a class="link-quiet mono" href="#rs-title">req_01J8Z…0b94</a></td><td class="mono">fast</td>
+            <td><span class="mini" role="img" aria-label="3 Attempts: skipped, skipped, failed">
+              <i class="skip" style="left:0"></i><i class="skip" style="left:8px"></i>
+              <i class="c-danger" style="left:16px; width:40px"></i><span class="c-danger" style="left:58px">✕</span></span></td>
+            <td class="mono secondary">no_eligible_model</td><td class="r num">412 ms</td><td class="r num">$0.0000</td><td class="r muted">9 min ago</td>
+          </tr>
+          <tr>
+            <td><a class="link-quiet mono" href="#rs-title">req_01J8Y…e5d2</a></td><td class="mono">long-context</td>
+            <td><span class="mini" role="img" aria-label="1 Attempt: failed">
+              <i class="c-danger" style="left:0; width:72px"></i><span class="c-danger" style="left:74px">✕</span></span></td>
+            <td class="mono secondary">context_length_exceeded</td><td class="r num">1.12 s</td><td class="r num">$0.0004</td><td class="r muted">17 min ago</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- COLOR -->
+  <section class="section" aria-labelledby="color-title">
+    <div class="section-head">
+      <h2 class="t-title" id="color-title">Color</h2>
+      <p class="muted">Each swatch shows the current theme; both values are listed.</p>
+    </div>
+    <h3 class="group-title">Surfaces and text</h3>
+    <div class="swatches" id="sw-neutral"></div>
+    <h3 class="group-title">Accent and status</h3>
+    <div class="swatches" id="sw-status"></div>
+  </section>
+
+  <!-- TYPE -->
+  <section class="section" aria-labelledby="type-title">
+    <div class="section-head">
+      <h2 class="t-title" id="type-title">Type</h2>
+      <p class="muted">Atkinson Hyperlegible Next and Mono. One family, two widths.</p>
+    </div>
+    <div class="type-rows">
+      <div class="type-row"><div class="spec"><span>heading</span><span class="t-caption muted num">24 / 32, weight 600</span></div><p class="t-heading">Request detail</p></div>
+      <div class="type-row"><div class="spec"><span>readout</span><span class="t-caption muted num">24 / 32, weight 500, tabular figures</span></div><p class="t-readout">48,210 &nbsp; 99.31 % &nbsp; $41.07</p></div>
+      <div class="type-row"><div class="spec"><span>title</span><span class="t-caption muted num">18 / 24, weight 600</span></div><p class="t-title">Routing Decision</p></div>
+      <div class="type-row"><div class="spec"><span>lede</span><span class="t-caption muted num">16 / 24, weight 400</span></div><p class="t-lede prose">The policy ranked four Candidates by worst-case cost. One was excluded because its context window is smaller than the request.</p></div>
+      <div class="type-row"><div class="spec"><span>body</span><span class="t-caption muted num">14 / 20, weight 400</span></div><p class="prose">Estimated Cost uses the Price that was in effect when the Attempt started. Provider-reported usage replaces the estimate once it arrives.</p></div>
+      <div class="type-row"><div class="spec"><span>caption</span><span class="t-caption muted num">12 / 16, weight 500</span></div><p class="t-caption secondary">Updated 14 Oct 2026, 18:42 UTC</p></div>
+      <div class="type-row"><div class="spec"><span>mono</span><span class="t-caption muted num">slashed zero on</span></div><p class="glyph-test">msk_O0Il1S5B8 &nbsp;req_01J8ZQ0K</p></div>
+    </div>
+  </section>
+
+  <!-- BUTTONS & LINKS -->
+  <section class="section" aria-labelledby="btn-title">
+    <div class="section-head">
+      <h2 class="t-title" id="btn-title">Buttons and links</h2>
+    </div>
+    <div class="matrix">
+      <div class="matrix-row"><span class="label t-caption muted">Variants</span>
+        <button class="btn btn-primary" type="button">Save policy</button>
+        <button class="btn btn-secondary" type="button">Test connection</button>
+        <button class="btn btn-ghost" type="button">Clear filters</button>
+        <button class="btn btn-secondary is-danger" type="button">Revoke key</button>
+        <button class="btn btn-danger" type="button">Revoke key</button>
+      </div>
+      <div class="matrix-row"><span class="label t-caption muted">Sizes</span>
+        <button class="btn btn-secondary btn-sm" type="button"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>Add price</button>
+        <button class="btn btn-secondary" type="button"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>Add price</button>
+        <button class="btn btn-secondary btn-lg" type="button"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>Add price</button>
+        <button class="btn btn-ghost btn-icon" type="button" aria-label="Refresh" title="Refresh"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"/></svg></button>
+      </div>
+      <div class="matrix-row"><span class="label t-caption muted">States</span>
+        <button class="btn btn-primary" type="button" disabled>Start run</button>
+        <button class="btn btn-secondary" type="button" id="loading-btn" aria-busy="false">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" class="ic"><path d="M2.5 8h11M9 3.5 13.5 8 9 12.5"/></svg>Test connection</button>
+        <span class="muted t-caption">Click the second button to see the loading state. Tab to see focus.</span>
+      </div>
+      <div class="matrix-row"><span class="label t-caption muted">Links</span>
+        <p>Prices are versioned, see <a class="link" href="#color-title">how Estimated Cost is calculated</a>.</p>
+        <a class="link-quiet mono" href="#rs-title">req_01J8Z…9f3a</a>
+        <a class="link-section" href="#rq-title">All failed requests</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATES -->
+  <section class="section" aria-labelledby="st-title">
+    <div class="section-head"><h2 class="t-title" id="st-title">Empty, error and confirm</h2></div>
+    <div class="two">
+      <div class="surface state empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h6"/><circle cx="18" cy="16" r="3"/></svg>
+        <p class="t-lede">No Providers yet. Add one to start routing requests.</p>
+        <button class="btn btn-primary" type="button">Add Provider</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:24px; min-width:0;">
+        <div class="alert" role="alert">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="9" cy="9" r="7"/><path d="M9 5.5v4M9 12.2v.1"/></svg>
+          <div class="stack">
+            <p>No Provider Model can serve <span class="mono">balanced</span> with these Capabilities (<span class="mono">no_eligible_model</span>). Enable a model that supports JSON-schema output, or add one to the Routing Policy.</p>
+            <dl class="facts t-caption"><div><dt>Request id</dt><dd class="mono">req_01J8Z…0b94</dd></div></dl>
+          </div>
+        </div>
+        <div class="dialog" role="group" aria-labelledby="dlg-title">
+          <h3 class="t-title" id="dlg-title">Revoke key <span class="mono">msk_3F9A2K7Q</span>?</h3>
+          <p class="secondary">Applications that use it will get 401 errors immediately. This cannot be undone.</p>
+          <div class="field">
+            <label for="confirm-prefix">Type the Key Prefix to confirm</label>
+            <input id="confirm-prefix" autocomplete="off" spellcheck="false" placeholder="msk_3F9A2K7Q">
+            <span class="help">The prefix is the part before the second underscore.</span>
+          </div>
+          <div class="actions">
+            <button class="btn btn-secondary" type="button">Cancel</button>
+            <button class="btn btn-danger" type="button" id="revoke" disabled>Revoke key</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCALES -->
+  <section class="section" aria-labelledby="sc-title">
+    <div class="section-head"><h2 class="t-title" id="sc-title">Spacing and radii</h2></div>
+    <div class="scale" id="space-scale" aria-label="Spacing scale"></div>
+    <div class="scale">
+      <figure><div class="radius-box" style="border-radius:2px"></div><figcaption class="t-caption muted">hair 2: strip, badges</figcaption></figure>
+      <figure><div class="radius-box" style="border-radius:6px"></div><figcaption class="t-caption muted">control 6: buttons, inputs</figcaption></figure>
+      <figure><div class="radius-box" style="border-radius:8px"></div><figcaption class="t-caption muted">surface 8: tables, menus</figcaption></figure>
+      <figure><div class="radius-box" style="border-radius:12px; box-shadow:var(--shadow-overlay); border-color:transparent; background:var(--raised)"></div><figcaption class="t-caption muted">dialog 12: dialogs, sheets</figcaption></figure>
+    </div>
+  </section>
+
+  <p class="footer">Fonts load from Google Fonts here for the preview. The dashboard self-hosts them. Every request, figure and id on this page is an example.</p>
+</main>
+
+<script>
+(function () {
+  // theme
+  var root = document.documentElement;
+  var buttons = document.querySelectorAll('[data-theme-choice]');
+  function apply(choice) {
+    if (choice === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', choice);
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.themeChoice === choice)); });
+  }
+  var saved = 'system';
+  try { saved = localStorage.getItem('ms-theme') || 'system'; } catch (e) {}
+  apply(saved);
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      apply(b.dataset.themeChoice);
+      try { localStorage.setItem('ms-theme', b.dataset.themeChoice); } catch (e) {}
+    });
+  });
+
+  // route strip ↔ table linking
+  var strip = document.getElementById('strip');
+  function hot(n, on) {
+    document.querySelectorAll('[data-attempt="' + n + '"]').forEach(function (el) { el.classList.toggle('is-hot', on); });
+  }
+  document.querySelectorAll('[data-attempt]').forEach(function (el) {
+    var n = el.dataset.attempt;
+    ['mouseenter', 'focus'].forEach(function (ev) { el.addEventListener(ev, function () { hot(n, true); }); });
+    ['mouseleave', 'blur'].forEach(function (ev) { el.addEventListener(ev, function () { hot(n, false); }); });
+  });
+  document.getElementById('replay').addEventListener('click', function () {
+    strip.classList.remove('draw'); void strip.offsetWidth; strip.classList.add('draw');
+  });
+
+  // copy id
+  var copyBtn = document.getElementById('copy-id');
+  copyBtn.addEventListener('click', function () {
+    var label = copyBtn.querySelector('span');
+    var done = function () { label.textContent = 'Copied'; setTimeout(function () { label.textContent = 'Copy id'; }, 1500); };
+    var fallback = function () {
+      var r = document.createRange(); r.selectNodeContents(document.querySelector('.rs-id .t-title'));
+      var s = getSelection(); s.removeAllRanges(); s.addRange(r); label.textContent = 'Selected';
+      setTimeout(function () { label.textContent = 'Copy id'; }, 1500);
+    };
+    try { navigator.clipboard.writeText(copyBtn.dataset.copy).then(done, fallback); } catch (e) { fallback(); }
+  });
+
+  // loading state
+  var lb = document.getElementById('loading-btn');
+  var spinner = '<svg class="spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 2a6 6 0 1 1-6 6"/></svg>';
+  var icon = lb.querySelector('svg').outerHTML;
+  lb.addEventListener('click', function () {
+    if (lb.getAttribute('aria-busy') === 'true') return;
+    lb.setAttribute('aria-busy', 'true'); lb.querySelector('svg').outerHTML = spinner;
+    setTimeout(function () { lb.setAttribute('aria-busy', 'false'); lb.querySelector('svg').outerHTML = icon; }, 1600);
+  });
+
+  // confirm input
+  var input = document.getElementById('confirm-prefix'), revoke = document.getElementById('revoke');
+  input.addEventListener('input', function () { revoke.disabled = input.value.trim() !== 'msk_3F9A2K7Q'; });
+
+  // readout with sparklines (example data)
+  var items = [
+    { label: 'Requests', value: '48,210', delta: '+6.2 % vs previous', data: [31,34,30,38,44,41,47,52,49,55,58,54], tone: '--accent-fg' },
+    { label: 'Success', value: '99.31 %', delta: '−0.12 pts', data: [99.6,99.5,99.6,99.4,99.5,98.7,99.2,99.4,99.3,99.4,99.3,99.3], tone: '--accent-fg' },
+    { label: 'Estimated Cost', value: '$41.07', delta: '+$3.88', data: [2.1,2.4,2.2,3.1,3.6,3.4,3.9,4.2,3.8,4.0,4.4,4.1], tone: '--accent-fg', estimated: true },
+    { label: 'Tokens', value: '12.4 M', delta: '+4.9 %', data: [0.8,0.9,0.8,1.0,1.1,1.0,1.2,1.3,1.2,1.1,1.3,1.2], tone: '--accent-fg' },
+    { label: 'p95 latency', value: '1.84 s', delta: '+210 ms', data: [1.5,1.6,1.5,1.6,1.7,2.4,1.9,1.8,1.7,1.8,1.9,1.8], tone: '--accent-fg' },
+    { label: 'Fallback', value: '2.1 %', delta: '+0.8 pts', data: [1.0,1.1,0.9,1.2,1.3,4.6,2.8,2.0,1.6,1.8,2.2,2.1], tone: '--warning' }
+  ];
+  var ro = document.getElementById('readout');
+  items.forEach(function (it, i) {
+    var w = 120, h = 24, min = Math.min.apply(null, it.data), max = Math.max.apply(null, it.data);
+    var pts = it.data.map(function (v, j) {
+      var x = (j / (it.data.length - 1)) * w;
+      var y = h - 2 - ((v - min) / ((max - min) || 1)) * (h - 4);
+      return [x.toFixed(1), y.toFixed(1)];
+    });
+    var line = pts.map(function (p) { return p.join(','); }).join(' ');
+    var area = 'M0,' + h + ' L' + pts.map(function (p) { return p.join(','); }).join(' L') + ' L' + w + ',' + h + ' Z';
+    var last = pts[pts.length - 1];
+    var el = document.createElement('div');
+    el.innerHTML =
+      '<span class="t-caption muted">' + it.label + (it.estimated ? ' <span class="badge b-info" style="height:16px;padding:0 4px;font-size:11px">Estimated</span>' : '') + '</span>' +
+      '<span class="t-readout">' + it.value + '</span>' +
+      '<span class="delta">' + it.delta + '</span>' +
+      '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true">' +
+        '<path d="' + area + '" fill="var(' + it.tone + ')" fill-opacity="0.12"></path>' +
+        '<polyline points="' + line + '" fill="none" stroke="var(' + it.tone + ')" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline>' +
+        '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="2.5" fill="var(' + it.tone + ')"></circle>' +
+      '</svg>';
+    ro.appendChild(el);
+  });
+
+  // swatches
+  var neutral = [
+    ['canvas', '--canvas', '#1a1821', '#f8f7fa', 'bg.canvas'],
+    ['surface', '--surface', '#221f29', '#ffffff', 'bg.surface'],
+    ['raised', '--raised', '#292631', '#ffffff', 'bg.raised'],
+    ['n100', '--subtle', '#302c37', '#f1f0f5', 'bg.subtle'],
+    ['n200', '--border', '#3d3a45', '#d4d0dc', 'border.default'],
+    ['n300', '--border-strong', '#54515d', '#b4b0bf', 'border.strong'],
+    ['n400', '--border-control', '#777382', '#766f85', 'border.control'],
+    ['n500', '--fg-muted', '#9e9ba6', '#554f63', 'fg.muted'],
+    ['n600', '--fg-secondary', '#bdbbc4', '#3c3749', 'fg.secondary'],
+    ['n800', '--fg', '#f2f0f4', '#14101e', 'fg.default']
+  ];
+  var status = [
+    ['accent.solid', '--accent-solid', '#7139c6', '#7139c6', 'Primary button'],
+    ['accent.fg', '--accent-fg', '#bd94f9', '#5a2ba1', 'Links, focus, active nav'],
+    ['accent.subtle', '--accent-subtle', '#34244c', '#f3edfd', 'Selected row'],
+    ['success.fg', '--success', '#5ec994', '#115f38', 'Succeeded, healthy'],
+    ['warning.fg', '--warning', '#f0b042', '#814203', 'Fell back, half-open'],
+    ['danger.fg', '--danger', '#f1827e', '#a51c18', 'Failed, circuit open'],
+    ['info.fg', '--info', '#5abee2', '#035172', 'Estimated']
+  ];
+  function fill(id, rows) {
+    var host = document.getElementById(id);
+    rows.forEach(function (r) {
+      var d = document.createElement('div'); d.className = 'swatch';
+      d.innerHTML = '<div class="chip" style="background:var(' + r[1] + ')"></div>' +
+        '<div class="meta"><span style="font-weight:500">' + r[0] + '</span>' +
+        '<span class="t-caption secondary">' + r[4] + '</span>' +
+        '<span class="mono">dark ' + r[2] + ', light ' + r[3] + '</span></div>';
+      host.appendChild(d);
+    });
+  }
+  fill('sw-neutral', neutral); fill('sw-status', status);
+
+  // spacing scale
+  var sp = document.getElementById('space-scale');
+  [2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64].forEach(function (v) {
+    var f = document.createElement('figure');
+    f.innerHTML = '<div class="space-bar" style="width:' + v + 'px"></div><figcaption class="t-caption muted num">' + v + '</figcaption>';
+    sp.appendChild(f);
+  });
+})();
+</script>
+</body>
+</html>
