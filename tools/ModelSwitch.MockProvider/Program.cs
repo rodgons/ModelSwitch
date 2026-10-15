@@ -1,5 +1,3 @@
-var builder = WebApplication.CreateBuilder(args);
+using ModelSwitch.MockProvider;
 
-var app = builder.Build();
-
-app.Run();
+await MockProviderApp.Build(args).RunAsync();
