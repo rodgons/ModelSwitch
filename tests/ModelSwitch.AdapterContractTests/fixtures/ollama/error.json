@@ -1,0 +1,5 @@
+{
+  "_source": "synthetic",
+  "_note": "Ollama error bodies are a bare string: {\"error\": \"...\"}, e.g. model 'x' not found. Not a recording.",
+  "error": "model \"llama3.2\" not found, try pulling it first"
+}

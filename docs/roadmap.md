@@ -26,7 +26,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [x] Mock Provider (both protocols, fault scripting)
 - [x] Adapter contract test suite
 - [ ] OpenAI-compatible Adapter (non-streaming + streaming) passing the suite, with fixtures recorded from OpenAI ([provider-adapters.md §4](provider-adapters.md#wire-fixtures))
-- [ ] Ollama Adapter passing the suite
+- [x] Ollama Adapter passing the suite
 - [x] Registry: env-based credential resolution, outbound destination policy
 - [ ] `POST /v1/chat/completions` non-streaming with a **static alias → single model** stub, request validation, Problem Details error body with the OpenAI `error` member (ADR-0012), `X-Request-Id`
 - [ ] `GET /v1/models`, `/health`, `/ready`

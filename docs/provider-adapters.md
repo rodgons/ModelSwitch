@@ -64,6 +64,9 @@ Rules every Adapter must follow:
 - `format: "json"` for `JsonObject`, and `format: <schema>` for `JsonSchema` (Ollama ≥ 0.5).
 - Streaming is NDJSON (one JSON object per line). The final object has `done: true` and `prompt_eval_count` / `eval_count`, which map to reported usage. `prompt_eval_cached_count`, when present, maps to `CachedInputTokens`.
 - `done_reason` maps to `finish_reason` (`stop`, `length`).
+- A usage is reported only when both `prompt_eval_count` and `eval_count` are present (Ollama omits `prompt_eval_count` when the prompt was fully cached; the Adapter then reports no usage rather than a partial one). `prompt_eval_cached_count` larger than `prompt_eval_count` sets `CachedInputTokens = null` and increments `modelswitch.provider.invalid_usage`. A `done_reason` of `content_filter` (never emitted by Ollama itself, but possible behind a proxy) maps to `ContentFilter`; any unknown reason maps to `Stop`.
+- Errors: Ollama's own error body is a bare string, `{"error": "..."}`, with no machine code, so classification is by HTTP status. An `error` object with a `code` (what a reverse proxy in front of Ollama may emit) is honoured for billing/quota 429s. Ollama has no distinguishable context-length error (it truncates the prompt), so that suite scenario is skipped. A mid-stream `{"error": ...}` line, or one in a 200 non-streaming body, fails transient (nothing classifiable inside).
+- The streaming parser reads NDJSON lines from a `PipeReader` and parses each with `Utf8JsonReader`. Fixtures: `fixtures/ollama/` is hand-authored from Ollama's documented API and marked `"_source": "synthetic"`. Ollama has no recording requirement.
 - `CheckAsync`: `GET {endpoint}/api/version`. `ListModelsAsync`: `GET /api/tags`.
 - No credential by default. An optional bearer token is supported for Ollama behind a reverse proxy.
 
