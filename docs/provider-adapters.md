@@ -26,11 +26,13 @@ public sealed record AdapterContext(
 
 Neutral types:
 
-- `NeutralChatRequest`: messages (role + text), `MaxOutputTokens`, sampling params (all nullable), `Stop`, `Seed`, `ResponseFormat` (`Text | JsonObject | JsonSchema(name, schema, strict)`).
+- `NeutralChatRequest`: messages (role `System | User | Assistant` + text), `MaxOutputTokens`, sampling params (`Temperature`, `TopP`, `PresencePenalty`, `FrequencyPenalty`, all nullable), `Stop`, `Seed`, `ResponseFormat` (`Text | JsonObject | JsonSchema(name, schema, strict)`). Message and completion text is content (ADR-0010), so the record `ToString()` of `NeutralMessage`, `CompletionOutcome.Success` and `StreamEvent.ContentDelta` redacts it.
+- `FinishReason`: `Stop | Length | ContentFilter`.
 - `CompletionOutcome`: either `Success(text, finishReason, NeutralUsage?)` or `Failure(ProviderFailure)`.
 - `StreamEvent`: `ContentDelta(text)`, `Finish(reason)`, `Usage(NeutralUsage)`, `Failed(ProviderFailure)`. The stream always ends with exactly one `Finish` or `Failed`, and `Usage` may come before or after `Finish`.
 - `NeutralUsage(int InputTokens, int OutputTokens, int? CachedInputTokens)`. Only *reported* values go here. The Adapter never estimates. `CachedInputTokens` is a subset of `InputTokens`: `null` when the Provider didn't report it, `0` when it reported none. If a Provider reports more cached than input tokens, the Adapter sets `CachedInputTokens = null` (everything is then priced at the full input rate) and increments `modelswitch.provider.invalid_usage`. It doesn't fail the Attempt.
-- `ProviderFailure(FailureClass Class, string Code, int? HttpStatus, TimeSpan? RetryAfter, bool RequestSent)`. Classification follows [routing-and-resilience.md §3](routing-and-resilience.md#3-failure-classification).
+- `ProviderFailure(FailureClass Class, string Code, int? HttpStatus, TimeSpan? RetryAfter, bool RequestSent)`. Classification follows [routing-and-resilience.md §3](routing-and-resilience.md#3-failure-classification). `FailureClass` is `Transient | Permanent | Ambiguous`. `Code` is one of the sanitized `ProviderFailureCodes`: `connect_failed`, `timeout`, `connection_reset`, `edge_timeout`, `bad_request`, `context_length_exceeded`, `unauthorized`, `forbidden`, `not_found`, `payload_too_large`, `unprocessable`, `client_error` (unlisted 4xx), `request_timeout`, `conflict`, `too_early`, `rate_limited`, `quota_exhausted` (402 and billing 429s), `server_error` (all 5xx except 524) and `invalid_provider_response`. These are Adapter-level codes, separate from the gateway's client-facing error codes in [api.md §2](api.md#2-error-codes).
+- `ConnectivityResult(bool Reachable, ProviderFailure? Failure)` and `DiscoveredModel(string Id)` are the results of `CheckAsync` and `ListModelsAsync`.
 
 Rules every Adapter must follow:
 
@@ -67,9 +69,11 @@ Rules every Adapter must follow:
 
 ## 4. Shared contract test suite (`ModelSwitch.AdapterContractTests`)
 
-An abstract xUnit class `AdapterContract<TAdapter>` holds every scenario. Each Adapter has a subclass that supplies:
-- a WireMock.Net server configured with that Provider's recorded wire fixtures (`fixtures/<adapter>/*.json|.sse|.ndjson`), and
-- a factory for the Adapter.
+An abstract xUnit class `AdapterContract<TAdapter>` holds every scenario (partial files by area: Success, Failures, Behaviour). Each Adapter has a subclass that supplies only:
+- a `ProviderWireFormat`: how that Provider's wire format is put on the wire. It encodes completions, stream frames, error bodies, embedded errors and malformed payloads (backed by the recorded fixtures `fixtures/<adapter>/*.json|.sse|.ndjson`), and asserts how `json_object` and `json_schema` requests are encoded, and
+- a factory for the Adapter, which receives an `AdapterTestEnvironment` (an `HttpClient` without resilience handlers, a capturing `ILoggerFactory` and a `TimeProvider`).
+
+The suite creates one WireMock.Net server per test and does the stubbing itself. Two scenarios need a raw TCP server instead, because WireMock cannot close a socket mid-body or stall mid-body: the stream cut and the mid-stream cancellation (`RawStreamServer`). `SuiteSelfTest/ReferenceAdapterContractTests` runs the suite against a tiny test-only Adapter to prove the suite itself is sound. The real Adapters' test classes look the same.
 
 Scenarios (each one runs for every Adapter):
 
@@ -108,13 +112,18 @@ This is a small ASP.NET Core app that implements **both** wire protocols. Tests,
 
 ```
 model = "mock-echo"                          → echoes the last user message
-model = "mock-fixed?latency=300&tokens=50"   → fixed latency + output size
-X-Mock-Fault: status=503;times=2             → fail twice, then succeed (keyed by X-Mock-Scenario id)
+model = "mock-fixed?latency=300&tokens=50"   → fixed latency + output size (any other name, e.g. mock-a, behaves like mock-fixed)
+X-Mock-Fault: status=503;times=2             → fail twice, then succeed (keyed by X-Mock-Scenario id, or the model id)
+X-Mock-Fault: status=429;retry-after=2;error=insufficient_quota   → Retry-After header and the Provider error code in the body
 X-Mock-Fault: hang                           → never send headers
+X-Mock-Fault: latency=300                    → delay the response
 X-Mock-Fault: cut-after=5                    → send 5 chunks then drop the socket
 X-Mock-Fault: no-usage                       → omit usage
-X-Mock-Usage: cached=900                     → report 900 of the input tokens as cached
 X-Mock-Fault: garbage                        → invalid JSON
+X-Mock-Fault: inline-error=rate_limit_exceeded → a 200 response carrying an error object
+X-Mock-Usage: cached=900                     → report 900 of the input tokens as cached (also input=, output=)
 ```
+
+Directives combine with `;`. The mock serves `POST /v1/chat/completions` (JSON or SSE), `GET /v1/models`, `POST /api/chat` (JSON or NDJSON), `GET /api/tags` and `GET /api/version`. `max_tokens`, `max_completion_tokens` and `num_predict` truncate the output with `finish_reason: length`. Tests host it in-process with `MockProviderApp.StartAsync()`, which listens on a free loopback port; the executable runs it standalone. There is no Dockerfile yet: it arrives with the compose `demo` profile.
 
 The gateway never forwards client headers to Providers, so `X-Mock-Fault` works only in direct Adapter tests. Full-stack tests script faults through the mock's `POST /__scenarios` control endpoint instead. It sets the fault for a given mock model id (e.g. `{"model":"mock-a","fault":"status=503;times=2"}`) before the test calls the gateway.
