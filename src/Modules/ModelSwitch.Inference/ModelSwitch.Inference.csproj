@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="../../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
     <ProjectReference Include="../../ModelSwitch.SharedKernel.Http/ModelSwitch.SharedKernel.Http.csproj" />
+    <ProjectReference Include="../../ModelSwitch.Configuration/ModelSwitch.Configuration.csproj" />
     <ProjectReference Include="../ModelSwitch.Routing/ModelSwitch.Routing.csproj" />
     <ProjectReference Include="../ModelSwitch.Registry/ModelSwitch.Registry.csproj" />
     <ProjectReference Include="../ModelSwitch.Usage/ModelSwitch.Usage.csproj" />

@@ -51,6 +51,30 @@ public sealed class ProblemResultsTests
         context.Response.Headers[RequestId.HeaderName].ToString().ShouldBe(FixedIds.Id.ToString());
     }
 
+    [Theory]
+    [InlineData(0.2, "1")]
+    [InlineData(1.0, "1")]
+    [InlineData(29.4, "30")]
+    public async Task A_retry_after_is_emitted_in_whole_seconds_rounded_up(double seconds, string expected)
+    {
+        var context = Context("/v1/chat/completions");
+
+        await WriteAsync(context, new Error(ErrorCode.ProviderUnavailable, "Unavailable.") { RetryAfter = TimeSpan.FromSeconds(seconds) });
+
+        context.Response.StatusCode.ShouldBe(503);
+        context.Response.Headers.RetryAfter.ToString().ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task No_retry_after_header_without_a_known_retry_after()
+    {
+        var context = Context("/v1/chat/completions");
+
+        await WriteAsync(context, new Error(ErrorCode.ProviderUnavailable, "Unavailable."));
+
+        context.Response.Headers.ContainsKey("Retry-After").ShouldBeFalse();
+    }
+
     [Fact]
     public async Task Admin_errors_have_no_openai_error_member()
     {

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ModelSwitch.Registry.Contracts;
+using ModelSwitch.Registry.Domain;
 
 namespace ModelSwitch.Registry.Infrastructure;
 
@@ -22,6 +23,10 @@ internal sealed class EfCatalogSnapshotSource(IDbContextFactory<RegistryDbContex
                 ProviderEnabled = provider.Enabled,
                 ModelEnabled = model.Enabled,
                 model.CapabilitiesJson,
+                provider.Endpoint,
+                provider.AdapterType,
+                provider.CredentialReference,
+                provider.RequestTimeoutMs,
             })
             .ToListAsync(cancellationToken);
 
@@ -42,7 +47,18 @@ internal sealed class EfCatalogSnapshotSource(IDbContextFactory<RegistryDbContex
                 m.ProviderEnabled,
                 m.ModelEnabled,
                 m.CapabilitiesJson,
-                prices.TryGetValue(m.Id, out var price) ? new CatalogPrice(price.InputPerMillion, price.CachedInputPerMillion, price.OutputPerMillion) : null))
+                prices.TryGetValue(m.Id, out var price) ? new CatalogPrice(price.InputPerMillion, price.CachedInputPerMillion, price.OutputPerMillion) : null,
+                Uri.TryCreate(m.Endpoint, UriKind.Absolute, out var endpoint)
+                    ? new ProviderModelTarget(
+                        m.Id,
+                        m.ProviderId,
+                        m.ProviderName,
+                        m.AdapterType == AdapterType.Ollama ? "ollama" : "openai_compatible",
+                        endpoint,
+                        m.CredentialReference,
+                        TimeSpan.FromMilliseconds(m.RequestTimeoutMs),
+                        m.ProviderModelIdentifier)
+                    : null))
             .ToList();
         return new CatalogSnapshot(entries);
     }

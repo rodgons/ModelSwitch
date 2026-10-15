@@ -1,5 +1,7 @@
 #pragma warning disable CS1573 // Record parameters are documented only where they need explanation.
 
+using ModelSwitch.Registry.Contracts;
+
 namespace ModelSwitch.Routing.Contracts;
 
 public static class CapabilityNames
@@ -41,7 +43,8 @@ public sealed record CandidateModel(
     bool ProviderEnabled,
     bool ModelEnabled,
     ModelCapabilities Capabilities,
-    PriceInForce? Price);
+    PriceInForce? Price,
+    ProviderModelTarget? Target = null);
 
 /// <summary>
 /// Immutable configuration the router decides on: alias to policy, Policy Versions (the latest per policy) and the

@@ -34,7 +34,11 @@ internal static class InferenceEndpoints
             RequestId.Get(http),
             tenant.Value,
             ApiKeyClaims.FindApiKeyId(http.User),
-            http.Request.Headers[ClientRequestIds.HeaderName].FirstOrDefault());
+            http.Request.Headers[ClientRequestIds.HeaderName].FirstOrDefault())
+        {
+            TaskType = http.Request.Headers[RoutingHeaders.TaskHeaderName].FirstOrDefault(),
+            TimeoutMs = http.Request.Headers[RoutingHeaders.TimeoutHeaderName].FirstOrDefault(),
+        };
         var result = await chat.CompleteAsync(caller, http.Request.Body, http.RequestAborted);
         return result.IsSuccess
             ? Results.Json(ChatCompletionWire.ChatCompletion(result.Value, time.GetUtcNow().ToUnixTimeSeconds()))

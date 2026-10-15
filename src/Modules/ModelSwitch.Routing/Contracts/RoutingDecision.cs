@@ -1,5 +1,6 @@
 #pragma warning disable CS1573 // Record parameters are documented only where they need explanation.
 
+using ModelSwitch.Registry.Contracts;
 using ModelSwitch.SharedKernel.Errors;
 
 namespace ModelSwitch.Routing.Contracts;
@@ -20,12 +21,14 @@ public static class EligibilityReason
 
 /// <summary>An eligible Candidate in rank order.</summary>
 /// <param name="WorstCaseEstimatedCost">Input estimate and the maximum output at the Price in force (routing-and-resilience.md, "Worst-case cost").</param>
+/// <param name="Target">How to call the model, from the same snapshot the decision was made on, so the attempt loop does no database read.</param>
 public sealed record RankedCandidate(
     Guid ProviderModelId,
     Guid ProviderId,
     string ProviderName,
     string ProviderModelIdentifier,
-    decimal WorstCaseEstimatedCost);
+    decimal WorstCaseEstimatedCost,
+    ProviderModelTarget? Target = null);
 
 public sealed record ExcludedCandidate(Guid ProviderModelId, string Reason);
 

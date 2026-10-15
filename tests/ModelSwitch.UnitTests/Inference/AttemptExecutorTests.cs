@@ -26,7 +26,7 @@ public sealed class AttemptExecutorTests : IDisposable
     public AttemptExecutorTests()
     {
         _health = new ProviderHealth(new CircuitOptions(), _time, NullLogger<ProviderHealth>.Instance);
-        _executor = new AttemptExecutor(_fleet, _fleet, _health, new InputTokenEstimator(), _jitter, _time, NullLogger<AttemptExecutor>.Instance);
+        _executor = new AttemptExecutor(_fleet, _health, new InputTokenEstimator(), _jitter, _time, NullLogger<AttemptExecutor>.Instance);
     }
 
     public void Dispose() => _health.Dispose();
@@ -504,8 +504,8 @@ public sealed class AttemptExecutorTests : IDisposable
         public double Next() => Value;
     }
 
-    /// <summary>One scripted Provider Model per name, serving as catalog, adapter factory and adapter.</summary>
-    private sealed class Fleet : IProviderCatalog, IAdapterFactory
+    /// <summary>One scripted Provider Model per name, serving as adapter factory and adapter.</summary>
+    private sealed class Fleet : IAdapterFactory
     {
         private readonly Dictionary<string, Guid> _ids = [];
         private readonly Dictionary<string, Queue<CompletionOutcome>> _scripts = [];
@@ -535,11 +535,13 @@ public sealed class AttemptExecutorTests : IDisposable
             _ = IdOf(model);
         }
 
-        public RankedCandidate Candidate(string model) => new(IdOf(model), IdOf(model), "p", model, 0m);
-
-        public Task<ProviderModelTarget?> FindEnabledAsync(string providerName, string providerModelIdentifier, CancellationToken cancellationToken)
-            => Task.FromResult<ProviderModelTarget?>(new ProviderModelTarget(
-                IdOf(providerModelIdentifier), IdOf(providerModelIdentifier), providerName, "fake", new Uri("http://x/"), null, RequestTimeout, providerModelIdentifier));
+        public RankedCandidate Candidate(string model) => new(
+            IdOf(model),
+            IdOf(model),
+            "p",
+            model,
+            0m,
+            new ProviderModelTarget(IdOf(model), IdOf(model), "p", "fake", new Uri("http://x/"), null, RequestTimeout, model));
 
         public ValueTask<Result<AdapterBinding>> BindAsync(ProviderModelTarget target, CancellationToken cancellationToken)
             => ValueTask.FromResult<Result<AdapterBinding>>(

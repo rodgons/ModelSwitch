@@ -152,7 +152,7 @@ internal sealed class Router : IRouter
             return new Verdict(EligibilityReason.CircuitOpen, null);
         }
 
-        return new Verdict(null, new RankedCandidate(model.ProviderModelId, model.ProviderId, model.ProviderName, model.ProviderModelIdentifier, worstCase));
+        return new Verdict(null, new RankedCandidate(model.ProviderModelId, model.ProviderId, model.ProviderName, model.ProviderModelIdentifier, worstCase, model.Target));
     }
 
     private static List<RankedCandidate> Rank(PolicyStrategy strategy, List<(int Listed, RankedCandidate Candidate)> eligible)

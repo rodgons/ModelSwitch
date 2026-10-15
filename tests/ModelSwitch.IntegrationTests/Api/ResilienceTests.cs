@@ -138,6 +138,7 @@ public sealed class CircuitBreakerTests(GatewayFixture gateway) : IClassFixture<
 
         HttpStatusCode last = default;
         string? lastRequestId = null;
+        int? lastRetryAfter = null;
         for (var i = 0; i < 20; i++)
         {
             using var content = new StringContent(
@@ -151,16 +152,18 @@ public sealed class CircuitBreakerTests(GatewayFixture gateway) : IClassFixture<
             var response = await gateway.Client.PostAsync("/v1/chat/completions", content, TestContext.Current.CancellationToken);
             last = response.StatusCode;
             lastRequestId = response.Headers.GetValues("X-Request-Id").Single();
+            lastRetryAfter = response.Headers.RetryAfter?.Delta is { } delta ? (int)delta.TotalSeconds : null;
         }
 
         last.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        lastRetryAfter.ShouldNotBeNull("the router knows the remaining break").ShouldBeInRange(1, 30);
         var attempts = await Statuses(lastRequestId!);
-        attempts.ShouldBe(["skipped_circuit_open"], "the open circuit answered without a Provider call");
+        attempts.ShouldBeEmpty("the router excluded the open circuit, so nothing was called");
         var health = gateway.Services.GetRequiredService<IProviderHealth>();
         health.OpenCircuits().Count.ShouldBe(1);
 
-        var requestStatus = await Scalar($"select status || '/' || error_code || '/' || attempt_count from usage.inference_request where id = '{lastRequestId}'");
-        requestStatus.ShouldBe("failed/provider_unavailable/0");
+        var requestStatus = await Scalar($"select status || '/' || error_code || '/' || attempt_count || '/' || (policy_version is not null) || '/' || (routing_decision::text like '%circuit_open%') from usage.inference_request where id = '{lastRequestId}'");
+        requestStatus.ShouldBe("failed/provider_unavailable/0/true/true");
 
         await gateway.SetFaultAsync(null, null);
     }

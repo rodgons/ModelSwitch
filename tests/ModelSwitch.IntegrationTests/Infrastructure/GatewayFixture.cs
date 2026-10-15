@@ -5,8 +5,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ModelSwitch.Api;
+using ModelSwitch.Configuration.Contracts;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.MockProvider;
+using ModelSwitch.SharedKernel.Configuration;
 using Npgsql;
 
 namespace ModelSwitch.IntegrationTests.Infrastructure;
@@ -14,7 +16,9 @@ namespace ModelSwitch.IntegrationTests.Infrastructure;
 /// <summary>
 /// The real api host (<see cref="WebApplicationFactory{TEntryPoint}"/>) on a migrated database cloned from the template,
 /// with one Tenant, two API Keys and two Providers (OpenAI-compatible and Ollama) that point at an in-process Mock Provider.
-/// Static aliases: <c>balanced</c> (OpenAI protocol) and <c>local</c> (Ollama protocol). Use it as a class fixture.
+/// Routing is real: each alias is a <c>routing_alias</c> row over a static Routing Policy, and the models are priced and declare
+/// their Capabilities, so they are eligible. <c>balanced</c> (OpenAI protocol), <c>local</c> (Ollama protocol) and
+/// <c>resilient</c> (OpenAI protocol with a Fallback). Use it as a class fixture.
 /// </summary>
 public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
 {
@@ -60,8 +64,12 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
         }
 
         await ExecuteAsync("update identity.api_key set scopes = array['models:read'] where name = 'models-only'");
-        await InsertProviderAsync("mock-openai", "openai_compatible", new Uri(_mock.BaseAddress, "v1").ToString(), PrimaryModel, FallbackModel);
-        await InsertProviderAsync("mock-ollama", "ollama", _mock.BaseAddress.ToString(), PrimaryModel);
+        var openAiModels = await InsertProviderAsync("mock-openai", "openai_compatible", new Uri(_mock.BaseAddress, "v1").ToString(), PrimaryModel, FallbackModel);
+        var ollamaModels = await InsertProviderAsync("mock-ollama", "ollama", _mock.BaseAddress.ToString(), PrimaryModel);
+        await WriteConfigurationAsync(
+            PolicyAndAliasSql(ChatAlias, [("mock-openai", PrimaryModel, openAiModels[PrimaryModel])])
+            + PolicyAndAliasSql(OllamaAlias, [("mock-ollama", PrimaryModel, ollamaModels[PrimaryModel])])
+            + PolicyAndAliasSql(ResilientAlias, [("mock-openai", PrimaryModel, openAiModels[PrimaryModel]), ("mock-openai", FallbackModel, openAiModels[FallbackModel])]));
 
         _factory = new Factory(ConnectionString);
         Client = Authenticated(full.PlaintextKey);
@@ -111,8 +119,56 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
         response.EnsureSuccessStatusCode();
     }
 
-    private async Task InsertProviderAsync(string name, string adapterType, string endpoint, params string[] models)
+    /// <summary>
+    /// Applies <paramref name="sql"/> and bumps <c>config.config_version</c> in one transaction, as an admin write does. When the
+    /// host is already running, waits until its snapshot has caught up.
+    /// </summary>
+    public async Task WriteConfigurationAsync(string sql)
     {
+        long version;
+        await using (var connection = new NpgsqlConnection(ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
+            await using (var command = new NpgsqlCommand(sql, connection, transaction))
+            {
+                await command.ExecuteNonQueryAsync();
+            }
+
+            version = await ConfigVersion.BumpAsync(connection, transaction, CancellationToken.None);
+            await transaction.CommitAsync();
+        }
+
+        if (_factory is not null)
+        {
+            var snapshots = Services.GetRequiredService<IConfigurationSnapshotProvider>();
+            var deadline = Environment.TickCount64 + 5_000;
+            while (snapshots.Current.Version < version && Environment.TickCount64 < deadline)
+            {
+                await Task.Delay(10);
+            }
+        }
+    }
+
+    /// <summary>SQL for a static Routing Policy over the given <c>(provider, model, id)</c> Candidates and an alias that points to it.</summary>
+    public static string PolicyAndAliasSql(string alias, (string Provider, string Model, Guid Id)[] candidates, string execution = "")
+    {
+        var policyId = Guid.CreateVersion7();
+        var names = string.Join(',', candidates.Select(c => $"\"{c.Provider}/{c.Model}\""));
+        var resolved = string.Join(',', candidates.Select(c => $"\"{c.Provider}/{c.Model}\":\"{c.Id}\""));
+        var executionJson = execution.Length == 0 ? string.Empty : $",\"execution\":{execution}";
+        return $$"""
+            insert into routing.routing_policy values ('{{policyId}}', '{{alias}}-policy', 1, now());
+            insert into routing.routing_policy_version (policy_id, version, definition, resolved_candidates, created_at)
+              values ('{{policyId}}', 1, '{"strategy":"static","candidates":[{{names}}]{{executionJson}}}', '{{{resolved}}}', now());
+            insert into routing.model_alias (alias, policy_id, description, updated_at) values ('{{alias}}', '{{policyId}}', null, now());
+
+            """;
+    }
+
+    private async Task<Dictionary<string, Guid>> InsertProviderAsync(string name, string adapterType, string endpoint, params string[] models)
+    {
+        var modelIds = new Dictionary<string, Guid>();
         var providerId = Guid.CreateVersion7();
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
@@ -130,18 +186,27 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
 
         foreach (var model in models)
         {
+            var modelId = Guid.CreateVersion7();
+            modelIds[model] = modelId;
             await using var insertModel = new NpgsqlCommand(
                 """
                 insert into registry.provider_model (id, provider_id, provider_model_id, display_name, capabilities, enabled, created_at, updated_at)
-                values (@modelId, @id, @model, @model, '{}'::jsonb, true, now(), now());
+                values (@modelId, @id, @model, @model, @capabilities::jsonb, true, now(), now());
+                insert into registry.model_price values (gen_random_uuid(), @modelId, 1, null, 2, 'USD', '2026-01-01', now(), null);
                 """,
                 connection);
             insertModel.Parameters.AddWithValue("id", providerId);
-            insertModel.Parameters.AddWithValue("modelId", Guid.CreateVersion7());
+            insertModel.Parameters.AddWithValue("modelId", modelId);
             insertModel.Parameters.AddWithValue("model", model);
+            insertModel.Parameters.AddWithValue("capabilities", _capabilities);
             await insertModel.ExecuteNonQueryAsync();
         }
+
+        return modelIds;
     }
+
+    private const string _capabilities =
+        """{"streaming":true,"jsonObject":true,"jsonSchema":true,"contextWindow":128000,"maxOutputTokens":16384,"tokenizer":"o200k_base","parameters":["temperature","top_p","seed","stop","presence_penalty","frequency_penalty"]}""";
 
     private sealed class Factory(string connectionString) : WebApplicationFactory<ApiHost>
     {
@@ -153,9 +218,6 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
                 ["Security:ApiKeyPepper"] = ModuleServices.Pepper,
                 // The Mock Provider listens on loopback, which the outbound policy refuses unless allow-listed.
                 ["Outbound:AllowedPrivateHosts"] = "127.0.0.1",
-                [$"Inference:StaticAliases:{ChatAlias}"] = "mock-openai/mock-echo",
-                [$"Inference:StaticAliases:{OllamaAlias}"] = "mock-ollama/mock-echo",
-                [$"Inference:StaticAliases:{ResilientAlias}"] = $"mock-openai/{PrimaryModel},mock-openai/{FallbackModel}",
             }));
         }
     }

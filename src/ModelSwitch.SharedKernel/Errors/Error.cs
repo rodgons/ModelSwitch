@@ -21,6 +21,9 @@ public sealed record Error
     /// <summary>Invalid fields keyed by path, e.g. <c>messages[3].content</c>. Only for validation errors.</summary>
     public IReadOnlyDictionary<string, string[]>? FieldErrors { get; }
 
+    /// <summary>When the client may retry: emitted as <c>Retry-After</c> on 429 and 503 when the gateway knows (api.md section 1).</summary>
+    public TimeSpan? RetryAfter { get; init; }
+
     public static Error Validation(string message, IReadOnlyDictionary<string, string[]> fieldErrors)
         => new(ErrorCode.ValidationFailed, message, fieldErrors);
 }

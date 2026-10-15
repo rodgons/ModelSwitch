@@ -21,6 +21,12 @@ public static class ProblemResults
         var requestId = RequestId.Get(context);
         var requestIdText = requestId == Guid.Empty ? null : requestId.ToString();
 
+        if (error.RetryAfter is { } retryAfter)
+        {
+            // Whole seconds, rounded up, and at least 1: "0" would invite an immediate retry into the same open circuit.
+            context.Response.Headers.RetryAfter = Math.Max(1, (long)Math.Ceiling(retryAfter.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         var extensions = new Dictionary<string, object?>
         {
             ["errorCode"] = error.Code.Value,

@@ -19,6 +19,9 @@ public sealed record InferenceRequest(Guid RequestId, Guid TenantId, string Alia
 
     public Guid? EvaluationRunId { get; init; }
 
+    /// <summary><c>X-ModelSwitch-Task</c>, already validated: the Task Type that rule-based routing matches on.</summary>
+    public string? TaskType { get; init; }
+
     /// <summary><c>X-Client-Request-Id</c>, already validated.</summary>
     public string? ClientRequestId { get; init; }
 
@@ -52,15 +55,15 @@ public sealed record InferenceResult(Guid RequestId, string Alias, string Text, 
 /// completion. The HTTP endpoint and, later, Evaluation both call it in-process.
 /// </summary>
 /// <remarks>
-/// Runs the Attempt loop (retries, backoff, Fallback, Deadline) over a static alias binding for now. Routing Policies
-/// and limits arrive behind this same interface.
+/// Routes the request on the current configuration snapshot (held for the whole request), then runs the Attempt loop
+/// (retries, backoff, Fallback, Deadline) over the Routing Decision's Candidates. Limits arrive behind this same interface.
 /// </remarks>
 public interface IInferenceService
 {
     /// <summary>
-    /// Fails with <c>model_not_found</c> (unknown alias), <c>no_eligible_model</c> (the bound Provider Model is missing
-    /// or disabled), <c>provider_unavailable</c>, <c>provider_error</c>, <c>deadline_exceeded</c> or
-    /// <c>context_length_exceeded</c>.
+    /// Fails with <c>model_not_found</c> (unknown alias), <c>model_not_allowed</c> (the Tenant may not use it),
+    /// <c>no_eligible_model</c>, <c>provider_unavailable</c> (with a retry-after when known), <c>provider_error</c>,
+    /// <c>deadline_exceeded</c> or <c>context_length_exceeded</c>.
     /// </summary>
     Task<Result<InferenceResult>> CompleteAsync(InferenceRequest request, CancellationToken cancellationToken);
 }

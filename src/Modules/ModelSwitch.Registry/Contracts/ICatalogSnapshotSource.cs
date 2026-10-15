@@ -9,6 +9,7 @@ public sealed record CatalogPrice(decimal InputPerMillion, decimal? CachedInputP
 /// <summary>One Provider Model with its Provider's state and Price in force. Contains no secret.</summary>
 /// <param name="CapabilitiesJson">The <c>registry.provider_model.capabilities</c> document, as stored.</param>
 /// <param name="Price">Null when no Price is in force yet.</param>
+/// <param name="Target">What the attempt loop needs to call the model (endpoint, Adapter type, Credential Reference, timeout). Null only in tests.</param>
 public sealed record CatalogEntry(
     Guid ProviderModelId,
     Guid ProviderId,
@@ -17,7 +18,8 @@ public sealed record CatalogEntry(
     bool ProviderEnabled,
     bool ModelEnabled,
     string CapabilitiesJson,
-    CatalogPrice? Price);
+    CatalogPrice? Price,
+    ProviderModelTarget? Target = null);
 
 /// <summary>Providers, Provider Models, Capabilities and current Prices, as read for one configuration snapshot.</summary>
 public sealed record CatalogSnapshot(IReadOnlyList<CatalogEntry> Entries);

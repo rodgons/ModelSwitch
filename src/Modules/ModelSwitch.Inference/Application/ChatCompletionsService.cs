@@ -9,7 +9,52 @@ namespace ModelSwitch.Inference.Application;
 /// The use case behind <c>POST /v1/chat/completions</c>: read and validate the body, then hand the neutral request to
 /// <see cref="IInferenceService"/>. The only thing the HTTP endpoint calls.
 /// </summary>
-internal sealed record ChatCaller(Guid RequestId, Guid TenantId, Guid? ApiKeyId, string? ClientRequestId);
+internal sealed record ChatCaller(Guid RequestId, Guid TenantId, Guid? ApiKeyId, string? ClientRequestId)
+{
+    /// <summary>Raw <c>X-ModelSwitch-Task</c>.</summary>
+    public string? TaskType { get; init; }
+
+    /// <summary>Raw <c>X-ModelSwitch-Timeout-Ms</c>.</summary>
+    public string? TimeoutMs { get; init; }
+}
+
+/// <summary>Validates the ModelSwitch request headers (api.md section 1): <c>X-ModelSwitch-Task</c> and <c>X-ModelSwitch-Timeout-Ms</c>.</summary>
+internal static partial class RoutingHeaders
+{
+    public const string TaskHeaderName = "X-ModelSwitch-Task";
+    public const string TimeoutHeaderName = "X-ModelSwitch-Timeout-Ms";
+
+    [System.Text.RegularExpressions.GeneratedRegex("^[a-z0-9_-]{1,64}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex TaskPattern();
+
+    public static Result<string?> ValidateTask(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return Result.Success<string?>(null);
+        }
+
+        return TaskPattern().IsMatch(value)
+            ? Result.Success<string?>(value)
+            : Invalid<string?>(TaskHeaderName, "X-ModelSwitch-Task must match [a-z0-9_-]{1,64}.");
+    }
+
+    /// <summary>A positive number of milliseconds. It can only shorten the Deadline, which the caller enforces with <c>min</c>.</summary>
+    public static Result<TimeSpan?> ValidateTimeout(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return Result.Success<TimeSpan?>(null);
+        }
+
+        return int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var milliseconds) && milliseconds > 0
+            ? Result.Success<TimeSpan?>(TimeSpan.FromMilliseconds(milliseconds))
+            : Invalid<TimeSpan?>(TimeoutHeaderName, "X-ModelSwitch-Timeout-Ms must be a positive number of milliseconds.");
+    }
+
+    private static Result<T> Invalid<T>(string header, string message)
+        => Result.Failure<T>(new Error(ErrorCode.InvalidRequest, message, new Dictionary<string, string[]> { [header] = [message] }));
+}
 
 /// <summary>Validates <c>X-Client-Request-Id</c>: at most 128 printable ASCII characters (api.md section 1).</summary>
 internal static class ClientRequestIds
@@ -88,6 +133,18 @@ internal sealed class ChatCompletionsService(InferenceOptions options, IInferenc
             return clientRequestId.Error;
         }
 
+        var taskType = RoutingHeaders.ValidateTask(caller.TaskType);
+        if (taskType.IsFailure)
+        {
+            return taskType.Error;
+        }
+
+        var timeout = RoutingHeaders.ValidateTimeout(caller.TimeoutMs);
+        if (timeout.IsFailure)
+        {
+            return timeout.Error;
+        }
+
         var counted = new CountingStream(body);
 
         JsonDocument document;
@@ -113,6 +170,8 @@ internal sealed class ChatCompletionsService(InferenceOptions options, IInferenc
             {
                 ApiKeyId = caller.ApiKeyId,
                 ClientRequestId = clientRequestId.Value,
+                TaskType = taskType.Value,
+                Timeout = timeout.Value,
                 InputBytes = (int)Math.Min(counted.BytesRead, int.MaxValue),
             };
             return await inference.CompleteAsync(request, cancellationToken);

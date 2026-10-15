@@ -1,5 +1,8 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
+using ModelSwitch.Adapters.Abstractions;
+using ModelSwitch.Configuration.Contracts;
 using ModelSwitch.Inference.Contracts;
 using ModelSwitch.Registry.Contracts;
 using ModelSwitch.Routing.Contracts;
@@ -10,15 +13,16 @@ using ModelSwitch.Usage.Contracts;
 namespace ModelSwitch.Inference.Application;
 
 /// <summary>
-/// <see cref="IInferenceService"/> with a static candidate source: the alias is resolved from
-/// <see cref="InferenceOptions.StaticAliases"/> into an ordered Candidate list (temporary, until Routing and the runtime
-/// configuration snapshot replace it) and run by the <see cref="AttemptExecutor"/>. The request is recorded: one
-/// <c>inference_request</c> opened before the first Attempt and settled after the last, with every Attempt in between.
-/// It never logs or persists content (ADR-0010).
+/// <see cref="IInferenceService"/>: reads the configuration snapshot once, asks <see cref="IRouter"/> for the ordered
+/// Candidates, and runs them through the <see cref="AttemptExecutor"/> under the Policy Version's execution settings. The
+/// request is recorded: one <c>inference_request</c> opened before routing and settled after the last Attempt, with the
+/// Policy Version, the Routing Decision and every Attempt. It never logs or persists content (ADR-0010).
 /// </summary>
 internal sealed partial class InferenceService(
-    InferenceOptions options,
-    IProviderCatalog catalog,
+    IConfigurationSnapshotProvider configuration,
+    IRouter router,
+    IInputTokenEstimator estimator,
+    IProviderHealth health,
     AttemptExecutor executor,
     IUsageLedger ledger,
     TimeProvider time,
@@ -28,6 +32,12 @@ internal sealed partial class InferenceService(
     internal static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(10);
 
     private static readonly TimeSpan[] _settleBackoff = [TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(400), TimeSpan.FromSeconds(1.6)];
+
+    // The distinct tokenizers a snapshot's models name never change within a snapshot, so they are worked out once per snapshot.
+    private static readonly ConditionalWeakTable<ConfigurationSnapshot, string[]> _tokenizers = [];
+
+    /// <summary>What routing decided, kept for the settlement: the Policy Version and the Routing Decision.</summary>
+    private sealed record Routed(Guid? PolicyId, int? PolicyVersion, string? DecisionJson, Error? Error, ExecutionPlan? Plan, NeutralChatRequest? Chat);
 
     public async Task<Result<InferenceResult>> CompleteAsync(InferenceRequest request, CancellationToken cancellationToken)
     {
@@ -42,7 +52,7 @@ internal sealed partial class InferenceService(
                 request.EvaluationRunId,
                 request.ClientRequestId,
                 request.Alias,
-                TaskType: null,
+                request.TaskType,
                 Streaming: false,
                 request.InputBytes,
                 Activity.Current?.TraceId.ToString() ?? string.Empty),
@@ -53,69 +63,47 @@ internal sealed partial class InferenceService(
         }
 
         var attempts = new List<AttemptRecord>();
+        var routed = Route(request, time.GetUtcNow());
         Result<InferenceResult> result;
         try
         {
-            result = await ExecuteAsync(request, attempts, cancellationToken);
+            result = await ExecuteAsync(request, routed, attempts, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // The client went away. The Attempt in flight may have reached the Provider, so it is ambiguous, not cancelled.
-            await SettleAsync(request, opened.Value, RequestOutcome.Cancelled, errorCode: null, attempts);
+            await SettleAsync(request, opened.Value, routed, RequestOutcome.Cancelled, errorCode: null, ttftMs: null, attempts);
             throw;
         }
         catch
         {
             // A bug or infrastructure fault must not leave the request 'running'; the failure itself still propagates.
-            await SettleAsync(request, opened.Value, RequestOutcome.Failed, ErrorCode.InternalError.Value, attempts);
+            await SettleAsync(request, opened.Value, routed, RequestOutcome.Failed, ErrorCode.InternalError.Value, ttftMs: null, attempts);
             throw;
         }
 
         await SettleAsync(
             request,
             opened.Value,
+            routed,
             result.IsSuccess ? RequestOutcome.Succeeded : RequestOutcome.Failed,
             result.IsSuccess ? null : result.Error.Code.Value,
+            ttftMs: null,
             attempts);
         return result;
     }
 
-    private async Task<Result<InferenceResult>> ExecuteAsync(InferenceRequest request, List<AttemptRecord> attempts, CancellationToken cancellationToken)
+    private async Task<Result<InferenceResult>> ExecuteAsync(InferenceRequest request, Routed routed, List<AttemptRecord> attempts, CancellationToken cancellationToken)
     {
-        var received = time.GetUtcNow();
-        var binding = options.StaticAliases.FirstOrDefault(a => string.Equals(a.Alias, request.Alias, StringComparison.Ordinal));
-        if (binding is null)
+        if (routed.Plan is not { } plan)
         {
-            return new Error(ErrorCode.ModelNotFound, "The requested model does not exist.");
+            return routed.Error!;
         }
 
-        var candidates = new List<RankedCandidate>();
-        foreach (var (providerName, identifier) in binding.Targets)
-        {
-            // Skipped, not fatal, when disabled or unknown: the next Candidate can still serve the request.
-            var target = await catalog.FindEnabledAsync(providerName, identifier, cancellationToken);
-            if (target is not null)
-            {
-                candidates.Add(new RankedCandidate(target.ProviderModelId, target.ProviderId, target.ProviderName, target.ProviderModelIdentifier, WorstCaseEstimatedCost: 0m));
-            }
-        }
-
-        if (candidates.Count == 0)
-        {
-            return new Error(ErrorCode.NoEligibleModel, "No eligible model can serve this request.");
-        }
-
-        var settings = ExecutionSettings.Default;
-        var deadline = received + TimeSpan.FromMilliseconds(settings.DeadlineMs);
-        if (request.Timeout is { } requested && received + requested < deadline)
-        {
-            deadline = received + requested;
-        }
-
-        var executed = await executor.ExecuteAsync(new ExecutionPlan(candidates, settings, deadline), request.Chat, attempts, cancellationToken);
+        var executed = await executor.ExecuteAsync(plan, routed.Chat!, attempts, cancellationToken);
         if (executed.IsFailure)
         {
-            return executed.Error;
+            return WithRetryAfter(executed.Error, plan, attempts);
         }
 
         var success = executed.Value;
@@ -123,21 +111,116 @@ internal sealed partial class InferenceService(
     }
 
     /// <summary>
+    /// Step 7. A pure function of the snapshot taken here: the same instance serves the whole request, so a configuration
+    /// change in between never mixes two Policy Versions. Routing failures keep their Decision for the record.
+    /// </summary>
+    private Routed Route(InferenceRequest request, DateTimeOffset received)
+    {
+        var snapshot = configuration.Current;
+        var texts = new string[request.Chat.Messages.Count];
+        for (var i = 0; i < texts.Length; i++)
+        {
+            texts[i] = request.Chat.Messages[i].Text;
+        }
+
+        var input = new RoutingInput(
+            request.TenantId,
+            request.Alias,
+            snapshot.AccessFor(request.TenantId),
+            request.TaskType,
+            RequiredCapabilities(request),
+            EstimateInput(snapshot, texts),
+            request.Chat.MaxOutputTokens,
+            snapshot.Routing,
+            health.OpenCircuits());
+
+        var outcome = router.Decide(input);
+        var decision = outcome.Decision;
+        var json = decision is null ? null : RoutingDecisionJson.Write(decision);
+        if (outcome.Error is not null || decision is null)
+        {
+            return new Routed(decision?.PolicyId, decision?.PolicyVersion, json, outcome.Error! with { RetryAfter = outcome.RetryAfter }, null, null);
+        }
+
+        var settings = decision.Execution;
+        var deadline = received + TimeSpan.FromMilliseconds(settings.DeadlineMs);
+        if (request.Timeout is { } requested && received + requested < deadline)
+        {
+            deadline = received + requested;
+        }
+
+        // The Reservation and the Routing Decision were costed at this ceiling, so the Provider is held to it.
+        var chat = request.Chat with { MaxOutputTokens = decision.EffectiveMaxOutputTokens };
+        return new Routed(decision.PolicyId, decision.PolicyVersion, json, null, new ExecutionPlan(decision.Ordered, settings, deadline), chat);
+    }
+
+    private static List<string> RequiredCapabilities(InferenceRequest request)
+    {
+        var required = new List<string>(2);
+        if (request.Chat.ResponseFormat is ResponseFormat.JsonObject)
+        {
+            required.Add(CapabilityNames.JsonObject);
+        }
+        else if (request.Chat.ResponseFormat is ResponseFormat.JsonSchema)
+        {
+            required.Add(CapabilityNames.JsonSchema);
+        }
+
+        return required;
+    }
+
+    // One estimate per tokenizer the snapshot's models declare (routing-and-resilience.md section 1); the byte estimate covers the rest.
+    private Routing.Contracts.InputTokenEstimate EstimateInput(ConfigurationSnapshot snapshot, string[] texts)
+    {
+        var tokenizers = _tokenizers.GetValue(
+            snapshot,
+            static s => [.. s.Routing.Models.Values.Select(m => m.Capabilities.Tokenizer).Where(t => t is not null).Distinct().Order(StringComparer.Ordinal)!]);
+        var byTokenizer = new Dictionary<string, int>(tokenizers.Length, StringComparer.Ordinal);
+        foreach (var tokenizer in tokenizers)
+        {
+            byTokenizer[tokenizer] = estimator.Estimate(texts, tokenizer).Tokens;
+        }
+
+        return new Routing.Contracts.InputTokenEstimate(byTokenizer, estimator.Estimate(texts, tokenizer: null).Tokens);
+    }
+
+    // When nothing could be called because every circuit is open, the client is told when the first one lets a probe through.
+    private Error WithRetryAfter(Error error, ExecutionPlan plan, List<AttemptRecord> attempts)
+    {
+        if (error.Code != ErrorCode.ProviderUnavailable || attempts.Count == 0 || attempts.Any(a => a.Status != AttemptStatus.SkippedCircuitOpen))
+        {
+            return error;
+        }
+
+        var open = health.OpenCircuits();
+        TimeSpan? shortest = null;
+        foreach (var candidate in plan.Candidates)
+        {
+            if (open.TryGetValue(candidate.ProviderModelId, out var remaining) && (shortest is null || remaining < shortest))
+            {
+                shortest = remaining;
+            }
+        }
+
+        return shortest is null ? error : error with { RetryAfter = shortest };
+    }
+
+    /// <summary>
     /// Step 11. Runs on its own short-timeout token, never the client's, so an aborted request is still recorded. Retried
     /// with backoff inside that window; if it still fails the request stays 'running' for the sweeper (Phase 3), and the
     /// client is not made to wait or fail for it.
     /// </summary>
-    private async Task SettleAsync(InferenceRequest request, OpenedRequest opened, RequestOutcome outcome, string? errorCode, List<AttemptRecord> attempts)
+    private async Task SettleAsync(InferenceRequest request, OpenedRequest opened, Routed routed, RequestOutcome outcome, string? errorCode, int? ttftMs, List<AttemptRecord> attempts)
     {
         var settlement = new SettleInferenceRequest(
             opened.RequestId,
             opened.StartedAt,
             outcome,
             errorCode,
-            PolicyId: null,
-            PolicyVersion: null,
-            RoutingDecisionJson: null,
-            TtftMs: null,
+            routed.PolicyId,
+            routed.PolicyVersion,
+            routed.DecisionJson,
+            ttftMs,
             attempts);
 
         using var timeout = new CancellationTokenSource(SettleTimeout, time);

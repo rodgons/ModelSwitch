@@ -56,7 +56,7 @@ worstCase(model) = estimatedInputTokens × price.inputPerMillion / 1e6
                  + maxOutputTokens     × price.outputPerMillion / 1e6
 ```
 
-`estimatedInputTokens` is counted with the tokenizer named in the model's `capabilities.tokenizer`, plus 4 tokens per message. A tokenizer this gives a reasonable estimate, not an exact count. When a model declares no tokenizer, the gateway uses `ceil(utf8Bytes / 3)`, which is deliberately pessimistic.
+`estimatedInputTokens` is counted with the tokenizer named in the model's `capabilities.tokenizer`, plus 4 tokens per message. A tokenizer this gives a reasonable estimate, not an exact count. When a model declares no tokenizer, the gateway uses `ceil(utf8Bytes / 3)`, which is deliberately pessimistic. Text is counted in windows of 1024 characters, because byte-pair merging is quadratic in an unbroken run (one 1 MiB word would otherwise cost minutes of CPU); a window edge can change the count by a token.
 
 ### Ranking
 
@@ -155,7 +155,7 @@ Bounds:
 
 - **Total Attempts** ≤ `maxAttempts` (default 4), across all Candidates. This bounds *retry amplification*: one client call produces at most 4 Provider calls. The failure-injection report measures it.
 - **Total time** ≤ Deadline. The Deadline is `min(policy.deadlineMs, X-ModelSwitch-Timeout-Ms)` from request receipt.
-- **Skipped Attempts.** A Candidate whose circuit is open is recorded as a `skipped_circuit_open` Attempt (it consumes an `attempt_number` but not `maxAttempts`). When nothing was called because every circuit was open the request fails `503 provider_unavailable`. A Retry-After on the response is not emitted yet.
+- **Skipped Attempts.** A Candidate whose circuit is open is recorded as a `skipped_circuit_open` Attempt (it consumes an `attempt_number` but not `maxAttempts`). When nothing was called because every circuit was open the request fails `503 provider_unavailable` with a `Retry-After` of the shortest remaining break. Normally routing already caught this (`circuit_open` is an eligibility filter), so the skip path serves the race where a circuit opens between routing and the loop. The loop does not read the database: each Candidate carries the Provider Model's call target (endpoint, Adapter type, Credential Reference, timeout, tokenizer) from the same configuration snapshot the Routing Decision was made on.
 - **Backoff maths** is hand-written (`RetryPolicy.Backoff`): `Polly.Core` has no public backoff API, only its retry strategy, which the attempt loop must not use (ADR-0004). Full jitter is a uniform sample from zero to `min(maxMs, baseMs * 2^try)`, taken from an injectable source so tests are deterministic.
 - **Cancellation** is checked before every Attempt and every backoff delay, and is passed into the `HttpClient` call.
 

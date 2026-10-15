@@ -28,8 +28,8 @@ The response never reveals *why* a key is invalid, so revoked and unknown keys l
 
 | Header | Purpose |
 |---|---|
-| `X-ModelSwitch-Task` | Task Type for rule-based routing, `[a-z0-9_-]{1,64}` |
-| `X-ModelSwitch-Timeout-Ms` | Requests a Deadline shorter than the policy's. Cannot extend it |
+| `X-ModelSwitch-Task` | Task Type for rule-based routing, `[a-z0-9_-]{1,64}`, otherwise `400 invalid_request`. Recorded as `task_type` |
+| `X-ModelSwitch-Timeout-Ms` | Requests a Deadline shorter than the policy's. Cannot extend it. A positive integer, otherwise `400 invalid_request` (`errors` names the header) |
 | `X-Client-Request-Id` | Client correlation ID, ≤128 printable ASCII chars, stored as `client_request_id`. Longer or non-printable values are rejected with `400 invalid_request` |
 | `traceparent` / `tracestate` | W3C trace context, continued if present |
 
@@ -40,7 +40,7 @@ The response never reveals *why* a key is invalid, so revoked and unknown keys l
 | `X-Request-Id` | The Inference Request ID (UUIDv7). Present on **every** response, including errors |
 | `X-ModelSwitch-Attempts` | Number of Attempts made |
 | `X-RateLimit-Limit` / `-Remaining` / `-Reset` | Rate Limit state (non-streaming and SSE) |
-| `Retry-After` | On 429 and 503 |
+| `Retry-After` | On 429 and on 503 `provider_unavailable` when the gateway knows it: the shortest remaining circuit break, whether routing found every Candidate's circuit open or the loop found them open when it got there. Whole seconds, at least 1 |
 
 ### `POST /v1/chat/completions`
 
@@ -57,7 +57,7 @@ The response never reveals *why* a key is invalid, so revoked and unknown keys l
 | `response_format` | `{type:"text"}`, `{type:"json_object"}`, `{type:"json_schema", json_schema:{…}}`. Requires the matching Capability |
 | `user` | Accepted but **not stored** (it may be personal data) |
 
-**Rejected with `400 unsupported_parameter`:** `tools`, `tool_choice`, `functions`, `n` ≠ 1, `logprobs`, `audio`, `modalities`, `prediction`, image or audio content parts, and any unknown top-level field. Rejecting unknown fields is deliberate (FR-02): it stops a request from silently meaning something different than the client intended. **Phase 1 temporary limits:** `stream: true` is rejected with `400 unsupported_parameter` until SSE lands (Phase 2); `estimated_cost` is absent from `modelswitch` until the cost calculator exists; parameters are not yet checked against Provider Model capabilities; `usage_source` is `reported` or `unavailable`; and `GET /v1/models` lists every configured alias for every Tenant. Unsupported fields and bad values return `unsupported_parameter` or `invalid_request` (not `validation_failed`, which is Admin API only), and `error.param` is the first invalid field. **Tools / function calling are post-MVP.** Supporting them would mean normalizing streaming tool-call deltas in both Adapters, a `tools` Capability with its eligibility rule, and contract-suite coverage. The demo's "connect an application" works with plain chat.
+**Rejected with `400 unsupported_parameter`:** `tools`, `tool_choice`, `functions`, `n` ≠ 1, `logprobs`, `audio`, `modalities`, `prediction`, image or audio content parts, and any unknown top-level field. Rejecting unknown fields is deliberate (FR-02): it stops a request from silently meaning something different than the client intended. **Phase 1 temporary limits:** `stream: true` is rejected with `400 unsupported_parameter` until SSE lands (Phase 2); `estimated_cost` is absent from `modelswitch` until the cost calculator exists; parameters are not yet checked against Provider Model capabilities; and `usage_source` is `reported` or `unavailable`. Unsupported fields and bad values return `unsupported_parameter` or `invalid_request` (not `validation_failed`, which is Admin API only), and `error.param` is the first invalid field. **Tools / function calling are post-MVP.** Supporting them would mean normalizing streaming tool-call deltas in both Adapters, a `tools` Capability with its eligibility rule, and contract-suite coverage. The demo's "connect an application" works with plain chat.
 
 **Limits (configurable, defaults):** body ≤ 1 MiB, ≤ 256 messages, `Content-Type: application/json` only.
 
@@ -105,7 +105,7 @@ data: [DONE]
 
 ### `GET /v1/models`
 
-Returns the Model Aliases the Tenant may use, in OpenAI list format: `{"object":"list","data":[{"id":"balanced","object":"model","created":…,"owned_by":"modelswitch"}]}`. Provider Model IDs are never included.
+Returns the Model Aliases the Tenant may use (from the configuration snapshot, filtered by the Tenant's model access), sorted by name, in OpenAI list format: `{"object":"list","data":[{"id":"balanced","object":"model","created":…,"owned_by":"modelswitch"}]}`. Provider Model IDs are never included.
 
 ### Inference error body
 

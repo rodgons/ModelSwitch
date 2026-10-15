@@ -87,4 +87,27 @@ public sealed class InputTokenEstimatorTests
 
         fallback.ShouldBeGreaterThanOrEqualTo(tokenizer);
     }
+
+    // Regression: byte-pair merging is quadratic in an unbroken run, so one 1 MiB word used to burn minutes of CPU per request.
+    [Fact]
+    public void An_unbroken_megabyte_is_counted_in_linear_time()
+    {
+        var text = new string('x', 1024 * 1024);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        var estimate = _estimator.Estimate([text], "o200k_base");
+
+        watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(10));
+        estimate.Tokens.ShouldBeGreaterThan(1000);
+        estimate.Method.ShouldBe("tokenizer:o200k_base");
+    }
+
+    [Fact]
+    public void Windowing_does_not_split_a_surrogate_pair()
+    {
+        // 1023 ASCII characters then an emoji (a surrogate pair) straddling the 1024-character window edge.
+        var text = new string('a', 1023) + "\U0001F600" + new string('b', 10);
+
+        Should.NotThrow(() => _estimator.Estimate([text], "o200k_base"));
+    }
 }

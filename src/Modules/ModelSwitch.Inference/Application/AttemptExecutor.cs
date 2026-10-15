@@ -20,7 +20,7 @@ internal sealed class RandomJitterSource : IJitterSource
 }
 
 /// <summary>What the executor runs: ordered Candidates, the policy's bounds and the absolute Deadline.</summary>
-/// <param name="Candidates">The Routing Decision's ordered Candidates.</param>
+/// <param name="Candidates">The Routing Decision's ordered Candidates, each with the Target to call.</param>
 /// <param name="Settings">The Policy Version's execution settings.</param>
 /// <param name="Deadline">When the request must be answered by: the earlier of the policy's and the client's Deadline.</param>
 internal sealed record ExecutionPlan(IReadOnlyList<RankedCandidate> Candidates, ExecutionSettings Settings, DateTimeOffset Deadline);
@@ -32,7 +32,6 @@ internal sealed record ExecutionPlan(IReadOnlyList<RankedCandidate> Candidates, 
 /// (ADR-0010).
 /// </summary>
 internal sealed partial class AttemptExecutor(
-    IProviderCatalog catalog,
     IAdapterFactory adapters,
     IProviderHealth health,
     IInputTokenEstimator estimator,
@@ -63,8 +62,9 @@ internal sealed partial class AttemptExecutor(
         for (var index = 0; index < plan.Candidates.Count; index++)
         {
             var candidate = plan.Candidates[index];
-            var target = await catalog.FindEnabledAsync(candidate.ProviderName, candidate.ProviderModelIdentifier, cancellationToken);
-            if (target is null)
+
+            // The Target comes from the configuration snapshot the Routing Decision was made on: no database read here.
+            if (candidate.Target is not { } target)
             {
                 continue;
             }
@@ -252,8 +252,7 @@ internal sealed partial class AttemptExecutor(
             outputTokens: 0,
             UsageSource.Reported);
 
-    // Ambiguous: possibly billed. Input is the estimate and output is unknown (usage-and-budgets.md section 4). The Phase 1
-    // target carries no tokenizer name, so the pessimistic byte estimate applies until the catalog snapshot supplies one.
+    // Ambiguous: possibly billed. Input is the estimate and output is unknown (usage-and-budgets.md section 4).
     private AttemptRecord Ambiguous(NeutralChatRequest chat, ProviderModelTarget target, AttemptKind kind, int number, DateTimeOffset startedAt, string providerErrorType, int? httpStatus, string? errorCode)
         => Record(
             target,
@@ -265,7 +264,7 @@ internal sealed partial class AttemptExecutor(
             errorCode,
             httpStatus,
             providerErrorType,
-            inputTokens: estimator.Estimate([.. chat.Messages.Select(m => m.Text)], tokenizer: null).Tokens,
+            inputTokens: estimator.Estimate([.. chat.Messages.Select(m => m.Text)], target.Tokenizer).Tokens,
             outputTokens: null,
             UsageSource.Unavailable);
 
