@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Inference.Application;
+using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Errors;
 using ModelSwitch.SharedKernel.Http;
 
@@ -23,12 +24,13 @@ internal static class InferenceEndpoints
 
     private static async Task<IResult> CompleteAsync(HttpContext http, ChatCompletionsService chat, TimeProvider time)
     {
-        if (ApiKeyClaims.FindTenantId(http.User) is not { } tenantId)
+        var tenant = ResolveTenant(http);
+        if (tenant.IsFailure)
         {
-            return ProblemResults.From(http, new Error(ErrorCode.InvalidApiKey, "The API key is missing or invalid."));
+            return ProblemResults.From(http, tenant.Error);
         }
 
-        var result = await chat.CompleteAsync(RequestId.Get(http), tenantId, http.Request.Body, http.RequestAborted);
+        var result = await chat.CompleteAsync(RequestId.Get(http), tenant.Value, http.Request.Body, http.RequestAborted);
         return result.IsSuccess
             ? Results.Json(ChatCompletionWire.ChatCompletion(result.Value, time.GetUtcNow().ToUnixTimeSeconds()))
             : ProblemResults.From(http, result.Error);
@@ -36,11 +38,18 @@ internal static class InferenceEndpoints
 
     private static IResult ListModels(HttpContext http, ModelListService models)
     {
-        if (ApiKeyClaims.FindTenantId(http.User) is not { } tenantId)
+        var tenant = ResolveTenant(http);
+        if (tenant.IsFailure)
         {
-            return ProblemResults.From(http, new Error(ErrorCode.InvalidApiKey, "The API key is missing or invalid."));
+            return ProblemResults.From(http, tenant.Error);
         }
 
-        return Results.Json(ChatCompletionWire.ModelList(models.ListFor(tenantId)));
+        return Results.Json(ChatCompletionWire.ModelList(models.ListFor(tenant.Value)));
     }
+
+    // The authorization policy already rejected anonymous callers; a principal without a tenant claim is still not a valid key.
+    private static Result<Guid> ResolveTenant(HttpContext http)
+        => ApiKeyClaims.FindTenantId(http.User) is { } tenantId
+            ? Result.Success(tenantId)
+            : Result.Failure<Guid>(new Error(ErrorCode.InvalidApiKey, "The API key is missing or invalid."));
 }
