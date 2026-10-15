@@ -85,7 +85,9 @@ src/
   ModelSwitch.Api/               # host: endpoint wiring, auth handlers, middleware
   ModelSwitch.Worker/            # host: BackgroundService registrations
   ModelSwitch.Migrator/          # host: applies migrations, seeds first Owner
-  ModelSwitch.SharedKernel/      # ids (UUIDv7), Money, Clock, Result, error codes, outbox primitives
+  ModelSwitch.SharedKernel/      # ids (UUIDv7), Money, Clock, Result, error codes, outbox primitives (no ASP.NET Core)
+  ModelSwitch.SharedKernel.Http/ # ASP.NET Core half: Problem Details writer, X-Request-Id middleware, readiness check contract.
+                                 # Referenced only by the Api host and modules that have Endpoints or readiness checks
   Modules/
     ModelSwitch.Identity/        # tenants, API keys, administrators, roles, audit
     ModelSwitch.Registry/        # providers, provider models, prices, secrets, health
@@ -129,7 +131,7 @@ ModelSwitch.<Module>/
 Only `Contracts/` and the `*Module.cs` entry point are `public`. Everything else is `internal`, and tests get access through `InternalsVisibleTo`. NetArchTest enforces:
 
 1. No module references another module's non-`Contracts` namespaces.
-2. Adapters reference only `Adapters.Abstractions` and `SharedKernel`.
+2. Adapters reference only `Adapters.Abstractions` and `SharedKernel`, and never depend on `Microsoft.AspNetCore` (so never on `SharedKernel.Http`). The same holds for every `*.Domain` namespace.
 3. `Domain/` has no dependency on EF Core, ASP.NET Core or `HttpClient`.
 4. `Endpoints/` and the Api host have no dependency on `Infrastructure/`, any `DbContext` or EF Core.
 

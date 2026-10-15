@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/ModelSwitch.Api/ModelSwitch.Api.csproj" />
     <ProjectReference Include="../../src/ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+    <ProjectReference Include="../../src/ModelSwitch.SharedKernel.Http/ModelSwitch.SharedKernel.Http.csproj" />
     <ProjectReference Include="../../src/Modules/ModelSwitch.Identity/ModelSwitch.Identity.csproj" />
     <ProjectReference Include="../../src/Modules/ModelSwitch.Registry/ModelSwitch.Registry.csproj" />
     <ProjectReference Include="../../src/Modules/ModelSwitch.Routing/ModelSwitch.Routing.csproj" />

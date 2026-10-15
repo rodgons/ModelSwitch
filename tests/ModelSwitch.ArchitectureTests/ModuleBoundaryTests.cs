@@ -43,6 +43,37 @@ public sealed class ModuleBoundaryTests
     }
 
     [Theory]
+    [MemberData(nameof(AdapterData))]
+    public void Adapters_do_not_depend_on_aspnet_core(string adapter)
+    {
+        var result = Types.InAssembly(ArchitectureModel.Adapters[adapter])
+            .ShouldNot()
+            .HaveDependencyOn("Microsoft.AspNetCore")
+            .GetResult();
+
+        ArchitectureModel.ShouldHaveNoFailures(result, $"Adapter {adapter} must stay free of ASP.NET Core");
+
+        var frameworkReferences = ArchitectureModel.Adapters[adapter]
+            .GetReferencedAssemblies()
+            .Select(a => a.Name ?? string.Empty)
+            .Where(name => name.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal))
+            .ToList();
+        frameworkReferences.ShouldBeEmpty($"Adapter {adapter} must not reference ASP.NET Core assemblies");
+    }
+
+    [Fact]
+    public void Shared_kernel_does_not_reference_aspnet_core()
+    {
+        var offending = typeof(ModelSwitch.SharedKernel.Result).Assembly
+            .GetReferencedAssemblies()
+            .Select(a => a.Name ?? string.Empty)
+            .Where(name => name.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal))
+            .ToList();
+
+        offending.ShouldBeEmpty("SharedKernel must stay free of ASP.NET Core; HTTP helpers live in SharedKernel.Http");
+    }
+
+    [Theory]
     [MemberData(nameof(ModuleData))]
     public void Domain_has_no_dependency_on_ef_core_aspnet_core_or_http_client(string module)
     {

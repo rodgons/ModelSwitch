@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- The ASP.NET Core half of the shared kernel (ADR-0012): the Problem Details writer and X-Request-Id middleware.
+         Only the Api host and modules with Endpoints or readiness checks reference it; Adapters and Domain code never do. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ModelSwitch.UnitTests" />
+    <InternalsVisibleTo Include="ModelSwitch.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

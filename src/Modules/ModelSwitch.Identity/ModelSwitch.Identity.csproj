@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+    <ProjectReference Include="../../ModelSwitch.SharedKernel.Http/ModelSwitch.SharedKernel.Http.csproj" />
   </ItemGroup>
 
 </Project>
