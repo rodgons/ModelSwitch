@@ -37,6 +37,29 @@ public sealed class FaultSpecTests
         spec.InlineErrorCode.ShouldBe("rate_limit_exceeded");
     }
 
+    [Fact]
+    public void Chunk_delay_parses_as_milliseconds()
+    {
+        FaultSpec.TryParse("chunk-delay=250", out var spec, out _).ShouldBeTrue();
+
+        spec!.ChunkDelay.ShouldBe(TimeSpan.FromMilliseconds(250));
+    }
+
+    [Fact]
+    public void The_store_counts_started_and_aborted_requests_per_model_until_cleared()
+    {
+        var store = new ScenarioStore();
+        store.NoteStarted("m");
+        store.NoteStarted("m");
+        store.NoteAborted("m");
+
+        store.Started()["m"].ShouldBe(2);
+        store.Aborted()["m"].ShouldBe(1);
+        store.Clear();
+        store.Started().ShouldBeEmpty();
+        store.Aborted().ShouldBeEmpty();
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

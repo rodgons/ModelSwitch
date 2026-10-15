@@ -140,6 +140,11 @@ internal sealed class OpenAiProtocol(TimeProvider time) : IMockProtocol
                 return;
             }
 
+            if (plan.Fault is { ChunkDelay: { } pause })
+            {
+                await Task.Delay(pause, time, ct);
+            }
+
             await Send(Chunk(new JsonObject { ["content"] = piece }, null));
             sent++;
 

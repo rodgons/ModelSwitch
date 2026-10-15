@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -53,6 +54,11 @@ public static class MockProviderApp
             store.SetFault(model!, fault!);
             return Results.NoContent();
         });
+        app.MapGet("/__stats", (ScenarioStore store) => Results.Json(new JsonObject
+        {
+            ["started"] = JsonSerializer.SerializeToNode(store.Started()),
+            ["aborted"] = JsonSerializer.SerializeToNode(store.Aborted()),
+        }));
         app.MapDelete("/__scenarios", (ScenarioStore store) =>
         {
             store.Clear();

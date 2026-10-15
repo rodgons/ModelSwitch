@@ -31,6 +31,20 @@ public sealed class ChatRequestParserTests
     }
 
     [Fact]
+    public void Stream_true_is_accepted_and_include_usage_is_echoed_only_for_a_stream()
+    {
+        var plain = Parse(Body()).Value;
+        var streamed = Parse(Body("\"stream\":true")).Value;
+        var withUsage = Parse(Body("\"stream\":true,\"stream_options\":{\"include_usage\":true}")).Value;
+        var optionsOnly = Parse(Body("\"stream_options\":{\"include_usage\":true}")).Value;
+
+        (plain.Stream, plain.IncludeUsage).ShouldBe((false, false));
+        (streamed.Stream, streamed.IncludeUsage).ShouldBe((true, false));
+        (withUsage.Stream, withUsage.IncludeUsage).ShouldBe((true, true));
+        (optionsOnly.Stream, optionsOnly.IncludeUsage).ShouldBe((false, false));
+    }
+
+    [Fact]
     public void Minimal_valid_request_maps_alias_and_messages()
     {
         var result = Parse(Body());
@@ -168,7 +182,6 @@ public sealed class ChatRequestParserTests
     [InlineData("audio", "{}")]
     [InlineData("modalities", "[\"audio\"]")]
     [InlineData("prediction", "{}")]
-    [InlineData("stream", "true")]
     public void Unsupported_parameters_are_rejected(string name, string value)
         => Fails(Body($"\"{name}\":{value}"), ErrorCode.UnsupportedParameter, name);
 

@@ -126,6 +126,7 @@ X-Mock-Fault: status=429;retry-after=2;error=insufficient_quota   → Retry-Afte
 X-Mock-Fault: hang                           → never send headers
 X-Mock-Fault: latency=300                    → delay the response
 X-Mock-Fault: cut-after=5                    → send 5 chunks then drop the socket
+X-Mock-Fault: chunk-delay=200                → pause 200 ms before every streamed chunk (a stream long enough to abort)
 X-Mock-Fault: no-usage                       → omit usage
 X-Mock-Fault: garbage                        → invalid JSON
 X-Mock-Fault: inline-error=rate_limit_exceeded → a 200 response carrying an error object
@@ -134,4 +135,4 @@ X-Mock-Usage: cached=900                     → report 900 of the input tokens 
 
 Directives combine with `;`. The mock serves `POST /v1/chat/completions` (JSON or SSE), `GET /v1/models`, `POST /api/chat` (JSON or NDJSON), `GET /api/tags` and `GET /api/version`. `max_tokens`, `max_completion_tokens` and `num_predict` truncate the output with `finish_reason: length`. Tests host it in-process with `MockProviderApp.StartAsync()`, which listens on a free loopback port; the executable runs it standalone. There is no Dockerfile yet: it arrives with the compose `demo` profile.
 
-The gateway never forwards client headers to Providers, so `X-Mock-Fault` works only in direct Adapter tests. Full-stack tests script faults through the mock's `POST /__scenarios` control endpoint instead. It sets the fault for a given mock model id (e.g. `{"model":"mock-a","fault":"status=503;times=2"}`) before the test calls the gateway.
+The gateway never forwards client headers to Providers, so `X-Mock-Fault` works only in direct Adapter tests. Full-stack tests script faults through the mock's `POST /__scenarios` control endpoint instead. `GET /__stats` returns `{"started":{model:n},"aborted":{model:n}}`: how many requests reached the mock per model id and how many of them ended because the client hung up (cleared by `DELETE /__scenarios`), which is how full-stack tests assert that a client abort closed the upstream call. `POST /__scenarios` sets the fault for a given mock model id (e.g. `{"model":"mock-a","fault":"status=503;times=2"}`) before the test calls the gateway.

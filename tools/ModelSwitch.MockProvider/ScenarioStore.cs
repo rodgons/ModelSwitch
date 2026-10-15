@@ -11,6 +11,19 @@ internal sealed class ScenarioStore
     private readonly ConcurrentDictionary<string, string> _faultsByModel = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _counters = new(StringComparer.Ordinal);
 
+    private readonly ConcurrentDictionary<string, int> _started = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, int> _aborted = new(StringComparer.Ordinal);
+
+    /// <summary>A request for the model reached the Mock Provider.</summary>
+    public void NoteStarted(string model) => _started.AddOrUpdate(model, 1, static (_, count) => count + 1);
+
+    /// <summary>The client of a request for the model hung up before the mock finished answering.</summary>
+    public void NoteAborted(string model) => _aborted.AddOrUpdate(model, 1, static (_, count) => count + 1);
+
+    public IReadOnlyDictionary<string, int> Started() => new Dictionary<string, int>(_started);
+
+    public IReadOnlyDictionary<string, int> Aborted() => new Dictionary<string, int>(_aborted);
+
     public void SetFault(string model, string faultText)
     {
         _faultsByModel[model] = faultText;
@@ -23,6 +36,8 @@ internal sealed class ScenarioStore
     {
         _faultsByModel.Clear();
         _counters.Clear();
+        _started.Clear();
+        _aborted.Clear();
     }
 
     /// <summary>Counts one request against the fault and reports whether the fault applies to it.</summary>

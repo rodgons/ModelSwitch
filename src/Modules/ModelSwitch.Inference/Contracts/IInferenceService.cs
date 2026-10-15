@@ -66,4 +66,12 @@ public interface IInferenceService
     /// <c>deadline_exceeded</c> or <c>context_length_exceeded</c>.
     /// </summary>
     Task<Result<InferenceResult>> CompleteAsync(InferenceRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Streams the completion. Routing, retries and Fallback run until a Provider has produced the First Token (the first
+    /// content chunk) and only then does this return, so a failure up to that point is an ordinary error (the same set as
+    /// <see cref="CompleteAsync"/>, with <c>no_eligible_model</c> also for a model without the <c>streaming</c> Capability).
+    /// After that the stream carries the failure itself (<see cref="StreamPart.Interrupted"/>); it is never replayed.
+    /// </summary>
+    Task<Result<StreamingCompletion>> StreamAsync(InferenceRequest request, CancellationToken cancellationToken);
 }

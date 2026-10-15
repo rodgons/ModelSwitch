@@ -42,7 +42,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [x] `AttemptExecutor`: deadlines, retries with backoff+jitter, Retry-After, Fallback, cancellation
 - [x] Failure classification in both Adapters (contract-tested)
 - [x] Per-instance circuit breakers + health snapshot job
-- [ ] SSE streaming end-to-end: first-token rule, keep-alives, mid-stream error event, disconnect cancellation
+- [x] SSE streaming end-to-end: first-token rule, keep-alives, mid-stream error event, disconnect cancellation
 - [x] `usage` schema: `inference_request`, `provider_attempt` (+ partitions); request/attempt recording
 - [x] Runtime configuration snapshot + NOTIFY/poll refresh
 - [ ] Failure-injection test project with the first scenarios (503 retry, hang, stream cut, circuit opens)

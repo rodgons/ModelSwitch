@@ -65,6 +65,7 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 | `MODELSWITCH__Limits__FailureMode` | | api | `Closed` |
 | `MODELSWITCH__Limits__MaxRequestBodyBytes` | | api | `1048576` |
 | `MODELSWITCH__Limits__MaxMessages` | | api | `256` |
+| `MODELSWITCH__Streaming__KeepAliveSeconds` | | api | `15`. Silence on an SSE stream after which a `: keep-alive` comment is sent |
 | `MODELSWITCH__Outbound__AllowedPrivateHosts` | | api, worker | `""`. Compose sets `ollama,mock-provider` |
 | `MODELSWITCH__Retention__RequestDays` | | worker | `30` |
 | `MODELSWITCH__Circuit__*` | | api, worker | see routing-and-resilience §5 |

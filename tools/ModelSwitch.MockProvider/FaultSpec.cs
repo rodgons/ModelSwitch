@@ -5,7 +5,7 @@ namespace ModelSwitch.MockProvider;
 /// <summary>
 /// A scripted fault, parsed from <c>X-Mock-Fault</c> or the <c>POST /__scenarios</c> body (docs/provider-adapters.md section 5).
 /// Directives are separated by <c>;</c>: <c>status=503;times=2</c>, <c>hang</c>, <c>cut-after=5</c>, <c>no-usage</c>, <c>garbage</c>,
-/// <c>latency=300</c>, <c>retry-after=2</c>, <c>error=insufficient_quota</c>, <c>inline-error=rate_limit_exceeded</c>.
+/// <c>latency=300</c>, <c>chunk-delay=200</c>, <c>retry-after=2</c>, <c>error=insufficient_quota</c>, <c>inline-error=rate_limit_exceeded</c>.
 /// </summary>
 internal sealed record FaultSpec
 {
@@ -17,6 +17,9 @@ internal sealed record FaultSpec
     public bool Hang { get; init; }
 
     public int? CutAfter { get; init; }
+
+    /// <summary>A pause before every streamed chunk, so a stream lasts long enough for a client to abort it mid-way.</summary>
+    public TimeSpan? ChunkDelay { get; init; }
 
     public bool NoUsage { get; init; }
 
@@ -60,6 +63,9 @@ internal sealed record FaultSpec
                     break;
                 case "cut-after" when TryInt(value, 0, int.MaxValue, out var cut):
                     result = result with { CutAfter = cut };
+                    break;
+                case "chunk-delay" when TryInt(value, 0, 600_000, out var chunkDelay):
+                    result = result with { ChunkDelay = TimeSpan.FromMilliseconds(chunkDelay) };
                     break;
                 case "latency" when TryInt(value, 0, 600_000, out var latency):
                     result = result with { Latency = TimeSpan.FromMilliseconds(latency) };

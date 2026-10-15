@@ -120,9 +120,15 @@ internal sealed class CountingStream(Stream inner) : Stream
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }
 
+/// <summary>The answer to a chat completions call: a finished completion, or a stream whose First Token has arrived.</summary>
+/// <param name="Completion">Set for a non-streaming call.</param>
+/// <param name="Stream">Set for <c>stream: true</c>.</param>
+/// <param name="IncludeUsage">Whether the client asked for the final usage chunk.</param>
+internal sealed record ChatReply(InferenceResult? Completion, StreamingCompletion? Stream, bool IncludeUsage);
+
 internal sealed class ChatCompletionsService(InferenceOptions options, IInferenceService inference)
 {
-    public async Task<Result<InferenceResult>> CompleteAsync(ChatCaller caller, Stream body, CancellationToken cancellationToken)
+    public async Task<Result<ChatReply>> CompleteAsync(ChatCaller caller, Stream body, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(caller);
         ArgumentNullException.ThrowIfNull(body);
@@ -174,7 +180,14 @@ internal sealed class ChatCompletionsService(InferenceOptions options, IInferenc
                 Timeout = timeout.Value,
                 InputBytes = (int)Math.Min(counted.BytesRead, int.MaxValue),
             };
-            return await inference.CompleteAsync(request, cancellationToken);
+            if (parsed.Value.Stream)
+            {
+                var stream = await inference.StreamAsync(request, cancellationToken);
+                return stream.IsSuccess ? new ChatReply(null, stream.Value, parsed.Value.IncludeUsage) : stream.Error;
+            }
+
+            var completion = await inference.CompleteAsync(request, cancellationToken);
+            return completion.IsSuccess ? new ChatReply(completion.Value, null, IncludeUsage: false) : completion.Error;
         }
     }
 }

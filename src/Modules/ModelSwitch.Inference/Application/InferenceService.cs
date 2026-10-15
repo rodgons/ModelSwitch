@@ -63,7 +63,7 @@ internal sealed partial class InferenceService(
         }
 
         var attempts = new List<AttemptRecord>();
-        var routed = Route(request, time.GetUtcNow());
+        var routed = Route(request, time.GetUtcNow(), streaming: false);
         Result<InferenceResult> result;
         try
         {
@@ -114,7 +114,7 @@ internal sealed partial class InferenceService(
     /// Step 7. A pure function of the snapshot taken here: the same instance serves the whole request, so a configuration
     /// change in between never mixes two Policy Versions. Routing failures keep their Decision for the record.
     /// </summary>
-    private Routed Route(InferenceRequest request, DateTimeOffset received)
+    private Routed Route(InferenceRequest request, DateTimeOffset received, bool streaming)
     {
         var snapshot = configuration.Current;
         var texts = new string[request.Chat.Messages.Count];
@@ -128,7 +128,7 @@ internal sealed partial class InferenceService(
             request.Alias,
             snapshot.AccessFor(request.TenantId),
             request.TaskType,
-            RequiredCapabilities(request),
+            RequiredCapabilities(request, streaming),
             EstimateInput(snapshot, texts),
             request.Chat.MaxOutputTokens,
             snapshot.Routing,
@@ -154,9 +154,14 @@ internal sealed partial class InferenceService(
         return new Routed(decision.PolicyId, decision.PolicyVersion, json, null, new ExecutionPlan(decision.Ordered, settings, deadline), chat);
     }
 
-    private static List<string> RequiredCapabilities(InferenceRequest request)
+    private static List<string> RequiredCapabilities(InferenceRequest request, bool streaming)
     {
         var required = new List<string>(2);
+        if (streaming)
+        {
+            required.Add(CapabilityNames.Streaming);
+        }
+
         if (request.Chat.ResponseFormat is ResponseFormat.JsonObject)
         {
             required.Add(CapabilityNames.JsonObject);

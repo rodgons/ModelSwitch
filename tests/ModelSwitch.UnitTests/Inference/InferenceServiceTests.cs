@@ -524,6 +524,153 @@ public sealed class InferenceServiceTests : IDisposable
         _ledger.Settled.Count.ShouldBe(1);
     }
 
+    // ---- streaming -------------------------------------------------------------------------------------------------
+
+    private void StreamScript(params StreamEvent[] events)
+    {
+        _adapters.Adapter.Events.Clear();
+        _adapters.Adapter.Events.AddRange(events);
+    }
+
+    private static StreamEvent.ContentDelta Delta(string text) => new(text);
+
+    [Fact]
+    public async Task A_stream_settles_after_its_last_part_has_been_handed_over_not_before()
+    {
+        StreamScript(Delta("a"), Delta("b"), new StreamEvent.Finish(FinishReason.Stop), new StreamEvent.Usage(new NeutralUsage(3, 2, null)));
+        var request = Request();
+
+        var started = await Service().StreamAsync(request, CancellationToken.None);
+        started.IsSuccess.ShouldBeTrue();
+        _ledger.Settled.ShouldBeEmpty("nothing settles before the stream is read");
+        var parts = new List<StreamPart>();
+        await foreach (var part in started.Value.ReadAsync(CancellationToken.None))
+        {
+            parts.Add(part);
+            if (part is StreamPart.Completed)
+            {
+                _ledger.Settled.ShouldBeEmpty("the client gets the last part first; settlement follows");
+            }
+        }
+
+        parts.Last().ShouldBeOfType<StreamPart.Completed>();
+        var settled = _ledger.Settled.Single();
+        settled.Outcome.ShouldBe(RequestOutcome.Succeeded);
+        settled.PolicyVersion.ShouldBe(1);
+        settled.TtftMs.ShouldNotBeNull();
+        settled.Attempts.Single().Status.ShouldBe(AttemptStatus.Succeeded);
+        _ledger.Opened.Single().Streaming.ShouldBeTrue();
+        _adapters.Adapter.StreamDisposed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_stream_that_breaks_after_the_first_token_settles_failed_with_stream_interrupted()
+    {
+        StreamScript(Delta("a"), new StreamEvent.Failed(new ProviderFailure(FailureClass.Ambiguous, ProviderFailureCodes.ConnectionReset, null, null, true)));
+
+        var started = await Service().StreamAsync(Request(), CancellationToken.None);
+        var parts = new List<StreamPart>();
+        await foreach (var part in started.Value.ReadAsync(CancellationToken.None))
+        {
+            parts.Add(part);
+        }
+
+        parts.Last().ShouldBeOfType<StreamPart.Interrupted>();
+        var settled = _ledger.Settled.Single();
+        (settled.Outcome, settled.ErrorCode).ShouldBe((RequestOutcome.Failed, "stream_interrupted"));
+        _adapters.Adapter.Calls.ShouldBe(1, "no replay");
+    }
+
+    [Fact]
+    public async Task A_stream_disposed_without_being_read_closes_the_provider_and_settles_cancelled()
+    {
+        StreamScript(Delta("a"), new StreamEvent.Finish(FinishReason.Stop));
+        var started = await Service().StreamAsync(Request(), CancellationToken.None);
+
+        await started.Value.DisposeAsync();
+
+        _adapters.Adapter.StreamDisposed.ShouldBeTrue();
+        var settled = _ledger.Settled.Single();
+        settled.Outcome.ShouldBe(RequestOutcome.Cancelled);
+        settled.Attempts.Single().Status.ShouldBe(AttemptStatus.Ambiguous);
+    }
+
+    [Fact]
+    public async Task A_consumer_that_stops_reading_settles_cancelled_exactly_once()
+    {
+        StreamScript(Delta("a"), Delta("b"), new StreamEvent.Finish(FinishReason.Stop));
+        var started = await Service().StreamAsync(Request(), CancellationToken.None);
+
+        await foreach (var part in started.Value.ReadAsync(CancellationToken.None))
+        {
+            part.ShouldBeOfType<StreamPart.Content>();
+            break;
+        }
+
+        await started.Value.DisposeAsync();
+        _ledger.Settled.Single().Outcome.ShouldBe(RequestOutcome.Cancelled);
+        _adapters.Adapter.StreamDisposed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_client_abort_mid_stream_settles_cancelled_on_a_fresh_token_and_rethrows()
+    {
+        StreamScript(Delta("a"), Delta("b"), Delta("c"), new StreamEvent.Finish(FinishReason.Stop));
+        using var abort = new CancellationTokenSource();
+        var started = await Service().StreamAsync(Request(), abort.Token);
+
+        await Should.ThrowAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var part in started.Value.ReadAsync(abort.Token))
+            {
+                part.ShouldBeOfType<StreamPart.Content>();
+                await abort.CancelAsync();
+            }
+        });
+
+        var settled = _ledger.Settled.Single();
+        settled.Outcome.ShouldBe(RequestOutcome.Cancelled);
+        settled.Attempts.Single().ProviderErrorType.ShouldBe("client_cancelled");
+        _ledger.SettleTokenWasCancelled.ShouldBeFalse();
+        _adapters.Adapter.StreamDisposed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_failure_before_the_first_token_is_an_ordinary_error_and_no_stream()
+    {
+        StreamScript(new StreamEvent.Failed(new ProviderFailure(FailureClass.Permanent, ProviderFailureCodes.BadRequest, 400, null, true)));
+
+        var result = await Service().StreamAsync(Request(), CancellationToken.None);
+
+        result.Error.Code.ShouldBe(ErrorCode.ProviderError);
+        var settled = _ledger.Settled.Single();
+        (settled.Outcome, settled.ErrorCode).ShouldBe((RequestOutcome.Failed, "provider_error"));
+        settled.Attempts.Single().Status.ShouldBe(AttemptStatus.Failed);
+    }
+
+    [Fact]
+    public async Task Streaming_needs_the_streaming_capability_so_a_model_without_it_is_no_eligible_model()
+    {
+        var snapshot = Snapshot(1);
+        var model = Model(_target) with { Capabilities = Model(_target).Capabilities with { Streaming = false } };
+        _snapshots.Current = snapshot with { Routing = snapshot.Routing with { Models = new Dictionary<Guid, CandidateModel> { [_target.ProviderModelId] = model } } };
+
+        var result = await Service().StreamAsync(Request(), CancellationToken.None);
+
+        result.Error.Code.ShouldBe(ErrorCode.NoEligibleModel);
+        _ledger.Settled.Single().RoutingDecisionJson.ShouldNotBeNull().ShouldContain("capability_missing:streaming");
+        _adapters.Adapter.Calls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_streaming_request_for_an_unknown_alias_is_model_not_found()
+    {
+        var result = await Service().StreamAsync(Request("nope"), CancellationToken.None);
+
+        result.Error.Code.ShouldBe(ErrorCode.ModelNotFound);
+        _ledger.Settled.Single().ErrorCode.ShouldBe("model_not_found");
+    }
+
     private sealed class FakeLedger : IUsageLedger
     {
         public List<OpenInferenceRequest> Opened { get; } = [];
@@ -607,7 +754,31 @@ public sealed class InferenceServiceTests : IDisposable
             return Task.FromResult(Outcome);
         }
 
-        public IAsyncEnumerable<StreamEvent> StreamAsync(AdapterContext ctx, NeutralChatRequest request, CancellationToken ct) => throw new NotSupportedException();
+        /// <summary>What a streaming call yields. A stream with no <c>Finish</c> or <c>Failed</c> at its end is a broken Adapter.</summary>
+        public List<StreamEvent> Events { get; } = [];
+
+        /// <summary>Set when the stream's enumerator has been disposed: the Provider connection is closed.</summary>
+        public bool StreamDisposed { get; private set; }
+
+        public async IAsyncEnumerable<StreamEvent> StreamAsync(AdapterContext ctx, NeutralChatRequest request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            Calls++;
+            LastRequest = request;
+            OnCall?.Invoke();
+            try
+            {
+                foreach (var item in Events)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    await Task.CompletedTask;
+                    yield return item;
+                }
+            }
+            finally
+            {
+                StreamDisposed = true;
+            }
+        }
 
         public Task<ConnectivityResult> CheckAsync(AdapterContext ctx, CancellationToken ct) => throw new NotSupportedException();
 

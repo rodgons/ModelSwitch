@@ -20,6 +20,8 @@ internal static class MockPipeline
     public static async Task RunAsync(HttpContext http, MockPlan plan, IMockProtocol protocol, TimeProvider time)
     {
         var ct = http.RequestAborted;
+        var store = http.RequestServices.GetRequiredService<ScenarioStore>();
+        store.NoteStarted(plan.ModelId);
         try
         {
             if (plan.Fault is { Hang: true })
@@ -50,7 +52,8 @@ internal static class MockPipeline
         }
         catch (OperationCanceledException)
         {
-            // The client went away (or hung up on the hang fault): nothing to answer.
+            // The client went away (or hung up on the hang fault): nothing to answer. Tests assert on the count.
+            store.NoteAborted(plan.ModelId);
         }
     }
 

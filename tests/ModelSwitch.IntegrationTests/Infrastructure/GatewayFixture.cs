@@ -47,6 +47,15 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
 
     public Uri MockAddress => _mock!.BaseAddress;
 
+    /// <summary>The Mock Provider's counters (<c>GET /__stats</c>): requests started and aborted by the client, per model id.</summary>
+    public async Task<(IReadOnlyDictionary<string, int> Started, IReadOnlyDictionary<string, int> Aborted)> MockStatsAsync()
+    {
+        using var http = new HttpClient { BaseAddress = _mock!.BaseAddress };
+        var stats = await http.GetFromJsonAsync<System.Text.Json.JsonElement>(new Uri("/__stats", UriKind.Relative));
+        static Dictionary<string, int> Read(System.Text.Json.JsonElement e) => e.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetInt32());
+        return (Read(stats.GetProperty("started")), Read(stats.GetProperty("aborted")));
+    }
+
     public IServiceProvider Services => _factory!.Services;
 
     public async ValueTask InitializeAsync()
@@ -218,6 +227,8 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
                 ["Security:ApiKeyPepper"] = ModuleServices.Pepper,
                 // The Mock Provider listens on loopback, which the outbound policy refuses unless allow-listed.
                 ["Outbound:AllowedPrivateHosts"] = "127.0.0.1",
+                // One second instead of 15 so the keep-alive test does not take a quarter of a minute.
+                ["Streaming:KeepAliveSeconds"] = "1",
             }));
         }
     }

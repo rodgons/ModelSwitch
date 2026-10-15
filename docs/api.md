@@ -50,14 +50,14 @@ The response never reveals *why* a key is invalid, so revoked and unknown keys l
 |---|---|
 | `model` (required) | A Model Alias |
 | `messages` (required) | Roles `system`, `developer`, `user`, `assistant`. `content` must be a string or an array of `{type:"text"}` parts |
-| `stream` | boolean |
-| `stream_options.include_usage` | Always effectively `true`, because the gateway needs usage. Echoed as the client asked |
+| `stream` | boolean. `true` answers with Server-Sent Events (below). A model without the `streaming` Capability is not eligible for it (`422 no_eligible_model`) |
+| `stream_options.include_usage` | The gateway always asks the Provider for usage, because it needs it. The client gets the final usage chunk only when it asked (`true`). Only meaningful with `stream: true` |
 | `max_tokens` / `max_completion_tokens` | Upper bound for output. If absent, the policy's `defaultMaxOutputTokens` applies (needed for the Reservation) |
 | `temperature`, `top_p`, `stop`, `seed`, `presence_penalty`, `frequency_penalty` | Passed through when the Provider Model declares the parameter. Otherwise `400 unsupported_parameter` |
 | `response_format` | `{type:"text"}`, `{type:"json_object"}`, `{type:"json_schema", json_schema:{…}}`. Requires the matching Capability |
 | `user` | Accepted but **not stored** (it may be personal data) |
 
-**Rejected with `400 unsupported_parameter`:** `tools`, `tool_choice`, `functions`, `n` ≠ 1, `logprobs`, `audio`, `modalities`, `prediction`, image or audio content parts, and any unknown top-level field. Rejecting unknown fields is deliberate (FR-02): it stops a request from silently meaning something different than the client intended. **Phase 1 temporary limits:** `stream: true` is rejected with `400 unsupported_parameter` until SSE lands (Phase 2); `estimated_cost` is absent from `modelswitch` until the cost calculator exists; parameters are not yet checked against Provider Model capabilities; and `usage_source` is `reported` or `unavailable`. Unsupported fields and bad values return `unsupported_parameter` or `invalid_request` (not `validation_failed`, which is Admin API only), and `error.param` is the first invalid field. **Tools / function calling are post-MVP.** Supporting them would mean normalizing streaming tool-call deltas in both Adapters, a `tools` Capability with its eligibility rule, and contract-suite coverage. The demo's "connect an application" works with plain chat.
+**Rejected with `400 unsupported_parameter`:** `tools`, `tool_choice`, `functions`, `n` ≠ 1, `logprobs`, `audio`, `modalities`, `prediction`, image or audio content parts, and any unknown top-level field. Rejecting unknown fields is deliberate (FR-02): it stops a request from silently meaning something different than the client intended. **Phase 1 temporary limits:** `estimated_cost` is absent from `modelswitch` until the cost calculator exists; parameters are not yet checked against Provider Model capabilities; and `usage_source` is `reported` or `unavailable`. Unsupported fields and bad values return `unsupported_parameter` or `invalid_request` (not `validation_failed`, which is Admin API only), and `error.param` is the first invalid field. **Tools / function calling are post-MVP.** Supporting them would mean normalizing streaming tool-call deltas in both Adapters, a `tools` Capability with its eligibility rule, and contract-suite coverage. The demo's "connect an application" works with plain chat.
 
 **Limits (configurable, defaults):** body ≤ 1 MiB, ≤ 256 messages, `Content-Type: application/json` only.
 
@@ -85,23 +85,25 @@ The response never reveals *why* a key is invalid, so revoked and unknown keys l
 **Streaming response** (`text/event-stream`):
 
 ```
-data: {"id":"chatcmpl-…","object":"chat.completion.chunk","model":"balanced","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+data: {"id":"chatcmpl-…","object":"chat.completion.chunk","created":1760450000,"model":"balanced","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
 
-data: {"id":"chatcmpl-…","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hel"}}]}
+data: {"id":"chatcmpl-…","object":"chat.completion.chunk","created":1760450000,"model":"balanced","choices":[{"index":0,"delta":{"content":"Hel"},"finish_reason":null}]}
 
-data: {"id":"chatcmpl-…","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+data: {"id":"chatcmpl-…","object":"chat.completion.chunk","created":1760450000,"model":"balanced","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
 
-data: {"id":"chatcmpl-…","object":"chat.completion.chunk","choices":[],"usage":{…},"modelswitch":{…}}
+data: {"id":"chatcmpl-…","object":"chat.completion.chunk","created":1760450000,"model":"balanced","choices":[],"usage":{…},"modelswitch":{"request_id":"…","usage_source":"reported","attempts":1}}
 
 data: [DONE]
 
 ```
 
+Every chunk carries the same `id` (`chatcmpl-<request id>`) and the alias as `model`. The `role` chunk goes out together with the First Token, never before it. The usage chunk (`usage_source` is `reported`, or `estimated` when the Provider sent no usage) is sent only when the client set `stream_options.include_usage`.
+
 - **Completion signal:** `data: [DONE]` is sent only after a successful completion.
-- **Failure before the first chunk:** the gateway may still retry or fall back. If it gives up, it returns an ordinary HTTP error response (not SSE).
-- **Failure after the first chunk:** the gateway sends one `data: {"error":{…}}` event and closes the stream **without** `[DONE]`. It never replays a partially delivered stream (FR-05).
-- **Keep-alive:** an SSE comment line `: keep-alive` is sent every 15 s while waiting for the Provider.
-- **Client disconnect:** cancels the upstream Attempt immediately.
+- **Failure before the First Token** (the first content chunk): the gateway still retries or falls back, the client has seen nothing, and if it gives up it returns an ordinary HTTP error response (not SSE). Routing, Rate Limit and validation errors are ordinary responses too. Consequently the gateway sends no bytes at all until the First Token has arrived from a Provider.
+- **Failure after the First Token:** the gateway sends one `data: {"error":{…}}` event (the same `error` object as Problem Details, `code` `stream_interrupted`) and closes the stream **without** `[DONE]`. It never replays a partially delivered stream and never falls back (FR-05).
+- **Keep-alive:** an SSE comment line `: keep-alive` is sent whenever the stream has been quiet for 15 s (`Streaming:KeepAliveSeconds`), from the First Token on. A Provider that stays silent for longer than the policy's `attemptTimeoutMs` ends the stream with `stream_interrupted`.
+- **Client disconnect:** cancels the upstream Attempt immediately. The request is recorded `cancelled` and its Attempt `ambiguous` (the Provider was generating and may bill for it) with estimated usage.
 
 ### `GET /v1/models`
 

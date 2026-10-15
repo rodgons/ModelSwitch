@@ -7,7 +7,11 @@ using ModelSwitch.SharedKernel.Errors;
 namespace ModelSwitch.Inference.Application;
 
 /// <summary>A validated <c>POST /v1/chat/completions</c> body.</summary>
-internal sealed record ParsedChatRequest(string Alias, NeutralChatRequest Chat);
+/// <param name="Alias">The Model Alias.</param>
+/// <param name="Chat">The provider-neutral request.</param>
+/// <param name="Stream"><c>stream: true</c>.</param>
+/// <param name="IncludeUsage"><c>stream_options.include_usage</c>: whether the client wants the final usage chunk. The gateway asks the Provider for usage either way.</param>
+internal sealed record ParsedChatRequest(string Alias, NeutralChatRequest Chat, bool Stream = false, bool IncludeUsage = false);
 
 /// <summary>
 /// Hand-written validation of the chat completions body (docs/api.md section 1; no reflection-heavy validation on the
@@ -36,6 +40,8 @@ internal static class ChatRequestParser
         }
 
         string? alias = null;
+        var stream = false;
+        var includeUsage = false;
         IReadOnlyList<NeutralMessage>? messages = null;
         int? maxTokens = null;
         int? maxCompletionTokens = null;
@@ -62,10 +68,10 @@ internal static class ChatRequestParser
                     messages = ReadMessages(value, options.MaxMessages, problems);
                     break;
                 case "stream":
-                    ReadStream(value, problems);
+                    stream = ReadStream(value, problems);
                     break;
                 case "stream_options":
-                    ReadStreamOptions(value, problems);
+                    includeUsage = ReadStreamOptions(value, problems);
                     break;
                 case "max_tokens":
                     maxTokens = ReadInt(name, value, 1, int.MaxValue, problems);
@@ -152,7 +158,7 @@ internal static class ChatRequestParser
             Stop = stop,
             Seed = seed,
             ResponseFormat = format,
-        });
+        }, stream, stream && includeUsage);
     }
 
     private static string? ReadAlias(JsonElement value, Problems problems)
@@ -317,32 +323,35 @@ internal static class ChatRequestParser
         return failed ? null : builder.ToString();
     }
 
-    private static void ReadStream(JsonElement value, Problems problems)
+    private static bool ReadStream(JsonElement value, Problems problems)
     {
         if (value.ValueKind is JsonValueKind.True)
         {
-            // Streaming is Phase 2 (roadmap: SSE end-to-end). Rejecting is honest; ignoring it would break clients.
-            problems.Unsupported("stream", "Streaming is not available yet.");
+            return true;
         }
-        else if (value.ValueKind is not (JsonValueKind.False or JsonValueKind.Null))
+
+        if (value.ValueKind is not (JsonValueKind.False or JsonValueKind.Null))
         {
             problems.Invalid("stream", "'stream' must be a boolean.");
         }
+
+        return false;
     }
 
-    private static void ReadStreamOptions(JsonElement value, Problems problems)
+    private static bool ReadStreamOptions(JsonElement value, Problems problems)
     {
         if (value.ValueKind == JsonValueKind.Null)
         {
-            return;
+            return false;
         }
 
         if (value.ValueKind != JsonValueKind.Object)
         {
             problems.Invalid("stream_options", "'stream_options' must be an object.");
-            return;
+            return false;
         }
 
+        var includeUsage = false;
         foreach (var property in value.EnumerateObject())
         {
             if (property.Name != "include_usage")
@@ -353,7 +362,13 @@ internal static class ChatRequestParser
             {
                 problems.Invalid("stream_options.include_usage", "'include_usage' must be a boolean.");
             }
+            else
+            {
+                includeUsage = property.Value.ValueKind == JsonValueKind.True;
+            }
         }
+
+        return includeUsage;
     }
 
     private static int? ReadInt(string name, JsonElement value, int min, int max, Problems problems)

@@ -44,7 +44,7 @@ internal sealed partial class AttemptExecutor(
     /// caller still has them when this throws <see cref="OperationCanceledException"/> because the client went away.
     /// Fails with <c>provider_unavailable</c>, <c>provider_error</c>, <c>context_length_exceeded</c> or <c>deadline_exceeded</c>.
     /// </summary>
-    public async Task<Result<CompletionOutcome.Success>> ExecuteAsync(
+    public Task<Result<CompletionOutcome.Success>> ExecuteAsync(
         ExecutionPlan plan,
         NeutralChatRequest chat,
         List<AttemptRecord> attempts,
@@ -54,6 +54,59 @@ internal sealed partial class AttemptExecutor(
         ArgumentNullException.ThrowIfNull(chat);
         ArgumentNullException.ThrowIfNull(attempts);
 
+        return RunAsync(
+            plan,
+            chat,
+            attempts,
+            static (input, token) => input.Adapter.CompleteAsync(input.Context, input.Chat, token),
+            static outcome => outcome is CompletionOutcome.Failure failure ? failure.Error : null,
+            (outcome, attempt) =>
+            {
+                var success = (CompletionOutcome.Success)outcome;
+                attempts.Add(Succeeded(attempt.Target, attempt.Kind, attempt.Number, attempt.StartedAt, success.Usage));
+                return success;
+            },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the plan for a streaming completion up to the First Token (routing-and-resilience.md section 6): retries and Fallback
+    /// work exactly as for a non-streaming call until the first content chunk (or the end of an empty completion) has been
+    /// received from a Provider. The returned <see cref="StreamingAttempt"/> then owns the open Provider stream and records the
+    /// Attempt when it ends. From that moment there are no more retries and no Fallback: a failure is the caller's
+    /// <c>stream_interrupted</c>. Nothing has been written to the client yet, so every failure here is an ordinary error.
+    /// </summary>
+    public Task<Result<StreamingAttempt>> ExecuteStreamAsync(
+        ExecutionPlan plan,
+        NeutralChatRequest chat,
+        List<AttemptRecord> attempts,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(chat);
+        ArgumentNullException.ThrowIfNull(attempts);
+
+        return RunAsync(
+            plan,
+            chat,
+            attempts,
+            (input, token) => StreamingAttempt.OpenAsync(this, input, time, token),
+            static start => start is StreamStart.Failed failed ? failed.Error : null,
+            (start, attempt) => ((StreamStart.Started)start).Attempt.Begin(attempts, attempt),
+            cancellationToken);
+    }
+
+    // The loop of routing-and-resilience.md section 4, shared by the buffered and the streaming call: only the call itself, how
+    // its outcome fails, and what a success hands back differ.
+    private async Task<Result<TSuccess>> RunAsync<TOutcome, TSuccess>(
+        ExecutionPlan plan,
+        NeutralChatRequest chat,
+        List<AttemptRecord> attempts,
+        Func<CallInput, CancellationToken, Task<TOutcome>> call,
+        Func<TOutcome, ProviderFailure?> failureOf,
+        Func<TOutcome, AttemptContext, TSuccess> succeeded,
+        CancellationToken cancellationToken)
+    {
         var settings = plan.Settings;
         var calls = 0;
         var deadlineReached = false;
@@ -100,19 +153,25 @@ internal sealed partial class AttemptExecutor(
 
                 var kind = KindFor(index, retry: attempt > 0);
                 var number = attempts.Count + 1;
+                var context = new AttemptContext(target, kind, number, started);
 
                 // The Attempt timeout is the policy's, the Provider's own request timeout, or what is left of the Deadline.
                 var timeout = Min(Min(TimeSpan.FromMilliseconds(settings.AttemptTimeoutMs), plan.Deadline - started), target.RequestTimeout);
-                var context = bound.Value.Context with { AttemptTimeout = timeout };
-                var adapter = bound.Value.Adapter;
+                var input = new CallInput(
+                    bound.Value.Adapter,
+                    bound.Value.Context with { AttemptTimeout = timeout },
+                    chat,
+                    target,
+                    timeout,
+                    Min(TimeSpan.FromMilliseconds(settings.AttemptTimeoutMs), target.RequestTimeout));
 
-                GuardedCall<CompletionOutcome> guarded;
+                GuardedCall<TOutcome> guarded;
                 try
                 {
                     guarded = await health.ExecuteAsync(
                         target.ProviderModelId,
-                        token => adapter.CompleteAsync(context, chat, token),
-                        static outcome => outcome is CompletionOutcome.Failure failure ? failure.Error : null,
+                        token => call(input, token),
+                        failureOf,
                         cancellationToken);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -131,47 +190,39 @@ internal sealed partial class AttemptExecutor(
                 }
 
                 calls++;
-                switch (guarded.Value)
+                if (failureOf(guarded.Value!) is not { } providerFailure)
                 {
-                    case CompletionOutcome.Success success:
-                        attempts.Add(Succeeded(target, kind, number, started, success.Usage));
-                        return success;
+                    return succeeded(guarded.Value!, context);
+                }
 
-                    case CompletionOutcome.Failure failure:
-                        var error = ProviderFailureMapper.ToError(failure.Error);
-                        lastError = error;
-                        attempts.Add(
-                            failure.Error.Class == FailureClass.Ambiguous
-                                ? Ambiguous(chat, target, kind, number, started, failure.Error.Code, failure.Error.HttpStatus, error.Code.Value)
-                                : Failed(target, kind, number, started, failure.Error, error.Code.Value));
+                var error = ProviderFailureMapper.ToError(providerFailure);
+                lastError = error;
+                attempts.Add(
+                    providerFailure.Class == FailureClass.Ambiguous
+                        ? Ambiguous(chat, target, kind, number, started, providerFailure.Code, providerFailure.HttpStatus, error.Code.Value)
+                        : Failed(target, kind, number, started, providerFailure, error.Code.Value));
 
-                        var decision = RetryPolicy.Classify(failure.Error);
-                        if (!decision.RetrySameModel && !decision.Fallback)
-                        {
-                            return error;
-                        }
+                var decision = RetryPolicy.Classify(providerFailure);
+                if (!decision.RetrySameModel && !decision.Fallback)
+                {
+                    return error;
+                }
 
-                        if (attempt < settings.MaxRetriesPerCandidate)
-                        {
-                            var delay = RetryPolicy.DelayBeforeRetry(
-                                failure.Error,
-                                settings.Backoff,
-                                attempt,
-                                jitter.Next(),
-                                plan.Deadline - time.GetUtcNow(),
-                                TimeSpan.FromMilliseconds(settings.AttemptTimeoutMs));
-                            if (delay is { } wait)
-                            {
-                                LogRetrying(logger, target.ProviderModelId, failure.Error.Code, (int)wait.TotalMilliseconds);
-                                await Task.Delay(wait, time, cancellationToken);
-                                continue;
-                            }
-                        }
-
-                        break;
-
-                    default:
-                        return new Error(ErrorCode.InternalError, "An internal error occurred.");
+                if (attempt < settings.MaxRetriesPerCandidate)
+                {
+                    var delay = RetryPolicy.DelayBeforeRetry(
+                        providerFailure,
+                        settings.Backoff,
+                        attempt,
+                        jitter.Next(),
+                        plan.Deadline - time.GetUtcNow(),
+                        TimeSpan.FromMilliseconds(settings.AttemptTimeoutMs));
+                    if (delay is { } wait)
+                    {
+                        LogRetrying(logger, target.ProviderModelId, providerFailure.Code, (int)wait.TotalMilliseconds);
+                        await Task.Delay(wait, time, cancellationToken);
+                        continue;
+                    }
                 }
 
                 // A failure that is neither retried here nor stopped above goes to the next Candidate.
@@ -189,11 +240,29 @@ internal sealed partial class AttemptExecutor(
             return new Error(ErrorCode.DeadlineExceeded, "The Deadline was reached before a Provider answered.");
         }
 
-        // Nothing was called: every circuit was open (recorded as skipped Attempts) or no Candidate is enabled any more.
+        // Nothing was called: every circuit was open (recorded as skipped Attempts) or no Candidate is usable any more.
         return lastError ?? (attempts.Count > 0
             ? new Error(ErrorCode.ProviderUnavailable, "The Provider is temporarily unavailable.")
             : new Error(ErrorCode.NoEligibleModel, "No eligible model can serve this request."));
     }
+
+    /// <summary>What one call of the loop needs: the bound Adapter and its context, the request and the time limits.</summary>
+    /// <param name="Adapter">The bound Adapter.</param>
+    /// <param name="Context">Its call context, carrying <paramref name="AttemptTimeout"/>.</param>
+    /// <param name="Chat">The request, with the policy's output ceiling applied.</param>
+    /// <param name="Target">The Provider Model being called.</param>
+    /// <param name="AttemptTimeout">The smallest of the policy's, the Provider's and what is left of the Deadline.</param>
+    /// <param name="StallTimeout">How long a started stream may stay silent before it counts as stalled.</param>
+    internal readonly record struct CallInput(
+        IProviderAdapter Adapter,
+        AdapterContext Context,
+        NeutralChatRequest Chat,
+        ProviderModelTarget Target,
+        TimeSpan AttemptTimeout,
+        TimeSpan StallTimeout);
+
+    /// <summary>Which Attempt this is: the Candidate, why it was made, its number and when it began.</summary>
+    internal readonly record struct AttemptContext(ProviderModelTarget Target, AttemptKind Kind, int Number, DateTimeOffset StartedAt);
 
     private static AttemptKind KindFor(int candidateIndex, bool retry)
         => retry ? AttemptKind.Retry : candidateIndex == 0 ? AttemptKind.Primary : AttemptKind.Fallback;
@@ -298,13 +367,73 @@ internal sealed partial class AttemptExecutor(
             outputTokens,
             usageSource);
 
+    /// <summary>
+    /// The Attempt record of a stream that has started (the First Token went out). Usage is the Provider's when it reported any;
+    /// otherwise input tokens are estimated from the request and output tokens counted from the text forwarded, with the
+    /// model's tokenizer, and the source is <c>estimated</c> (routing-and-resilience.md section 6).
+    /// </summary>
+    internal (AttemptRecord Record, NeutralUsage Usage, UsageSource Source) EndStream(
+        NeutralChatRequest chat,
+        AttemptContext attempt,
+        AttemptStatus status,
+        AttemptErrorClass? errorClass,
+        string? errorCode,
+        int? httpStatus,
+        string? providerErrorType,
+        NeutralUsage? reported,
+        string forwarded,
+        int? ttftMs)
+    {
+        var target = attempt.Target;
+        NeutralUsage usage;
+        UsageSource source;
+        if (reported is not null)
+        {
+            usage = reported;
+            source = UsageSource.Reported;
+        }
+        else
+        {
+            var input = estimator.Estimate([.. chat.Messages.Select(m => m.Text)], target.Tokenizer).Tokens;
+            var output = forwarded.Length == 0 ? 0 : Math.Max(0, estimator.Estimate([forwarded], target.Tokenizer).Tokens - IInputTokenEstimator.PerMessageOverhead);
+            usage = new NeutralUsage(input, output, null);
+            source = UsageSource.Estimated;
+        }
+
+        var now = time.GetUtcNow();
+        var record = new AttemptRecord(
+            attempt.Number,
+            target.ProviderId,
+            target.ProviderModelId,
+            attempt.Kind,
+            status,
+            errorClass,
+            errorCode,
+            httpStatus,
+            providerErrorType,
+            attempt.StartedAt,
+            now,
+            ttftMs,
+            usage.InputTokens,
+            usage.OutputTokens,
+            source);
+        return (record, usage, source);
+    }
+
+    /// <summary>
+    /// A failure after the First Token still says something about the Provider, so the circuit is told. The call that opened the
+    /// stream already counted as a success, which is all the breaker could know then. A breaker that is open meanwhile ignores it.
+    /// </summary>
+    internal async Task ReportStreamFailureAsync(Guid providerModelId, ProviderFailure failure)
+        => await health.ExecuteAsync(providerModelId, _ => Task.FromResult(failure), static f => f, CancellationToken.None);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Skipping Provider Model {ProviderModelId}: its circuit is open.")]
     private static partial void LogSkipped(ILogger logger, Guid providerModelId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Retrying Provider Model {ProviderModelId} after {FailureCode} in {DelayMs} ms.")]
     private static partial void LogRetrying(ILogger logger, Guid providerModelId, string failureCode, int delayMs);
 
-    private static class ProviderErrorTypes
+    internal static class ProviderErrorTypes
     {
         public const string ClientCancelled = "client_cancelled";
     }

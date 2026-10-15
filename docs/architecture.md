@@ -211,4 +211,4 @@ Implementation (`ModelSwitch.Configuration`, infrastructure that owns the `confi
 - **Time**: `TimeProvider` is injected everywhere. Timestamps are stored as `timestamptz` in UTC, and column names end in `_at`.
 - **Money**: `decimal` in C#, `numeric(20,10)` in PostgreSQL, always paired with an ISO-4217 currency (USD only in the MVP).
 - **Errors**: a closed set of error codes in `SharedKernel.Errors` (see [api.md](api.md#2-error-codes)). Modules return `Result<T>` for expected failures and throw only for bugs. One shared writer turns every error into Problem Details, and validation errors are always 400 (ADR-0012).
-- **Hot-path allocation**: the streaming path uses `System.IO.Pipelines` / `Utf8JsonReader` and no per-chunk LINQ.
+- **Hot-path allocation**: the streaming path uses `System.IO.Pipelines` / `Utf8JsonReader` and no per-chunk LINQ. The SSE side writes straight into the response `PipeWriter` with one reused `Utf8JsonWriter` (`SseFrames`, `SsePump`).

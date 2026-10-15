@@ -105,6 +105,11 @@ internal sealed class OllamaProtocol(TimeProvider time) : IMockProtocol
                 return;
             }
 
+            if (plan.Fault is { ChunkDelay: { } pause })
+            {
+                await Task.Delay(pause, time, ct);
+            }
+
             await Send(Envelope(plan, piece, done: false));
             sent++;
 

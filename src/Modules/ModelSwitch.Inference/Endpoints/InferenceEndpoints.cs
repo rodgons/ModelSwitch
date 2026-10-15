@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Inference.Application;
+using ModelSwitch.Inference.Contracts;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Errors;
 using ModelSwitch.SharedKernel.Http;
@@ -22,7 +23,7 @@ internal static class InferenceEndpoints
         return app;
     }
 
-    private static async Task<IResult> CompleteAsync(HttpContext http, ChatCompletionsService chat, TimeProvider time)
+    private static async Task<IResult> CompleteAsync(HttpContext http, ChatCompletionsService chat, InferenceOptions options, TimeProvider time)
     {
         var tenant = ResolveTenant(http);
         if (tenant.IsFailure)
@@ -40,9 +41,38 @@ internal static class InferenceEndpoints
             TimeoutMs = http.Request.Headers[RoutingHeaders.TimeoutHeaderName].FirstOrDefault(),
         };
         var result = await chat.CompleteAsync(caller, http.Request.Body, http.RequestAborted);
-        return result.IsSuccess
-            ? Results.Json(ChatCompletionWire.ChatCompletion(result.Value, time.GetUtcNow().ToUnixTimeSeconds()))
-            : ProblemResults.From(http, result.Error);
+        if (result.IsFailure)
+        {
+            return ProblemResults.From(http, result.Error);
+        }
+
+        var reply = result.Value;
+        var created = time.GetUtcNow().ToUnixTimeSeconds();
+        return reply.Stream is { } stream
+            ? await StreamAsync(http, stream, reply.IncludeUsage, options, time, created)
+            : Results.Json(ChatCompletionWire.ChatCompletion(reply.Completion!, created));
+    }
+
+    // The First Token is in hand, so from here the response is a 200 event stream: failures travel inside it (FR-05).
+    private static async Task<IResult> StreamAsync(HttpContext http, StreamingCompletion stream, bool includeUsage, InferenceOptions options, TimeProvider time, long created)
+    {
+        await using (stream)
+        {
+            var response = http.Response;
+            response.ContentType = "text/event-stream";
+            response.Headers.CacheControl = "no-cache";
+            response.Headers["X-Accel-Buffering"] = "no";
+            try
+            {
+                await new SsePump(time, options.KeepAliveInterval).PumpAsync(response.BodyWriter, stream, includeUsage, created, http.RequestAborted);
+            }
+            catch (Exception exception) when (http.RequestAborted.IsCancellationRequested && exception is OperationCanceledException or IOException)
+            {
+                // The client disconnected: nothing to answer. The stream already aborted the Provider call and settled the request.
+            }
+        }
+
+        return Results.Empty;
     }
 
     private static IResult ListModels(HttpContext http, ModelListService models)
