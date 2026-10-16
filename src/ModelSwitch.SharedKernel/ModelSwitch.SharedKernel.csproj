@@ -4,6 +4,8 @@
     <!-- Abstractions only (DI, Options, Configuration): no ASP.NET Core here, so Adapters and Domain code stay free of it.
          The HTTP pieces live in ModelSwitch.SharedKernel.Http. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <!-- Data classification attributes only ([SecretData], [ContentData]); the redactor is registered by the hosts. -->
+    <PackageReference Include="Microsoft.Extensions.Compliance.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>

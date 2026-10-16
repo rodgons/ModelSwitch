@@ -31,6 +31,7 @@ internal static class InferenceEndpoints
             return ProblemResults.From(http, tenant.Error);
         }
 
+        RequestId.SetTenant(http, tenant.Value);
         var timeout = RoutingHeaders.ValidateTimeout(http.Request.Headers[RoutingHeaders.TimeoutHeaderName].FirstOrDefault());
         if (timeout.IsFailure)
         {
@@ -105,6 +106,7 @@ internal static class InferenceEndpoints
             return ProblemResults.From(http, tenant.Error);
         }
 
+        RequestId.SetTenant(http, tenant.Value);
         return Results.Json(ChatCompletionWire.ModelList(models.ListFor(tenant.Value)));
     }
 

@@ -15,6 +15,7 @@
     <PackageReference Include="Testcontainers.Redis" />
     <PackageReference Include="StackExchange.Redis" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
   </ItemGroup>
 
   <ItemGroup>

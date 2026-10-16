@@ -74,6 +74,7 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 | `MODELSWITCH__Circuit__*` | | api, worker | see routing-and-resilience §5 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | | all | unset → no export |
 | `OTEL_SERVICE_NAME` | | all | `modelswitch-api` / `-worker` |
+| `MODELSWITCH__Telemetry__TraceSampleRatio` | | api, worker | `1.0`. Parent-based head sampling ratio, 0 to 1 (observability.md section 2) |
 | `MODELSWITCH__Telemetry__TraceUrlTemplate` | | api | e.g. `http://localhost:3000/explore?…{traceId}` |
 | Provider env credentials (e.g. `OPENAI_API_KEY`) | | api, worker | referenced as `env:OPENAI_API_KEY` |
 

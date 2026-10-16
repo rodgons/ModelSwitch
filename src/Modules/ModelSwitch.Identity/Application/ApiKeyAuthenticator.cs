@@ -2,6 +2,7 @@ using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Identity.Domain;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Errors;
+using ModelSwitch.SharedKernel.Telemetry;
 
 namespace ModelSwitch.Identity.Application;
 
@@ -21,13 +22,24 @@ internal sealed class ApiKeyAuthenticator(
 
     public async Task<Result<AuthenticatedApiKey>> AuthenticateAsync(string? presentedKey, CancellationToken cancellationToken)
     {
+        // The span carries whether the cache answered and the outcome code, never the key or its prefix.
+        using var span = GatewayTelemetry.StartSpan(GatewayTelemetry.Spans.Auth);
+        var result = await VerifyAsync(presentedKey, span, cancellationToken);
+        span?.SetTag(GatewayTelemetry.Attributes.Result, result.IsSuccess ? "ok" : result.Error.Code.Value);
+        return result;
+    }
+
+    private async Task<Result<AuthenticatedApiKey>> VerifyAsync(string? presentedKey, System.Diagnostics.Activity? span, CancellationToken cancellationToken)
+    {
         if (!ApiKeyFormat.TryParse(presentedKey, out var parsed))
         {
             return _invalidKey;
         }
 
         var presentedHash = hasher.Hash(presentedKey!);
-        if (cache.TryGet(presentedHash, out var cached))
+        var hit = cache.TryGet(presentedHash, out var cached);
+        span?.SetTag(GatewayTelemetry.Attributes.CacheHit, hit);
+        if (hit)
         {
             usage.Record(cached.ApiKeyId);
             return cached;

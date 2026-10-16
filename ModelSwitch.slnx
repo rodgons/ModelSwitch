@@ -5,6 +5,7 @@
     <Project Path="src/ModelSwitch.Migrator/ModelSwitch.Migrator.csproj" />
     <Project Path="src/ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
     <Project Path="src/ModelSwitch.SharedKernel.Http/ModelSwitch.SharedKernel.Http.csproj" />
+    <Project Path="src/ModelSwitch.Telemetry/ModelSwitch.Telemetry.csproj" />
     <Project Path="src/ModelSwitch.Worker/ModelSwitch.Worker.csproj" />
   </Folder>
   <Folder Name="/src/Adapters/">

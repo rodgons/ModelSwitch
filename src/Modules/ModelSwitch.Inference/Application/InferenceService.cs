@@ -8,6 +8,7 @@ using ModelSwitch.Registry.Contracts;
 using ModelSwitch.Routing.Contracts;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Errors;
+using ModelSwitch.SharedKernel.Telemetry;
 using ModelSwitch.Usage.Contracts;
 
 namespace ModelSwitch.Inference.Application;
@@ -25,6 +26,8 @@ internal sealed partial class InferenceService(
     IProviderHealth health,
     AttemptExecutor executor,
     IUsageLedger ledger,
+    InferenceMetrics metrics,
+    LimitsMetrics limits,
     TimeProvider time,
     ILogger<InferenceService> logger) : IInferenceService
 {
@@ -44,7 +47,10 @@ internal sealed partial class InferenceService(
         Error? Error,
         ExecutionPlan? Plan,
         NeutralChatRequest? Chat,
-        RoutingSnapshot? Catalog = null);
+        RoutingSnapshot? Catalog = null)
+    {
+        public bool Streaming { get; init; }
+    }
 
     /// <summary>How long after the Deadline a held Reservation survives before the sweeper may treat the request as abandoned.</summary>
     internal static readonly TimeSpan ReservationGrace = TimeSpan.FromMinutes(1);
@@ -117,6 +123,28 @@ internal sealed partial class InferenceService(
     /// change in between never mixes two Policy Versions. Routing failures keep their Decision for the record.
     /// </summary>
     private Routed Route(InferenceRequest request, DateTimeOffset received, bool streaming)
+    {
+        using var span = GatewayTelemetry.StartSpan(GatewayTelemetry.Spans.Route);
+        span?.SetTag(GatewayTelemetry.Attributes.RequestModel, request.Alias);
+        var routed = Decide(request, received, streaming) with { Streaming = streaming };
+        if (span is not null)
+        {
+            span.SetTag(GatewayTelemetry.Attributes.PolicyId, routed.PolicyId?.ToString());
+            span.SetTag(GatewayTelemetry.Attributes.PolicyVersion, routed.PolicyVersion);
+            span.SetTag(GatewayTelemetry.Attributes.Candidates, routed.Plan?.Candidates.Count ?? 0);
+            span.SetTag(GatewayTelemetry.Attributes.Chosen, routed.Plan is { Candidates.Count: > 0 } chosen ? chosen.Candidates[0].ProviderModelId.ToString() : null);
+            span.SetTag(GatewayTelemetry.Attributes.Result, routed.Error?.Code.Value ?? "routed");
+        }
+
+        if (routed.Error?.Code == ErrorCode.RequestCostLimitExceeded)
+        {
+            limits.Rejected("request_cost");
+        }
+
+        return routed;
+    }
+
+    private Routed Decide(InferenceRequest request, DateTimeOffset received, bool streaming)
     {
         var snapshot = configuration.Current;
         var texts = ChatInput.Texts(request.Chat);
@@ -220,6 +248,7 @@ internal sealed partial class InferenceService(
             expiresAt = plan.Deadline + (streaming ? StreamReservationGrace : ReservationGrace);
         }
 
+        using var span = GatewayTelemetry.StartSpan(GatewayTelemetry.Spans.Reserve);
         var opened = await ledger.OpenAsync(
             new OpenInferenceRequest(
                 request.RequestId,
@@ -235,8 +264,12 @@ internal sealed partial class InferenceService(
                 Activity.Current?.TraceId.ToString() ?? string.Empty,
                 new ReservationRequest(hold, expiresAt)),
             cancellationToken);
+        span?.SetTag(GatewayTelemetry.Attributes.Result, opened.IsSuccess ? "reserved" : opened.Error.Code.Value);
         if (opened.IsFailure)
         {
+            // A refused Reservation is still a finished request, recorded by the ledger; it is counted here because it never settles.
+            limits.Rejected("budget");
+            Completed(request, routed, "failed", opened.Error.Code.Value, received, ttftMs: null, attempts: []);
             return opened.Error;
         }
 
@@ -272,12 +305,16 @@ internal sealed partial class InferenceService(
             [.. attempts.Select(a => a with { Pricing = PricingOf(routed, a.ProviderModelId) })],
             routed.Chat?.MaxOutputTokens);
 
+        Completed(request, routed, StatusName(outcome), errorCode, opened.StartedAt, ttftMs, attempts);
+
+        using var span = GatewayTelemetry.StartSpan(GatewayTelemetry.Spans.Settle);
         using var timeout = new CancellationTokenSource(SettleTimeout, time);
         for (var attempt = 0; ; attempt++)
         {
             try
             {
                 await ledger.SettleAsync(settlement, timeout.Token);
+                span?.SetTag(GatewayTelemetry.Attributes.Result, "settled");
                 return;
             }
 #pragma warning disable CA1031 // Any storage fault is retried, then reported; settlement must never fail the response.
@@ -287,7 +324,7 @@ internal sealed partial class InferenceService(
                 LogSettleFailed(logger, exception, request.RequestId, attempt + 1);
                 if (attempt >= _settleBackoff.Length)
                 {
-                    LogSettleGaveUp(logger, request.RequestId);
+                    GaveUp(span, request.RequestId);
                     return;
                 }
 
@@ -297,17 +334,52 @@ internal sealed partial class InferenceService(
                 }
                 catch (OperationCanceledException)
                 {
-                    LogSettleGaveUp(logger, request.RequestId);
+                    GaveUp(span, request.RequestId);
                     return;
                 }
             }
             catch (OperationCanceledException)
             {
-                LogSettleGaveUp(logger, request.RequestId);
+                GaveUp(span, request.RequestId);
                 return;
             }
         }
     }
+
+    private void GaveUp(Activity? span, Guid requestId)
+    {
+        span?.SetTag(GatewayTelemetry.Attributes.Result, "gave_up");
+        span?.SetStatus(ActivityStatusCode.Error);
+        metrics.SettlementFailed();
+        LogSettleGaveUp(logger, requestId);
+    }
+
+    /// <summary>The metrics and the one Information line of a finished request (observability.md sections 3 and 4). Metadata only.</summary>
+    private void Completed(InferenceRequest request, Routed routed, string status, string? errorCode, DateTimeOffset startedAt, int? ttftMs, IReadOnlyList<AttemptRecord> attempts)
+    {
+        var telemetry = new RequestTelemetry(
+            request.RequestId,
+            request.Alias,
+            routed.Streaming,
+            status,
+            errorCode,
+            attempts.LastOrDefault(a => a.Status == AttemptStatus.Succeeded)?.ProviderModelId,
+            time.GetUtcNow() - startedAt,
+            ttftMs is { } ms ? TimeSpan.FromMilliseconds(ms) : null,
+            attempts);
+        metrics.Completed(telemetry);
+        LogCompleted(logger, request.RequestId, status, request.Alias, telemetry.SelectedProviderModelId, telemetry.CalledAttempts, (long)telemetry.Duration.TotalMilliseconds, errorCode);
+    }
+
+    private static string StatusName(RequestOutcome outcome) => outcome switch
+    {
+        RequestOutcome.Succeeded => "succeeded",
+        RequestOutcome.Failed => "failed",
+        _ => "cancelled",
+    };
+
+    [LoggerMessage(EventId = 4001, Level = LogLevel.Information, Message = "Request {RequestId} {Status}: alias {Alias}, Provider Model {ProviderModelId}, {Attempts} attempt(s), {DurationMs} ms, error {ErrorCode}.")]
+    private static partial void LogCompleted(ILogger logger, Guid requestId, string status, string alias, Guid? providerModelId, int attempts, long durationMs, string? errorCode);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Settling request {RequestId} failed (try {Try}); retrying.")]
     private static partial void LogSettleFailed(ILogger logger, Exception exception, Guid requestId, int @try);

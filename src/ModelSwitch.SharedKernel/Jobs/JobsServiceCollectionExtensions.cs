@@ -41,6 +41,8 @@ public static class JobsServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, JobWorkerService>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, RecurringJobService>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxRelayService>());
+        services.TryAddSingleton<JobsMetricsSampler>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, JobsMetricsSampler>(provider => provider.GetRequiredService<JobsMetricsSampler>()));
         return services;
     }
 

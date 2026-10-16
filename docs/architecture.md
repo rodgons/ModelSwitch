@@ -37,7 +37,8 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
 | Polly v8 (`Polly.Core`) | Circuit-breaker state machine (ADR-0004, ADR-0005). Backoff-with-jitter is a few lines of our own (`Polly.Core` exposes no standalone backoff calculator) | Writing our own breaker: more code to test for no gain |
 | `Microsoft.ML.Tokenizers` | Estimates input tokens for Reservations when the Provider does not report usage | A chars/4 heuristic: underestimates and lets Budgets be exceeded |
 | `Microsoft.ML.Tokenizers.Data.O200kBase`, `Microsoft.ML.Tokenizers.Data.Cl100kBase` | The vocabulary files `Microsoft.ML.Tokenizers` needs for the `o200k_base` and `cl100k_base` encodings. They embed the data, so no download happens at runtime | Fetching vocabularies at startup: needs network access and breaks air-gapped deployments |
-| OpenTelemetry .NET SDK + OTLP exporter | Traces, metrics and logs in a vendor-neutral format (FR-08, NFR-05) | Vendor SDKs: tie the product to one backend |
+| OpenTelemetry .NET SDK + OTLP exporter (`OpenTelemetry`, `OpenTelemetry.Extensions.Hosting`, `OpenTelemetry.Exporter.OpenTelemetryProtocol`) | Traces, metrics and logs in a vendor-neutral format (FR-08, NFR-05). Referenced only by `ModelSwitch.Telemetry`. ASP.NET Core, HttpClient, Npgsql and the runtime emit their own activities and meters in .NET 10, so no instrumentation packages are added | Vendor SDKs: tie the product to one backend |
+| `OpenTelemetry.Exporter.InMemory` | Test-only: the canary leak test (DoD #11) and the telemetry degradation test read every exported span, metric and log line | A custom exporter: same code, maintained by us |
 | xUnit v3 (+ `Microsoft.NET.Test.Sdk`, `xunit.runner.visualstudio`) | Mandated by the constitution. The two extra packages let IDE test explorers discover the tests; CI runs on Microsoft.Testing.Platform | — |
 | `Microsoft.Extensions.TimeProvider.Testing` | `FakeTimeProvider` for deterministic time in unit tests (framework package, listed for the test project) | Hand-written fake clocks |
 | Shouldly | Assertion messages that name the failing expression, which makes CI failures readable | Plain `Assert`: weaker messages. FluentAssertions: commercial licence |
@@ -86,9 +87,10 @@ src/
   ModelSwitch.Api/               # host: endpoint wiring, auth handlers, middleware
   ModelSwitch.Worker/            # host: BackgroundService registrations
   ModelSwitch.Migrator/          # host: applies migrations, seeds first Owner
-  ModelSwitch.SharedKernel/      # ids (UUIDv7), Money, Clock, Result, error codes, outbox and jobs primitives: `Outbox/` (writer), `Jobs/` (enqueue, claim/lease/retry processor, recurring scheduler, outbox relay, `jobs` schema migrator) (no ASP.NET Core)
+  ModelSwitch.SharedKernel/      # ids (UUIDv7), Money, Clock, Result, error codes, `Telemetry/` (ActivitySource and metric names, [SecretData]/[ContentData]), outbox and jobs primitives: `Outbox/` (writer), `Jobs/` (enqueue, claim/lease/retry processor, recurring scheduler, outbox relay, `jobs` schema migrator) (no ASP.NET Core)
   ModelSwitch.SharedKernel.Http/ # ASP.NET Core half: Problem Details writer, X-Request-Id middleware, readiness check contract.
                                  # Referenced only by the Api host and modules that have Endpoints or readiness checks
+  ModelSwitch.Telemetry/         # OpenTelemetry SDK + OTLP export + log redaction for the api and worker hosts (observability.md)
   ModelSwitch.Configuration/     # owns schema `config`; builds the ConfigurationSnapshot from the modules' Contracts loaders; LISTEN/poll refresh
   Modules/
     ModelSwitch.Identity/        # tenants, API keys, administrators, roles, audit

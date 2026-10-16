@@ -4,6 +4,7 @@ using ModelSwitch.Registry.Contracts;
 using ModelSwitch.Routing.Contracts;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Errors;
+using ModelSwitch.SharedKernel.Telemetry;
 using ModelSwitch.Usage.Contracts;
 
 namespace ModelSwitch.Inference.Application;
@@ -173,6 +174,13 @@ internal sealed partial class AttemptExecutor(
                     timeout,
                     Min(TimeSpan.FromMilliseconds(settings.AttemptTimeoutMs), target.RequestTimeout));
 
+                // One span per Attempt; the Adapter's HTTP span nests under it. For a stream it ends at the First Token.
+                using var span = GatewayTelemetry.StartSpan(GatewayTelemetry.Spans.Attempt);
+                span?.SetTag(GatewayTelemetry.Attributes.Provider, target.ProviderId.ToString());
+                span?.SetTag(GatewayTelemetry.Attributes.ResponseModel, target.ProviderModelId.ToString());
+                span?.SetTag(GatewayTelemetry.Attributes.AttemptKind, InferenceMetrics.KindName(kind));
+                span?.SetTag(GatewayTelemetry.Attributes.AttemptNumber, number);
+
                 GuardedCall<TOutcome> guarded;
                 try
                 {
@@ -186,6 +194,7 @@ internal sealed partial class AttemptExecutor(
                 {
                     // The client went away. The call may have reached the Provider, so the Attempt is ambiguous, not cancelled.
                     attempts.Add(Ambiguous(chat, target, kind, number, started, ProviderErrorTypes.ClientCancelled, httpStatus: null, errorCode: null));
+                    span?.SetTag(GatewayTelemetry.Attributes.Outcome, "ambiguous");
                     throw;
                 }
 
@@ -194,17 +203,30 @@ internal sealed partial class AttemptExecutor(
                     // The circuit opened between the check and the call, or a half-open probe is already in flight.
                     attempts.Add(Skipped(target, kind, number));
                     LogSkipped(logger, target.ProviderModelId);
+                    span?.SetTag(GatewayTelemetry.Attributes.Outcome, "skipped_circuit_open");
                     break;
                 }
 
                 calls++;
                 if (failureOf(guarded.Value!) is not { } providerFailure)
                 {
+                    span?.SetTag(GatewayTelemetry.Attributes.Outcome, "succeeded");
                     return succeeded(guarded.Value!, context);
                 }
 
                 var error = ProviderFailureMapper.ToError(providerFailure);
                 lastError = error;
+                var errorClass = providerFailure.Class switch
+                {
+                    FailureClass.Ambiguous => "ambiguous",
+                    FailureClass.Transient => "transient",
+                    _ => "permanent",
+                };
+                span?.SetTag(GatewayTelemetry.Attributes.Outcome, providerFailure.Class == FailureClass.Ambiguous ? "ambiguous" : "failed");
+                span?.SetTag(GatewayTelemetry.Attributes.ErrorClass, errorClass);
+                span?.SetTag(GatewayTelemetry.Attributes.ErrorCode, error.Code.Value);
+                span?.SetStatus(System.Diagnostics.ActivityStatusCode.Error);
+                LogAttemptFailed(logger, target.ProviderModelId, number, errorClass, providerFailure.Code, providerFailure.HttpStatus);
                 attempts.Add(
                     providerFailure.Class == FailureClass.Ambiguous
                         ? Ambiguous(chat, target, kind, number, started, providerFailure.Code, providerFailure.HttpStatus, error.Code.Value)
@@ -444,6 +466,9 @@ internal sealed partial class AttemptExecutor(
     /// </summary>
     internal async Task ReportStreamFailureAsync(Guid providerModelId, ProviderFailure failure)
         => await health.ExecuteAsync(providerModelId, _ => Task.FromResult(failure), static f => f, CancellationToken.None);
+
+    [LoggerMessage(EventId = 4002, Level = LogLevel.Warning, Message = "Attempt {AttemptNumber} on Provider Model {ProviderModelId} failed: {ErrorClass} {FailureCode} (HTTP {HttpStatus}).")]
+    private static partial void LogAttemptFailed(ILogger logger, Guid providerModelId, int attemptNumber, string errorClass, string failureCode, int? httpStatus);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Skipping Provider Model {ProviderModelId}: its circuit is open.")]
     private static partial void LogSkipped(ILogger logger, Guid providerModelId);

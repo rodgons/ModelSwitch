@@ -12,6 +12,7 @@ using ModelSwitch.Routing.Application;
 using ModelSwitch.Routing.Contracts;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Errors;
+using ModelSwitch.UnitTests.Support;
 using ModelSwitch.Usage.Contracts;
 using ModelSwitch.Usage.Domain;
 using Shouldly;
@@ -23,6 +24,8 @@ public sealed class InferenceServiceTests : IDisposable
     private static readonly Guid _policyId = new("0192f0c8-0000-7000-8000-0000000000a1");
     private static readonly ProviderModelTarget _target = new(Guid.CreateVersion7(), Guid.CreateVersion7(), "p", "ollama", new Uri("http://x/"), null, TimeSpan.FromSeconds(5), "m1");
     private static readonly ProviderModelTarget _other = new(Guid.CreateVersion7(), Guid.CreateVersion7(), "p", "ollama", new Uri("http://x/"), null, TimeSpan.FromSeconds(5), "m2");
+
+    private static readonly TestMeterFactory _meters = new();
 
     private readonly FakeSnapshots _snapshots = new();
     private readonly FakeAdapters _adapters = new();
@@ -45,6 +48,8 @@ public sealed class InferenceServiceTests : IDisposable
         health ?? _health,
         new AttemptExecutor(_adapters, health ?? _health, new InputTokenEstimator(), new RandomJitterSource(), _time, NullLogger<AttemptExecutor>.Instance),
         _ledger,
+        new InferenceMetrics(_meters),
+        new LimitsMetrics(_meters),
         _time,
         NullLogger<InferenceService>.Instance);
 

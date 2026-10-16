@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelSwitch.Inference.Application;
 using ModelSwitch.Inference.Endpoints;
 using ModelSwitch.SharedKernel;
@@ -31,7 +32,7 @@ public sealed class ProblemResultsTests
     public async Task Inference_errors_are_problem_json_with_the_openai_error_member()
     {
         var context = Context("/v1/chat/completions");
-        await new RequestIdMiddleware(_ => Task.CompletedTask, new FixedIds()).InvokeAsync(context);
+        await new RequestIdMiddleware(_ => Task.CompletedTask, new FixedIds(), NullLogger<RequestIdMiddleware>.Instance).InvokeAsync(context);
 
         var body = await WriteAsync(context, new Error(ErrorCode.NoEligibleModel, "No eligible model can serve this request."));
 
@@ -137,7 +138,7 @@ public sealed class ProblemResultsTests
         var context = Context("/health");
         var ids = new GuidGenerator7();
 
-        await new RequestIdMiddleware(_ => Task.CompletedTask, ids).InvokeAsync(context);
+        await new RequestIdMiddleware(_ => Task.CompletedTask, ids, NullLogger<RequestIdMiddleware>.Instance).InvokeAsync(context);
 
         var header = Guid.Parse(context.Response.Headers[RequestId.HeaderName].ToString());
         header.Version.ShouldBe(7);

@@ -13,7 +13,7 @@ namespace ModelSwitch.Usage.Infrastructure;
 /// <see cref="IUsageLedger"/> over the <c>usage</c> schema. Open and settle are one transaction each (architecture.md section 5,
 /// steps 8 and 11). Never stores content (ADR-0010): the contract carries none.
 /// </summary>
-internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, ICostCalculator calculator, TimeProvider time, IGuidGenerator ids) : IUsageLedger
+internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, ICostCalculator calculator, UsageMetrics metrics, TimeProvider time, IGuidGenerator ids) : IUsageLedger
 {
     private const int _providerErrorTypeMaxLength = 64;
 
@@ -258,6 +258,13 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
             cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
+        for (var i = 0; i < drafts.Count; i++)
+        {
+            if (drafts[i] is { } draft)
+            {
+                metrics.Recorded(identity.RequestedAlias, settlement.Attempts[i].ProviderModelId, draft);
+            }
+        }
     }
 
     // A refused request is still a request: it is recorded as failed, with no Attempts and no hold.

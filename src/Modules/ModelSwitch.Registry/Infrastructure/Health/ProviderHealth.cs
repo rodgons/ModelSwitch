@@ -24,7 +24,7 @@ internal sealed partial class ProviderHealth : IProviderHealth, IDisposable
         _transitions = _meter.CreateCounter<long>("modelswitch.circuit.transitions");
         _meter.CreateObservableGauge(
             "modelswitch.circuit.state",
-            () => _circuits.Select(c => new Measurement<int>((int)c.Value.State, new KeyValuePair<string, object?>("provider_model_id", c.Key))).ToArray());
+            () => _circuits.Select(c => new Measurement<int>((int)c.Value.State, new KeyValuePair<string, object?>("model", c.Key.ToString()))).ToArray());
     }
 
     public IReadOnlyDictionary<Guid, TimeSpan> OpenCircuits()
@@ -65,7 +65,7 @@ internal sealed partial class ProviderHealth : IProviderHealth, IDisposable
     {
         LogTransition(_logger, providerModelId, state);
         CircuitLog.AddSpanEvent(providerModelId, state);
-        _transitions.Add(1, new KeyValuePair<string, object?>("provider_model_id", providerModelId), new KeyValuePair<string, object?>("state", state.ToString()));
+        _transitions.Add(1, new KeyValuePair<string, object?>("model", providerModelId.ToString()), new KeyValuePair<string, object?>("state", state.ToString().ToLowerInvariant()));
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Circuit for Provider Model {ProviderModelId} is now {State}.")]

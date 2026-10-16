@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+    <ProjectReference Include="../ModelSwitch.Telemetry/ModelSwitch.Telemetry.csproj" />
     <ProjectReference Include="../ModelSwitch.SharedKernel.Http/ModelSwitch.SharedKernel.Http.csproj" />
     <ProjectReference Include="../ModelSwitch.Configuration/ModelSwitch.Configuration.csproj" />
     <ProjectReference Include="../Modules/ModelSwitch.Identity/ModelSwitch.Identity.csproj" />

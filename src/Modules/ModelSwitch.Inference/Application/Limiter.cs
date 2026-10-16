@@ -5,6 +5,7 @@ using ModelSwitch.Inference.Contracts;
 using ModelSwitch.Routing.Contracts;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Errors;
+using ModelSwitch.SharedKernel.Telemetry;
 
 namespace ModelSwitch.Inference.Application;
 
@@ -33,7 +34,7 @@ internal interface ILimitStore
 /// <summary>The instruments of the limits step (observability.md section 3).</summary>
 internal sealed class LimitsMetrics
 {
-    public const string MeterName = "ModelSwitch";
+    public const string MeterName = GatewayTelemetry.Name;
 
     private readonly Counter<long> _rejections;
     private readonly Counter<long> _degraded;
@@ -71,6 +72,14 @@ internal sealed partial class Limiter(
     public async Task<Result<LimitLease>> AcquireAsync(LimitRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        using var span = GatewayTelemetry.StartSpan(GatewayTelemetry.Spans.Limits);
+        var result = await DecideAsync(request, cancellationToken);
+        span?.SetTag(GatewayTelemetry.Attributes.Result, result.IsSuccess ? "allowed" : result.Error.Code.Value);
+        return result;
+    }
+
+    private async Task<Result<LimitLease>> DecideAsync(LimitRequest request, CancellationToken cancellationToken)
+    {
 
         var snapshot = configuration.Current;
         if (!snapshot.TenantLimits.TryGetValue(request.TenantId, out var limits) || (limits.RequestsPerMinute is null && limits.MaxConcurrent is null))

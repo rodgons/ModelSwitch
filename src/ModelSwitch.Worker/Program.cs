@@ -6,6 +6,7 @@ using ModelSwitch.Routing;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Jobs;
+using ModelSwitch.Telemetry;
 using ModelSwitch.Usage;
 using Npgsql;
 
@@ -16,6 +17,7 @@ return await StartupExit.RunAsync(
         var builder = Host.CreateApplicationBuilder(args);
         builder.Configuration.AddEnvironmentVariables(RequiredSetting.EnvironmentPrefix);
 
+        builder.AddModelSwitchTelemetry("modelswitch-worker");
         builder.Services.AddSharedKernel();
         builder.Services.AddUsageModule();
         builder.Services.AddEvaluationModule();

@@ -13,7 +13,7 @@ namespace ModelSwitch.Usage.Infrastructure;
 /// The core of the Reservation sweeper (usage-and-budgets.md section 3). Pessimistic by design: an abandoned request may have been
 /// billed, so its whole held amount is charged as <c>unavailable</c> usage.
 /// </summary>
-internal sealed class EfReservationSweeper(IDbContextFactory<UsageDbContext> contexts, TimeProvider time, IGuidGenerator ids) : IReservationSweeper
+internal sealed class EfReservationSweeper(IDbContextFactory<UsageDbContext> contexts, UsageMetrics metrics, TimeProvider time, IGuidGenerator ids) : IReservationSweeper
 {
     private readonly record struct Expired(Guid Id, Guid RequestId, DateTimeOffset RequestStartedAt);
 
@@ -138,6 +138,7 @@ internal sealed class EfReservationSweeper(IDbContextFactory<UsageDbContext> con
             cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
+        metrics.Abandoned(identity.RequestedAlias, amount);
         return true;
     }
 }

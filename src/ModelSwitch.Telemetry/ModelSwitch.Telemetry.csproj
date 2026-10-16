@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The OpenTelemetry SDK, exporters and log redaction for the api and worker hosts (observability.md). Modules only use
+       System.Diagnostics primitives and the names in SharedKernel.Telemetry, so they never reference this project. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Compliance.Redaction" />
+    <PackageReference Include="Microsoft.Extensions.Telemetry" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ModelSwitch.UnitTests" />
+    <InternalsVisibleTo Include="ModelSwitch.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

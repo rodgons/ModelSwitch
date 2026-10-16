@@ -14,6 +14,7 @@ using ModelSwitch.Routing;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Http;
+using ModelSwitch.Telemetry;
 using ModelSwitch.Usage;
 
 // Invalid deployment configuration exits with code 78 and names the variable (FR-10).
@@ -23,6 +24,7 @@ return await StartupExit.RunAsync(
         var builder = WebApplication.CreateBuilder(args);
         builder.Configuration.AddEnvironmentVariables(RequiredSetting.EnvironmentPrefix);
 
+        builder.AddModelSwitchTelemetry("modelswitch-api");
         builder.Services.AddSharedKernel();
         builder.Services.AddIdentityModule();
         builder.Services.AddAdministratorWebSecurity();

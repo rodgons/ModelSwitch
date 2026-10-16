@@ -28,6 +28,8 @@ public static class UsageModule
         services.TryAddSingleton<ICostCalculator, CostCalculator>();
         services.TryAddSingleton<IInputTokenEstimator, InputTokenEstimator>();
         services.AddUsageContext(_appConnection);
+        services.AddMetrics();
+        services.TryAddSingleton<UsageMetrics>();
         services.TryAddSingleton<IUsageLedger, EfUsageLedger>();
         services.TryAddSingleton<IBudgets, EfBudgets>();
         services.TryAddSingleton<ITenantBudgets, TenantBudgetsAdapter>();

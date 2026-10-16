@@ -20,6 +20,9 @@ public static class InferenceModule
         services.TryAddSingleton(provider => InferenceOptions.From(provider.GetRequiredService<IConfiguration>()));
         services.TryAddSingleton<IJitterSource, RandomJitterSource>();
         services.TryAddSingleton<AttemptExecutor>();
+        services.AddMetrics();
+        services.TryAddSingleton<InferenceMetrics>();
+        services.TryAddSingleton<LimitsMetrics>();
         services.TryAddSingleton<IInferenceService, InferenceService>();
         services.TryAddSingleton<ChatCompletionsService>();
         services.TryAddSingleton<ModelListService>();
