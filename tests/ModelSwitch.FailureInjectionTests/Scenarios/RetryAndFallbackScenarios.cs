@@ -98,7 +98,7 @@ public sealed class ProviderHangScenario(GatewayFixture gateway) : ScenarioTests
         await ResetAsync();
         var alias = await AddAliasAsync(
             "shang",
-            """{"deadlineMs":5000,"attemptTimeoutMs":300,"maxAttempts":4,"maxRetriesPerCandidate":1,"backoff":{"baseMs":5,"maxMs":10,"jitter":"full"}}""",
+            """{"deadlineMs":30000,"attemptTimeoutMs":300,"maxAttempts":4,"maxRetriesPerCandidate":1,"backoff":{"baseMs":5,"maxMs":10,"jitter":"full"}}""",
             GatewayFixture.PrimaryModel,
             GatewayFixture.FallbackModel);
         await Gateway.SetFaultAsync(GatewayFixture.PrimaryModel, "hang");
@@ -106,7 +106,10 @@ public sealed class ProviderHangScenario(GatewayFixture gateway) : ScenarioTests
         var outcome = await SendAsync(alias);
 
         outcome.StatusCode.ShouldBe(200);
-        outcome.Elapsed.ShouldBeInRange(TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(3));
+        // Flake fix: the upper bound was 3 s against a 300 ms attempt timeout, which full-suite CPU load could exceed. The Deadline is
+        // now 30 s and the ceiling 20 s: the hang must end at the attempt timeout (lower bound) rather than ride to the Deadline, and
+        // that no same-model retry happened is asserted exactly below (one call, two Attempts), not through the clock.
+        outcome.Elapsed.ShouldBeInRange(TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(20));
         (await AttemptsAsync(outcome.RequestId)).ShouldBe(
         [
             ["primary", "ambiguous", "ambiguous", "provider_unavailable", "", "mock-echo"],

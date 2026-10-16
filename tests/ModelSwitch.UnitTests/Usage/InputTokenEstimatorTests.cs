@@ -89,17 +89,31 @@ public sealed class InputTokenEstimatorTests
     }
 
     // Regression: byte-pair merging is quadratic in an unbroken run, so one 1 MiB word used to burn minutes of CPU per request.
+    // Flake fix: this used to assert a 10 s wall-clock ceiling, but the first call also paid the one-time (static Lazy) build of the
+    // o200k vocabulary, which under full-suite CPU load blew the ceiling. Now the vocabulary is warmed first and the property is
+    // asserted as scaling, which load slows equally on both sides: 64x the input must cost far less than the 4096x a quadratic
+    // algorithm would (linear: ~64x). The 500x bound leaves a wide margin for noise either way.
     [Fact]
     public void An_unbroken_megabyte_is_counted_in_linear_time()
     {
-        var text = new string('x', 1024 * 1024);
-        var watch = System.Diagnostics.Stopwatch.StartNew();
+        _estimator.Estimate(["warm up"], "o200k_base");
+        var small = new string('x', 16 * 1024);
+        var large = new string('x', 1024 * 1024);
 
-        var estimate = _estimator.Estimate([text], "o200k_base");
+        var smallTime = Enumerable.Range(0, 3).Min(_ => Time(small));
+        var largeTime = Time(large);
 
-        watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(10));
+        (largeTime.TotalMilliseconds / Math.Max(smallTime.TotalMilliseconds, 0.1)).ShouldBeLessThan(500);
+        var estimate = _estimator.Estimate([large], "o200k_base");
         estimate.Tokens.ShouldBeGreaterThan(1000);
         estimate.Method.ShouldBe("tokenizer:o200k_base");
+
+        TimeSpan Time(string text)
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            _estimator.Estimate([text], "o200k_base");
+            return watch.Elapsed;
+        }
     }
 
     [Fact]
