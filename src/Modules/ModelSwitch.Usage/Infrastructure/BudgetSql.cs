@@ -31,7 +31,7 @@ internal static class BudgetSql
             ("currency", UsdCurrency));
 
     /// <summary>
-    /// Adds <paramref name="amount"/> to <c>reserved_amount</c> only if reserved + spent + amount stays within the limit (or there is
+    /// Adds <paramref name="amount"/> to <c>reserved_amount</c> only if reserved + settled + amount stays within the limit (or there is
     /// none). False when the Budget cannot take it. Concurrent callers serialize on the row, so the check is never stale.
     /// </summary>
     public static async Task<bool> TryHoldAsync(UsageDbContext db, Guid tenantId, DateOnly periodStart, decimal amount, CancellationToken cancellationToken)
@@ -48,20 +48,20 @@ internal static class BudgetSql
             ("period", periodStart),
             ("amount", amount)) == 1;
 
-    /// <summary>Releases a hold and books what was actually spent.</summary>
-    public static Task SettleAsync(UsageDbContext db, Guid tenantId, DateOnly periodStart, decimal held, decimal spent, CancellationToken cancellationToken)
+    /// <summary>Releases a hold and books the Estimated Cost actually settled.</summary>
+    public static Task SettleAsync(UsageDbContext db, Guid tenantId, DateOnly periodStart, decimal held, decimal settled, CancellationToken cancellationToken)
         => ExecuteAsync(
             db,
             """
             UPDATE usage.budget_period
-               SET reserved_amount = reserved_amount - @held, spent_amount = spent_amount + @spent
+               SET reserved_amount = reserved_amount - @held, spent_amount = spent_amount + @settled
              WHERE tenant_id = @tenant AND period_start = @period
             """,
             cancellationToken,
             ("tenant", tenantId),
             ("period", periodStart),
             ("held", held),
-            ("spent", spent));
+            ("settled", settled));
 
     public static async Task<int> ExecuteAsync(UsageDbContext db, string sql, CancellationToken cancellationToken, params (string Name, object Value)[] parameters)
     {

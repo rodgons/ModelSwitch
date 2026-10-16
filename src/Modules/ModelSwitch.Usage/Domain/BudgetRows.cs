@@ -23,7 +23,7 @@ internal sealed class BudgetPeriodRow
 
     public decimal ReservedAmount { get; init; }
 
-    public decimal SpentAmount { get; init; }
+    public decimal SettledAmount { get; init; }
 
     public required string Currency { get; init; }
 }

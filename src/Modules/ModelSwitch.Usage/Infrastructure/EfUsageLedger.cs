@@ -208,7 +208,7 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
 
         await db.SaveChangesAsync(cancellationToken);
 
-        // Release the Reservation and book the actual spend. A request opened without a Reservation books its spend in the period it started in.
+        // Release the Reservation and book the settled Estimated Cost. A request opened without a Reservation settles in the period it started in.
         await using (var release = BudgetSql.Command(
             db,
             "UPDATE usage.reservation SET status = 'settled', settled_at = @now WHERE inference_request_id = @id AND status = 'held' RETURNING amount, period_start",
@@ -288,7 +288,7 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
             CompletedAt = completed ? startedAt : null,
             DurationMs = completed ? 0 : null,
 
-            // Until the request settles nothing is known, which is also what an abandoned request stays at. A refused request spent nothing.
+            // Until the request settles nothing is known, which is also what an abandoned request stays at. A refused request has no Estimated Cost.
             UsageStatus = completed ? "reported" : "unavailable",
             TraceId = request.TraceId,
         };

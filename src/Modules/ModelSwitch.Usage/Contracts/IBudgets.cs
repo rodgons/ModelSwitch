@@ -5,10 +5,10 @@ namespace ModelSwitch.Usage.Contracts;
 
 /// <summary>A Tenant's Budget for one calendar month (UTC), as the Reservation model sees it.</summary>
 /// <param name="PeriodStart">The first day of the month.</param>
-/// <param name="Limit">Null: no Budget, spending is unlimited.</param>
+/// <param name="Limit">Null: no Budget, Estimated Cost is unlimited.</param>
 /// <param name="Reserved">Held by requests in flight.</param>
-/// <param name="Spent">Settled Estimated Cost.</param>
-public sealed record BudgetStatus(DateOnly PeriodStart, Money? Limit, Money Reserved, Money Spent);
+/// <param name="Settled">Settled Estimated Cost.</param>
+public sealed record BudgetStatus(DateOnly PeriodStart, Money? Limit, Money Reserved, Money Settled);
 
 /// <summary>Configures and reads Tenant Budgets (FR-07). The admin limits endpoint calls this.</summary>
 public interface IBudgets

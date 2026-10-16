@@ -167,7 +167,7 @@ public interface IUsageLedger
 {
     /// <summary>
     /// Step 8, one transaction: places the Reservation (when given) and writes the Inference Request with <c>status = running</c>.
-    /// Fails with <c>budget_exceeded</c> when reserved + spent + hold would pass the Tenant's limit; the request is then recorded
+    /// Fails with <c>budget_exceeded</c> when reserved + settled + hold would pass the Tenant's limit; the request is then recorded
     /// as <c>failed</c> with no Reservation. Infrastructure faults throw.
     /// </summary>
     Task<Result<OpenedRequest>> OpenAsync(OpenInferenceRequest request, CancellationToken cancellationToken);

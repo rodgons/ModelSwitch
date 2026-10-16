@@ -48,7 +48,7 @@ internal sealed class UsageDbContext(DbContextOptions<UsageDbContext> options) :
             period.Property(x => x.PeriodStart).HasColumnName("period_start");
             period.Property(x => x.LimitAmount).HasColumnName("limit_amount").HasColumnType("numeric(20,10)");
             period.Property(x => x.ReservedAmount).HasColumnName("reserved_amount").HasColumnType("numeric(20,10)").HasDefaultValue(0m);
-            period.Property(x => x.SpentAmount).HasColumnName("spent_amount").HasColumnType("numeric(20,10)").HasDefaultValue(0m);
+            period.Property(x => x.SettledAmount).HasColumnName("spent_amount").HasColumnType("numeric(20,10)").HasDefaultValue(0m);
             period.Property(x => x.Currency).HasColumnName("currency").HasColumnType("char(3)").IsRequired();
         });
 

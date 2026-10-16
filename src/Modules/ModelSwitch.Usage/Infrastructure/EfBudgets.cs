@@ -113,7 +113,7 @@ internal sealed class EfBudgets(IDbContextFactory<UsageDbContext> contexts, Time
                 row.PeriodStart,
                 row.LimitAmount is { } limit ? Money.FromUsd(limit) : null,
                 Money.FromUsd(row.ReservedAmount),
-                Money.FromUsd(row.SpentAmount));
+                Money.FromUsd(row.SettledAmount));
     }
 
     private static async Task RunAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, CancellationToken cancellationToken, params (string Name, object Value)[] parameters)

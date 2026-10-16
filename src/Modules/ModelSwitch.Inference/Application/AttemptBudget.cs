@@ -19,8 +19,8 @@ internal sealed class AttemptBudget(IUsageLedger ledger, Guid requestId, Money h
     /// <summary>Fails with <c>budget_exceeded</c> when the Budget cannot cover the Attempt.</summary>
     public async Task<Result> CommitAsync(decimal worstCase, CancellationToken cancellationToken)
     {
-        var cost = Money.FromUsd(worstCase).Round();
-        var committed = _committed + cost;
+        var estimatedCost = Money.FromUsd(worstCase).Round();
+        var committed = _committed + estimatedCost;
         if (committed > _held)
         {
             var topUp = await ledger.TopUpAsync(requestId, committed - _held, cancellationToken);

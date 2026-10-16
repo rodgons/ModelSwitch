@@ -35,7 +35,7 @@ internal sealed record RequestSummary(
 
     /// <summary>
     /// The worst source over the Attempts (reported &lt; estimated &lt; unavailable), or <c>partial</c> when reported and
-    /// non-reported Attempts are mixed (usage-and-budgets.md section 2). A request with no Attempts spent nothing, so its
+    /// non-reported Attempts are mixed (usage-and-budgets.md section 2). A request with no Attempts has no Estimated Cost, so its
     /// usage is fully known: <c>reported</c>.
     /// </summary>
     private static string StatusOf(IReadOnlyList<AttemptRecord> called)

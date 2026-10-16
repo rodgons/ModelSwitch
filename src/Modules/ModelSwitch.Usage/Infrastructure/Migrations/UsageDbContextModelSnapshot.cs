@@ -48,7 +48,7 @@ namespace ModelSwitch.Usage.Infrastructure.Migrations
                         .HasDefaultValue(0m)
                         .HasColumnName("reserved_amount");
 
-                    b.Property<decimal>("SpentAmount")
+                    b.Property<decimal>("SettledAmount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("numeric(20,10)")
                         .HasDefaultValue(0m)

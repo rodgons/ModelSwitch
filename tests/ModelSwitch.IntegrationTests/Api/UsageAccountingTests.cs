@@ -146,8 +146,8 @@ public sealed class UsageAccountingTests(GatewayFixture gateway) : IClassFixture
         // Hold per request is fixed (same body, same policy). Find it, then allow room for 5.5 holds.
         var probe = await SendAsync();
         var hold = decimal.Parse((await Rows($"select amount::text from usage.reservation where inference_request_id = '{probe.RequestId}'")).Single()[0], CultureInfo.InvariantCulture);
-        var spentSoFar = (await Budgets.GetCurrentAsync(_tenant, CancellationToken.None))!.Spent.Amount;
-        var limit = spentSoFar + (hold * 5.5m);
+        var settledSoFar = (await Budgets.GetCurrentAsync(_tenant, CancellationToken.None))!.Settled.Amount;
+        var limit = settledSoFar + (hold * 5.5m);
         await Budgets.SetMonthlyLimitAsync(_tenant, Money.FromUsd(limit), CancellationToken.None);
 
         // Latency keeps every request in flight at once, so each one competes for the room with its Reservation held.
@@ -158,7 +158,7 @@ public sealed class UsageAccountingTests(GatewayFixture gateway) : IClassFixture
         results.Count(r => r.Status == HttpStatusCode.PaymentRequired).ShouldBe(15);
         var status = (await Budgets.GetCurrentAsync(_tenant, CancellationToken.None))!;
         status.Reserved.Amount.ShouldBe(0m);
-        (status.Spent.Amount + status.Reserved.Amount).ShouldBeLessThanOrEqualTo(limit);
+        (status.Settled.Amount + status.Reserved.Amount).ShouldBeLessThanOrEqualTo(limit);
         await AssertAccountingConsistentAsync();
     }
 
