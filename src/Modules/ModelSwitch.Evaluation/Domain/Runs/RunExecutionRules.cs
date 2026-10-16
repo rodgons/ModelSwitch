@@ -4,15 +4,15 @@ using ModelSwitch.SharedKernel.Jobs;
 namespace ModelSwitch.Evaluation.Domain.Runs;
 
 /// <summary>
-/// The run's cost cap (evaluation.md section 4, "Spend"). Before each Case starts, the run's Estimated Cost so far (candidate and
+/// The run's cost cap (evaluation.md section 4, "Estimated Cost cap"). Before each Case starts, the run's Estimated Cost so far (candidate and
 /// judge, from recorded usage) plus the worst case of the Cases still in flight plus this Case's worst case must stay within
 /// <c>maxEstimatedCost</c>. Counting the in-flight worst cases keeps the cap honest with <c>concurrency</c> above 1, where several
 /// Cases are started before any of them has settled.
 /// </summary>
 internal static class RunCostCap
 {
-    public static bool AllowsNextCase(decimal? cap, decimal spent, decimal inFlightWorstCase, decimal caseWorstCase)
-        => cap is not { } limit || spent + inFlightWorstCase + caseWorstCase <= limit;
+    public static bool AllowsNextCase(decimal? cap, decimal recorded, decimal inFlightWorstCase, decimal caseWorstCase)
+        => cap is not { } limit || recorded + inFlightWorstCase + caseWorstCase <= limit;
 }
 
 /// <summary>Resuming a run after a worker crash (NFR-02): a Case that already has a Case Result is never run again.</summary>

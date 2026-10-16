@@ -3,8 +3,8 @@ using ModelSwitch.Usage.Contracts;
 
 namespace ModelSwitch.Usage.Infrastructure;
 
-/// <summary><see cref="IEvaluationSpend"/> over <c>usage.inference_request</c> and <c>usage.usage_record</c>.</summary>
-internal sealed class EfEvaluationSpend(IDbContextFactory<UsageDbContext> contexts) : IEvaluationSpend
+/// <summary><see cref="IEvaluationRunCost"/> over <c>usage.inference_request</c> and <c>usage.usage_record</c>.</summary>
+internal sealed class EfEvaluationRunCost(IDbContextFactory<UsageDbContext> contexts) : IEvaluationRunCost
 {
     public async Task<decimal> RunEstimatedCostAsync(Guid evaluationRunId, CancellationToken cancellationToken)
     {

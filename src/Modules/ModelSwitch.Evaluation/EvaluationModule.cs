@@ -21,7 +21,7 @@ public static class EvaluationModule
     /// <summary>
     /// Registers the Dataset, Prompt and Evaluation Run services, the <c>evaluation.run</c> job handler and the recurring
     /// <c>evaluation.sweep_orphaned_runs</c> job (app-role connection). They need the Identity module's current Administrator, Tenant
-    /// Grant, Tenant directory and audit writer, IPolicyStore, IProviderCatalog, IInferenceService, IEvaluationSpend and the host's
+    /// Grant, Tenant directory and audit writer, IPolicyStore, IProviderCatalog, IInferenceService, IEvaluationRunCost and the host's
     /// IJobEnqueuer and IJobStatusReader.
     /// </summary>
     public static IServiceCollection AddEvaluationModule(this IServiceCollection services)

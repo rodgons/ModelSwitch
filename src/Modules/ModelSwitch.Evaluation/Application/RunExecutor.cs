@@ -33,7 +33,7 @@ namespace ModelSwitch.Evaluation.Application;
 internal sealed partial class RunExecutor(
     IDbContextFactory<EvaluationDbContext> contexts,
     IInferenceService inference,
-    IEvaluationSpend spend,
+    IEvaluationRunCost runCost,
     CaseCosting costing,
     IGuidGenerator ids,
     TimeProvider time,
@@ -63,18 +63,18 @@ internal sealed partial class RunExecutor(
         public decimal TotalCost => (Cost ?? 0m) + (JudgeCost ?? 0m);
     }
 
-    /// <summary>The run's spend while it executes, shared by the Cases in flight.</summary>
-    private sealed class Spend(decimal spent)
+    /// <summary>The run's Estimated Cost while it executes (recorded so far plus the worst case of the Cases in flight), shared by those Cases.</summary>
+    private sealed class RunningEstimatedCost(decimal recorded)
     {
         private readonly Lock _lock = new();
-        private decimal _spent = spent;
+        private decimal _recorded = recorded;
         private decimal _inFlight;
 
         public bool TryStart(decimal? cap, decimal worstCase)
         {
             lock (_lock)
             {
-                if (!RunCostCap.AllowsNextCase(cap, _spent, _inFlight, worstCase))
+                if (!RunCostCap.AllowsNextCase(cap, _recorded, _inFlight, worstCase))
                 {
                     return false;
                 }
@@ -89,7 +89,7 @@ internal sealed partial class RunExecutor(
             lock (_lock)
             {
                 _inFlight -= worstCase;
-                _spent += cost;
+                _recorded += cost;
             }
         }
     }
@@ -131,7 +131,7 @@ internal sealed partial class RunExecutor(
         LogRunStarted(logger, runId, cases.Count, cases.Count - pending.Count);
         var stop = capAlreadyReached
             ? new StopReason(CostCapReached: true, Cancelled: false, StartedCount: 0)
-            : await ProcessAsync(run, configuration, evaluator.Value, template.Value, pending, new Spend(await spend.RunEstimatedCostAsync(runId, cancellationToken)), cancellationToken);
+            : await ProcessAsync(run, configuration, evaluator.Value, template.Value, pending, new RunningEstimatedCost(await runCost.RunEstimatedCostAsync(runId, cancellationToken)), cancellationToken);
 
         if (stop.CostCapReached)
         {
@@ -203,7 +203,7 @@ internal sealed partial class RunExecutor(
         IEvaluator evaluator,
         PromptTemplate template,
         IReadOnlyList<CaseInput> pending,
-        Spend spent,
+        RunningEstimatedCost estimatedCost,
         CancellationToken cancellationToken)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -228,7 +228,7 @@ internal sealed partial class RunExecutor(
                 var worst = run.MaxEstimatedCost is null
                     ? 0m
                     : (await costing.EstimateAsync(run.TenantId, run.Id, configuration, evaluator, rendered, @case.Input, @case.Expected, linked.Token)).Total;
-                if (!spent.TryStart(run.MaxEstimatedCost, worst))
+                if (!estimatedCost.TryStart(run.MaxEstimatedCost, worst))
                 {
                     slots.Release();
                     capReached = true;
@@ -236,7 +236,7 @@ internal sealed partial class RunExecutor(
                 }
 
                 started++;
-                tasks.Add(RunCaseAsync(run, configuration, evaluator, @case, rendered, worst, spent, slots, linked));
+                tasks.Add(RunCaseAsync(run, configuration, evaluator, @case, rendered, worst, estimatedCost, slots, linked));
             }
         }
 #pragma warning disable CA1031 // Rethrown below, once the Cases in flight have finished.
@@ -278,7 +278,7 @@ internal sealed partial class RunExecutor(
         CaseInput @case,
         RenderResult rendered,
         decimal worst,
-        Spend spent,
+        RunningEstimatedCost estimatedCost,
         SemaphoreSlim slots,
         CancellationTokenSource linked)
     {
@@ -288,7 +288,7 @@ internal sealed partial class RunExecutor(
         {
             var outcome = await CaseAsync(run, configuration, evaluator, @case, rendered, linked.Token);
             await WriteAsync(run.Id, @case.Id, outcome, linked.Token);
-            spent.Finish(worst, outcome.TotalCost);
+            estimatedCost.Finish(worst, outcome.TotalCost);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -323,7 +323,7 @@ internal sealed partial class RunExecutor(
             return new CaseOutcome(CaseScore.Errored(new CaseError(candidate.Error.Code.Value, "The candidate call failed.")), null, Milliseconds(time.GetElapsedTime(started)))
             {
                 RequestId = requestId,
-                Cost = await spend.RequestsEstimatedCostAsync([requestId], cancellationToken),
+                Cost = await runCost.RequestsEstimatedCostAsync([requestId], cancellationToken),
             };
         }
 
@@ -353,7 +353,7 @@ internal sealed partial class RunExecutor(
             {
                 Score = CaseScore.Errored(new CaseError(judge.Error.Code.Value, "The judge call failed."), new { ModelJudged = true, judged.JudgeAlias, Error = "The judge call failed." }),
                 JudgeRequestId = judgeRequestId,
-                JudgeCost = await spend.RequestsEstimatedCostAsync([judgeRequestId], cancellationToken),
+                JudgeCost = await runCost.RequestsEstimatedCostAsync([judgeRequestId], cancellationToken),
             };
         }
 

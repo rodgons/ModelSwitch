@@ -1,10 +1,10 @@
 namespace ModelSwitch.Usage.Contracts;
 
 /// <summary>
-/// The Estimated Cost an Evaluation Run has recorded, for its <c>maxEstimatedCost</c> check (evaluation.md section 4, "Spend"). Both
+/// The Estimated Cost an Evaluation Run has recorded, for its <c>maxEstimatedCost</c> check (evaluation.md section 4, "Estimated Cost cap"). Both
 /// sums come from what settlement booked (USD), never from a Provider's charge; a request that is still running counts as 0.
 /// </summary>
-public interface IEvaluationSpend
+public interface IEvaluationRunCost
 {
     /// <summary>
     /// The Estimated Cost of every Inference Request recorded for the run (candidate and judge calls, Request Origin

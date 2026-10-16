@@ -53,7 +53,7 @@ import { createRun, estimateRun, runKeys } from '../runQueries'
 
 /**
  * The run builder (frontend.md section 2): one Dataset Version against 1–6 Run Configurations, with the worst-case Estimated Cost
- * shown before anything starts (evaluation.md section 4, "Spend").
+ * shown before anything starts (evaluation.md section 4, "Estimated Cost cap").
  */
 const session = useSession()
 const route = useRoute()

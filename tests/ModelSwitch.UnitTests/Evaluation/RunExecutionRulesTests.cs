@@ -11,10 +11,10 @@ public sealed class RunExecutionRulesTests
     [InlineData(1.0, 0.5, 0.2, 0.31, false)]
     [InlineData(1.0, 0.9, 0.0, 0.2, false)]
     [InlineData(0.0, 0.0, 0.0, 0.0, true)]
-    public void A_case_starts_only_while_spent_plus_in_flight_plus_its_worst_case_stays_within_the_cap(
-        double? cap, double spent, double inFlight, double worstCase, bool starts)
+    public void A_case_starts_only_while_recorded_plus_in_flight_plus_its_worst_case_stays_within_the_cap(
+        double? cap, double recorded, double inFlight, double worstCase, bool starts)
     {
-        RunCostCap.AllowsNextCase((decimal?)cap, (decimal)spent, (decimal)inFlight, (decimal)worstCase).ShouldBe(starts);
+        RunCostCap.AllowsNextCase((decimal?)cap, (decimal)recorded, (decimal)inFlight, (decimal)worstCase).ShouldBe(starts);
     }
 
     [Fact]

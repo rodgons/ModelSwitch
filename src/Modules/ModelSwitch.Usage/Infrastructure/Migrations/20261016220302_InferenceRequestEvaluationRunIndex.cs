@@ -10,7 +10,7 @@ namespace ModelSwitch.Usage.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // IEvaluationSpend sums a run's requests by evaluation_run_id (data-model.md "usage"). Created on the partitioned parent,
+            // IEvaluationRunCost sums a run's requests by evaluation_run_id (data-model.md "usage"). Created on the partitioned parent,
             // PostgreSQL builds it on every existing partition and on each one ensure_request_partitions creates later. Partial,
             // because API traffic (the bulk of the rows) never has a run. CONCURRENTLY is not supported on a partitioned parent.
             migrationBuilder.CreateIndex(
