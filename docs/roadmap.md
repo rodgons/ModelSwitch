@@ -79,13 +79,13 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 ## Phase 5: Evaluation (≈2 weeks)
 
 - [x] Carried over from Phase 4: `origin` in the `usage_hourly` key, so long-range Overview and usage figures can separate evaluation traffic from API traffic *(`status`, `errorCode`, `hadFallback` and `providerId` usage filters still read only the 30 days of raw rows)*
-- [x] Carried over from Phase 4: `POST /admin/routing-policies/{policyId}/simulate` and the Routing screen's simulate panel; the reserved amount of the current Budget period on the Tenant detail (its gauge shows spent and limit today)
+- [x] Carried over from Phase 4: `POST /admin/routing-policies/{policyId}/simulate` and the Routing screen's simulate panel; the reserved amount of the current Budget period on the Tenant detail *(its gauge shows spent and reserved against the limit)*
 
 - [x] `evaluation` schema; dataset JSONL upload + versioning; prompts + versions
 - [x] Evaluators: exact_match, json_fields, classification (P/R/F1), reference_similarity, llm_judge
-- [ ] Run creation (frozen configuration), worker execution with resume, cancellation
-- [ ] Aggregates from Case Results; Comparisons; export CSV/JSONL
-- [ ] Dashboard: datasets, run builder, comparison view, charts
+- [x] Run creation (frozen configuration), worker execution with resume, cancellation
+- [x] Aggregates from Case Results; Comparisons; export CSV/JSONL
+- [x] Dashboard: datasets, run builder, comparison view, charts
 - [x] Sample datasets in `samples/evaluations/` (extraction + classification, synthetic, no personal data)
 
 **Exit:** a repeatable evaluation workflow. FR-09 and FR-11 are covered and DoD #9 is met.
