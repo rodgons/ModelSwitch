@@ -23,6 +23,72 @@ namespace ModelSwitch.Usage.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ModelSwitch.Usage.Domain.BudgetPeriodRow", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("date")
+                        .HasColumnName("period_start");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<decimal?>("LimitAmount")
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("limit_amount");
+
+                    b.Property<decimal>("ReservedAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(20,10)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("reserved_amount");
+
+                    b.Property<decimal>("SpentAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(20,10)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("spent_amount");
+
+                    b.HasKey("TenantId", "PeriodStart");
+
+                    b.ToTable("budget_period", "usage", t =>
+                        {
+                            t.HasCheckConstraint("ck_budget_period_reserved", "reserved_amount >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("ModelSwitch.Usage.Domain.BudgetRow", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<decimal>("LimitAmount")
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("limit_amount");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("TenantId");
+
+                    b.ToTable("budget", "usage", t =>
+                        {
+                            t.HasCheckConstraint("ck_budget_limit", "limit_amount >= 0");
+                        });
+                });
+
             modelBuilder.Entity("ModelSwitch.Usage.Domain.InferenceRequestRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -266,6 +332,147 @@ namespace ModelSwitch.Usage.Infrastructure.Migrations
                             t.HasCheckConstraint("ck_provider_attempt_kind", "kind in ('primary', 'retry', 'fallback')");
 
                             t.HasCheckConstraint("ck_provider_attempt_status", "status in ('succeeded', 'failed', 'cancelled', 'ambiguous', 'skipped_circuit_open')");
+                        });
+                });
+
+            modelBuilder.Entity("ModelSwitch.Usage.Domain.ReservationRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("InferenceRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inference_request_id");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("date")
+                        .HasColumnName("period_start");
+
+                    b.Property<DateTimeOffset?>("SettledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("settled_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InferenceRequestId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_reservation_inference_request_id");
+
+                    b.HasIndex("Status", "ExpiresAt")
+                        .HasDatabaseName("ix_reservation_status_expires_at")
+                        .HasFilter("status = 'held'");
+
+                    b.ToTable("reservation", "usage", t =>
+                        {
+                            t.HasCheckConstraint("ck_reservation_status", "status in ('held', 'settled', 'expired')");
+                        });
+                });
+
+            modelBuilder.Entity("ModelSwitch.Usage.Domain.UsageRecordRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int?>("CachedInputTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("cached_input_tokens");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("EstimateMethod")
+                        .HasColumnType("text")
+                        .HasColumnName("estimate_method");
+
+                    b.Property<Guid>("InferenceRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inference_request_id");
+
+                    b.Property<decimal>("InputCost")
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("input_cost");
+
+                    b.Property<int?>("InputTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("input_tokens");
+
+                    b.Property<Guid?>("ModelPriceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("model_price_id");
+
+                    b.Property<decimal>("OutputCost")
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("output_cost");
+
+                    b.Property<int?>("OutputTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("output_tokens");
+
+                    b.Property<Guid?>("ProviderAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_attempt_id");
+
+                    b.Property<Guid?>("ProviderModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_model_id");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<decimal>("TotalCost")
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("total_cost");
+
+                    b.Property<string>("UsageSource")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("usage_source");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InferenceRequestId")
+                        .HasDatabaseName("ix_usage_record_inference_request_id");
+
+                    b.HasIndex("ProviderAttemptId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_usage_record_provider_attempt_id");
+
+                    b.HasIndex("TenantId", "RecordedAt")
+                        .HasDatabaseName("ix_usage_record_tenant_id_recorded_at");
+
+                    b.ToTable("usage_record", "usage", t =>
+                        {
+                            t.HasCheckConstraint("ck_usage_record_usage_source", "usage_source in ('reported', 'estimated', 'unavailable')");
                         });
                 });
 #pragma warning restore 612, 618

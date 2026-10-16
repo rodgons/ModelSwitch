@@ -27,6 +27,8 @@ public static class UsageModule
         services.TryAddSingleton<IInputTokenEstimator, InputTokenEstimator>();
         services.AddUsageContext(_appConnection);
         services.TryAddSingleton<IUsageLedger, EfUsageLedger>();
+        services.TryAddSingleton<IBudgets, EfBudgets>();
+        services.TryAddSingleton<IReservationSweeper, EfReservationSweeper>();
         return services;
     }
 

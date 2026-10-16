@@ -28,7 +28,7 @@ The PostgreSQL schema, module by module. Every module owns one schema and is the
 
 **tenant**: `id`, `name text unique`, `status text check (active|suspended)`, `created_at`, `updated_at`
 
-**tenant_limits** (1:1 with tenant): `tenant_id pk fk`, `requests_per_minute int null`, `max_concurrent int null`, `max_request_cost numeric null`, `budget_amount numeric null`, `budget_period text check (month)`, `allowed_aliases text[] not null default '{*}'`, `updated_at`. A NULL limit means unlimited.
+**tenant_limits** (1:1 with tenant): `tenant_id pk fk`, `requests_per_minute int null`, `max_concurrent int null`, `max_request_cost numeric null`, `allowed_aliases text[] not null default '{*}'`, `updated_at`. A NULL limit means unlimited.
 
 **api_key**: `id`, `tenant_id fk`, `name text`, `key_prefix char(8) unique`, `key_hash bytea(32)`, `scopes text[]`, `expires_at null`, `revoked_at null`, `last_used_at null` (updated at most once per minute), `created_at`, `created_by_admin_id`
 - Index: `unique(key_prefix)`, `(tenant_id, created_at desc)`
@@ -110,14 +110,16 @@ Indexes: `(tenant_id, started_at desc)`, `(started_at desc)`, `(status, started_
 
 **Partitioning.** Both tables are `PARTITION BY RANGE (started_at)` with one partition per UTC month, named `<table>_yYYYYmMM`. EF Core cannot create partitioned tables, so the `usage` migration creates them with raw SQL; the primary keys are `(id, started_at)` for the same reason. There are no foreign keys between the two tables (PostgreSQL cannot reference a partitioned table without its partition key, and retention drops partitions independently). The migration also creates `usage.ensure_request_partitions(months_back, months_ahead)`, which idempotently creates the missing monthly partitions. The Migrator calls it on every run (previous month through 12 months ahead), so partitions exist as long as the system is deployed at least yearly. There is no `DEFAULT` partition, because a later `CREATE ... PARTITION OF` fails once the default holds rows in that range. The Phase 4 retention job takes over calling the function and dropping expired partitions (it will need a `SECURITY DEFINER` wrapper or the migrator role, since `modelswitch_app` cannot run DDL).
 
-**usage_record**: `id`, `inference_request_id`, `provider_attempt_id unique`, `tenant_id`, `provider_model_id`, `model_price_id null`, `input_tokens null`, `cached_input_tokens null` (subset of `input_tokens`; null = not reported; always null unless `usage_source = reported`), `output_tokens null`, `usage_source text (reported|estimated|unavailable)`, `estimate_method text null` (e.g. `tokenizer:o200k_base`, `reservation_upper_bound`), `input_cost`, `output_cost`, `total_cost numeric`, `currency`, `recorded_at`
-- Exactly one per Attempt, including failed Attempts. A failed Attempt has 0 tokens unless it was ambiguous.
+**usage_record**: `id`, `inference_request_id`, `provider_attempt_id unique null` (null only for the sweeper's record of an abandoned request), `tenant_id`, `provider_model_id null` (same exception), `model_price_id null`, `input_tokens null`, `cached_input_tokens null` (subset of `input_tokens`; null = not reported; always null unless `usage_source = reported`), `output_tokens null`, `usage_source text (reported|estimated|unavailable)`, `estimate_method text null` (e.g. `tokenizer:o200k_base`, `reservation_upper_bound`), `input_cost`, `output_cost`, `total_cost numeric`, `currency`, `recorded_at`
+- Exactly one per Attempt that reached a Provider, including failed Attempts (an Attempt skipped for an open circuit has none). A failed Attempt has 0 tokens unless it was ambiguous. The sweeper's record for an abandoned request has no Attempt, NULL tokens and the whole held amount in `total_cost` (`input_cost` and `output_cost` stay 0).
 - Index `(tenant_id, recorded_at)`.
+
+**budget**: `tenant_id pk`, `limit_amount numeric`, `currency`, `updated_at`. The Tenant's standing monthly limit, owned by the Usage module (not `tenant_limits`) because the Reservation `UPDATE` consults it; no row means no Budget. Set through `IBudgets.SetMonthlyLimitAsync`, which the admin limits endpoint calls. It is read from the database at Reservation time, not from the configuration snapshot, so a change applies to the next request.
 
 **budget_period**: `tenant_id`, `period_start date`, `limit_amount numeric null`, `reserved_amount numeric not null default 0`, `spent_amount numeric not null default 0`, `currency`, pk `(tenant_id, period_start)`
 - `CHECK (reserved_amount >= 0)`
 
-**reservation**: `id`, `inference_request_id unique`, `tenant_id`, `period_start`, `amount numeric`, `status (held|settled|expired)`, `expires_at`, `created_at`, `settled_at null`. Index `(status, expires_at) where status = 'held'`.
+**reservation**: `id`, `inference_request_id unique`, `tenant_id`, `period_start`, `amount numeric`, `status (held|settled|expired)`, `expires_at`, `created_at` (= the request's `started_at`, which locates the partitioned request row), `settled_at null`. Index `(status, expires_at) where status = 'held'`.
 
 **usage_hourly** (rollup, written by the worker): `tenant_id`, `provider_model_id`, `requested_alias`, `hour timestamptz`, `requests`, `failed_requests`, `fallback_requests`, `attempts`, `input_tokens bigint`, `cached_input_tokens bigint` (null counted as 0), `output_tokens bigint`, `estimated_cost numeric`, `duration_ms_sum bigint`, `latency_histogram int[]` (fixed bucket bounds, so percentiles can be merged approximately), `ttft_histogram int[]`. pk `(tenant_id, provider_model_id, requested_alias, hour)`.
 
@@ -139,7 +141,7 @@ Indexes: `(tenant_id, started_at desc)`, `(started_at desc)`, `(status, started_
 
 ## Background processing (`jobs` schema, shared infrastructure)
 
-**outbox_event**: `id`, `type`, `payload jsonb`, `occurred_at`, `published_at null`. Index `(published_at) where published_at is null`.
+**outbox_event**: `id`, `type`, `payload jsonb`, `occurred_at`, `published_at null`. Index `(published_at) where published_at is null`. Created by plain idempotent DDL in the Migrator (`JobsSchemaMigrator`, in `ModelSwitch.Configuration`), written through `SharedKernel.Outbox.OutboxWriter` in the writer's own transaction. Settlement and the sweeper append `usage.request_completed` with metadata only (ids, alias, status, tokens, cost).
 
 **processed_event**: `consumer text`, `event_id uuid`, `processed_at`, pk both. This is the idempotency guard (NFR-06).
 

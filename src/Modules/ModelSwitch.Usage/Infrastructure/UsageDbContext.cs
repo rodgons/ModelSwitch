@@ -17,10 +17,82 @@ internal sealed class UsageDbContext(DbContextOptions<UsageDbContext> options) :
 
     public DbSet<ProviderAttemptRow> ProviderAttempts => Set<ProviderAttemptRow>();
 
+    public DbSet<BudgetRow> Budgets => Set<BudgetRow>();
+
+    public DbSet<BudgetPeriodRow> BudgetPeriods => Set<BudgetPeriodRow>();
+
+    public DbSet<ReservationRow> Reservations => Set<ReservationRow>();
+
+    public DbSet<UsageRecordRow> UsageRecords => Set<UsageRecordRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
         modelBuilder.HasDefaultSchema(Schema);
+
+        modelBuilder.Entity<BudgetRow>(budget =>
+        {
+            budget.ToTable("budget", t => t.HasCheckConstraint("ck_budget_limit", "limit_amount >= 0"));
+            budget.HasKey(x => x.TenantId);
+            budget.Property(x => x.TenantId).HasColumnName("tenant_id").ValueGeneratedNever();
+            budget.Property(x => x.LimitAmount).HasColumnName("limit_amount").HasColumnType("numeric(20,10)");
+            budget.Property(x => x.Currency).HasColumnName("currency").HasColumnType("char(3)").IsRequired();
+            budget.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        modelBuilder.Entity<BudgetPeriodRow>(period =>
+        {
+            period.ToTable("budget_period", t => t.HasCheckConstraint("ck_budget_period_reserved", "reserved_amount >= 0"));
+            period.HasKey(x => new { x.TenantId, x.PeriodStart });
+            period.Property(x => x.TenantId).HasColumnName("tenant_id");
+            period.Property(x => x.PeriodStart).HasColumnName("period_start");
+            period.Property(x => x.LimitAmount).HasColumnName("limit_amount").HasColumnType("numeric(20,10)");
+            period.Property(x => x.ReservedAmount).HasColumnName("reserved_amount").HasColumnType("numeric(20,10)").HasDefaultValue(0m);
+            period.Property(x => x.SpentAmount).HasColumnName("spent_amount").HasColumnType("numeric(20,10)").HasDefaultValue(0m);
+            period.Property(x => x.Currency).HasColumnName("currency").HasColumnType("char(3)").IsRequired();
+        });
+
+        modelBuilder.Entity<ReservationRow>(reservation =>
+        {
+            reservation.ToTable("reservation", t => t.HasCheckConstraint("ck_reservation_status", "status in ('held', 'settled', 'expired')"));
+            reservation.HasKey(x => x.Id);
+            reservation.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            reservation.Property(x => x.InferenceRequestId).HasColumnName("inference_request_id");
+            reservation.Property(x => x.TenantId).HasColumnName("tenant_id");
+            reservation.Property(x => x.PeriodStart).HasColumnName("period_start");
+            reservation.Property(x => x.Amount).HasColumnName("amount").HasColumnType("numeric(20,10)");
+            reservation.Property(x => x.Status).HasColumnName("status").IsRequired();
+            reservation.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            reservation.Property(x => x.CreatedAt).HasColumnName("created_at");
+            reservation.Property(x => x.SettledAt).HasColumnName("settled_at");
+            reservation.HasIndex(x => x.InferenceRequestId).IsUnique().HasDatabaseName("ux_reservation_inference_request_id");
+            reservation.HasIndex(x => new { x.Status, x.ExpiresAt }).HasFilter("status = 'held'").HasDatabaseName("ix_reservation_status_expires_at");
+        });
+
+        modelBuilder.Entity<UsageRecordRow>(record =>
+        {
+            record.ToTable("usage_record", t => t.HasCheckConstraint("ck_usage_record_usage_source", "usage_source in ('reported', 'estimated', 'unavailable')"));
+            record.HasKey(x => x.Id);
+            record.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            record.Property(x => x.InferenceRequestId).HasColumnName("inference_request_id");
+            record.Property(x => x.ProviderAttemptId).HasColumnName("provider_attempt_id");
+            record.Property(x => x.TenantId).HasColumnName("tenant_id");
+            record.Property(x => x.ProviderModelId).HasColumnName("provider_model_id");
+            record.Property(x => x.ModelPriceId).HasColumnName("model_price_id");
+            record.Property(x => x.InputTokens).HasColumnName("input_tokens");
+            record.Property(x => x.CachedInputTokens).HasColumnName("cached_input_tokens");
+            record.Property(x => x.OutputTokens).HasColumnName("output_tokens");
+            record.Property(x => x.UsageSource).HasColumnName("usage_source").IsRequired();
+            record.Property(x => x.EstimateMethod).HasColumnName("estimate_method");
+            record.Property(x => x.InputCost).HasColumnName("input_cost").HasColumnType("numeric(20,10)");
+            record.Property(x => x.OutputCost).HasColumnName("output_cost").HasColumnType("numeric(20,10)");
+            record.Property(x => x.TotalCost).HasColumnName("total_cost").HasColumnType("numeric(20,10)");
+            record.Property(x => x.Currency).HasColumnName("currency").HasColumnType("char(3)").IsRequired();
+            record.Property(x => x.RecordedAt).HasColumnName("recorded_at");
+            record.HasIndex(x => x.ProviderAttemptId).IsUnique().HasDatabaseName("ux_usage_record_provider_attempt_id");
+            record.HasIndex(x => new { x.TenantId, x.RecordedAt }).HasDatabaseName("ix_usage_record_tenant_id_recorded_at");
+            record.HasIndex(x => x.InferenceRequestId).HasDatabaseName("ix_usage_record_inference_request_id");
+        });
 
         modelBuilder.Entity<InferenceRequestRow>(request =>
         {

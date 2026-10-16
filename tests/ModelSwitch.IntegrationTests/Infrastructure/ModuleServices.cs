@@ -36,6 +36,14 @@ public static class ModuleServices
         return services.BuildServiceProvider();
     }
 
+    /// <summary>Services the api and worker register for usage: the ledger, budgets and the Reservation sweeper.</summary>
+    public static ServiceProvider ForUsage(string connectionString, TimeProvider? time = null)
+    {
+        var services = Base(connectionString, time);
+        services.AddUsageModule();
+        return services.BuildServiceProvider();
+    }
+
     /// <summary>Services the api host registers for routing: the router, the validator and the policy store.</summary>
     public static ServiceProvider ForRouting(string connectionString)
     {

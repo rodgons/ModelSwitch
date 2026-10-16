@@ -444,12 +444,118 @@ public sealed class InferenceServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Success_without_reported_usage_is_unavailable()
+    public async Task Success_without_reported_usage_is_estimated_from_what_was_sent_and_received()
     {
+        _adapters.Adapter.Outcome = new CompletionOutcome.Success("a reply with several words in it", FinishReason.Stop, null);
 
         await Service().CompleteAsync(Request(), CancellationToken.None);
 
-        _ledger.Settled.Single().Attempts.Single().UsageSource.ShouldBe(UsageSource.Unavailable);
+        var attempt = _ledger.Settled.Single().Attempts.Single();
+        attempt.UsageSource.ShouldBe(UsageSource.Estimated);
+        attempt.EstimateMethod.ShouldBe("tokenizer:o200k_base");
+        attempt.InputTokens!.Value.ShouldBeGreaterThan(0);
+        attempt.OutputTokens!.Value.ShouldBeGreaterThan(0);
+        attempt.CachedInputTokens.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Reported_cached_input_tokens_are_passed_on()
+    {
+        _adapters.Adapter.Outcome = new CompletionOutcome.Success("hello", FinishReason.Stop, new NeutralUsage(10, 4, 6));
+
+        await Service().CompleteAsync(Request(), CancellationToken.None);
+
+        _ledger.Settled.Single().Attempts.Single().CachedInputTokens.ShouldBe(6);
+    }
+
+    [Fact]
+    public async Task The_reservation_is_the_worst_case_of_the_dearest_candidate_times_two_attempts()
+    {
+        _snapshots.Current = Snapshot(1, [_target, _other]);
+
+        await Service().CompleteAsync(Request(), CancellationToken.None);
+
+        var hold = _ledger.Opened.Single().Reservation.ShouldNotBeNull();
+        // 777 output tokens at 2 USD per million plus the small input estimate at 1 USD per million, held for min(maxAttempts, 2) = 2 Attempts.
+        hold.Amount.Amount.ShouldBeGreaterThan(2 * 777 * 2m / 1_000_000m);
+        hold.Amount.Amount.ShouldBeLessThan(2 * (777 * 2m + 100) / 1_000_000m);
+        hold.ExpiresAt.ShouldBe(_time.GetUtcNow() + TimeSpan.FromMilliseconds(ExecutionSettings.Default.DeadlineMs) + InferenceService.ReservationGrace);
+    }
+
+    [Fact]
+    public async Task A_refused_reservation_is_a_402_and_nothing_is_called()
+    {
+        _ledger.RefuseOpen = true;
+
+        var result = await Service().CompleteAsync(Request(), CancellationToken.None);
+
+        result.Error.Code.ShouldBe(ErrorCode.BudgetExceeded);
+        _adapters.Adapter.Calls.ShouldBe(0);
+        _ledger.Settled.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_refused_reservation_on_a_stream_is_a_402_before_any_stream()
+    {
+        _ledger.RefuseOpen = true;
+
+        var result = await Service().StreamAsync(Request(), CancellationToken.None);
+
+        result.Error.Code.ShouldBe(ErrorCode.BudgetExceeded);
+        _adapters.Adapter.Calls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_third_attempt_tops_up_the_hold_by_its_worst_case_and_the_first_two_do_not()
+    {
+        _adapters.Adapter.Outcome = new CompletionOutcome.Failure(new ProviderFailure(FailureClass.Transient, ProviderFailureCodes.ServerError, 503, null, true));
+        _snapshots.Current = Snapshot(1, [_target], execution: ExecutionSettings.Default with { MaxRetriesPerCandidate = 2, MaxAttempts = 3 });
+
+        await CompleteDrivingTimeAsync(Request());
+
+        _adapters.Adapter.Calls.ShouldBe(3);
+        var hold = _ledger.Opened.Single().Reservation!.Amount;
+        var topUp = _ledger.TopUps.Single();
+        topUp.ShouldBe(hold * 0.5m, "the hold covers two Attempts, so only the third adds its worst case");
+    }
+
+    [Fact]
+    public async Task A_refused_top_up_stops_the_request_with_budget_exceeded_and_keeps_the_attempts_made()
+    {
+        _adapters.Adapter.Outcome = new CompletionOutcome.Failure(new ProviderFailure(FailureClass.Transient, ProviderFailureCodes.ServerError, 503, null, true));
+        _snapshots.Current = Snapshot(1, [_target], execution: ExecutionSettings.Default with { MaxRetriesPerCandidate = 2, MaxAttempts = 3 });
+        _ledger.RefuseTopUp = true;
+
+        var result = await CompleteDrivingTimeAsync(Request());
+
+        result.Error.Code.ShouldBe(ErrorCode.BudgetExceeded);
+        _adapters.Adapter.Calls.ShouldBe(2);
+        var settled = _ledger.Settled.Single();
+        settled.ErrorCode.ShouldBe("budget_exceeded");
+        settled.Attempts.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Every_attempt_is_settled_with_the_price_in_force_when_the_request_began()
+    {
+        var priceId = Guid.CreateVersion7();
+        var snapshot = Snapshot(1);
+        var model = snapshot.Routing.Models[_target.ProviderModelId];
+        _snapshots.Current = snapshot with
+        {
+            Routing = snapshot.Routing with
+            {
+                Models = new Dictionary<Guid, CandidateModel> { [_target.ProviderModelId] = model with { Price = new PriceInForce(1m, 2m, 0.5m, priceId) } },
+            },
+        };
+        _adapters.Adapter.Outcome = new CompletionOutcome.Success("hello", FinishReason.Stop, new NeutralUsage(3, 4, null));
+
+        await Service().CompleteAsync(Request(), CancellationToken.None);
+
+        var pricing = _ledger.Settled.Single().Attempts.Single().Pricing.ShouldNotBeNull();
+        pricing.ModelPriceId.ShouldBe(priceId);
+        pricing.Rates.ShouldBe(new PriceRates(1m, 0.5m, 2m));
+        _ledger.Settled.Single().MaxOutputTokens.ShouldBe(777);
     }
 
     [Fact]
@@ -680,12 +786,34 @@ public sealed class InferenceServiceTests : IDisposable
 
         public int FailSettleTimes { get; set; }
 
+        public bool RefuseOpen { get; set; }
+
+        public bool RefuseTopUp { get; set; }
+
+        public List<Money> TopUps { get; } = [];
+
         public bool SettleTokenWasCancelled { get; private set; }
 
         public Task<Result<OpenedRequest>> OpenAsync(OpenInferenceRequest request, CancellationToken cancellationToken)
         {
+            if (RefuseOpen)
+            {
+                return Task.FromResult<Result<OpenedRequest>>(new Error(ErrorCode.BudgetExceeded, "no budget"));
+            }
+
             Opened.Add(request);
             return Task.FromResult<Result<OpenedRequest>>(new OpenedRequest(request.RequestId, new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero)));
+        }
+
+        public Task<Result> TopUpAsync(Guid requestId, Money additional, CancellationToken cancellationToken)
+        {
+            if (RefuseTopUp)
+            {
+                return Task.FromResult<Result>(new Error(ErrorCode.BudgetExceeded, "no budget"));
+            }
+
+            TopUps.Add(additional);
+            return Task.FromResult(Result.Success());
         }
 
         public Task SettleAsync(SettleInferenceRequest settlement, CancellationToken cancellationToken)

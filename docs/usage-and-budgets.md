@@ -40,6 +40,9 @@ INSERT INTO usage.inference_request (…, status = 'running');
 ```
 
 - `@hold` is the worst-case cost of the **most expensive** Candidate in the Routing Decision, multiplied by `min(maxAttempts, 2)`. A Fallback can then normally proceed without a second reservation round-trip. If an Attempt sequence would exceed the hold, for example many ambiguous Attempts, the executor tops up the Reservation with the same conditional `UPDATE` before the next Attempt. If the top-up fails, the request stops with `budget_exceeded`.
+- The limit comes from `usage.budget` (set by `IBudgets.SetMonthlyLimitAsync`) when the period row is created, and setting it also updates the current period's `limit_amount`. A refused reservation rolls the transaction back, and the request is then recorded on its own as `failed` with `error_code = budget_exceeded` and no Reservation, so refusals stay visible.
+- `expires_at` is the Deadline plus 1 minute. A stream is bounded only by the Provider once it has started, so its Reservation expires 15 minutes after the Deadline.
+- Top-up: each Attempt commits its Candidate's worst case before it starts. While the commitments stay within the hold nothing happens. Beyond it, `IUsageLedger.TopUpAsync` raises the hold by the excess with the same conditional `UPDATE`.
 - A Tenant without a Budget still gets a Reservation row of the same amount, so the logic has one path and the sweeper can recover abandoned requests.
 
 **Settle** (request step 11, one transaction):
@@ -54,9 +57,10 @@ INSERT outbox_event('usage.request_completed', {requestId, tenantId, …})
 
 If settlement fails (e.g. the database is briefly unavailable), it is retried in-process with backoff for up to 10 s, then handed to the sweeper. The client response is **not** delayed past that. For non-streaming responses settlement happens after the response is written, and for streaming responses after `[DONE]`.
 
-**Sweep** (worker, every 30 s): Reservations with `status='held' AND expires_at < now()` mean the instance died or settlement failed for good. For each one, in its own transaction, the sweeper:
+**Sweep** (worker, every 30 s; the core is `IReservationSweeper.SweepAbandonedAsync`, scheduling belongs to the jobs infrastructure): Reservations with `status='held' AND expires_at < now()` mean the instance died or settlement failed for good. For each one, in its own transaction, the sweeper:
 - marks the request `abandoned`, `error_code = internal_error`, `usage_status = unavailable`
-- writes one `usage_record` with `usage_source = unavailable` and cost = the held amount (pessimistic: treated as possibly billed)
+- writes one `usage_record` with `usage_source = unavailable` and cost = the held amount (pessimistic: treated as possibly billed), and the `usage.request_completed` outbox event
+- locks the request row before the Reservation, as settlement does, and does nothing if the request is no longer `running`
 - moves the held amount from `reserved_amount` to `spent_amount`
 - marks the Reservation `expired`
 
@@ -89,7 +93,9 @@ total_cost  = input_cost + output_cost
 - A pure `CostCalculator` in the Usage module's `Domain/` is the only implementation, used by routing (worst case), settlement and evaluation. Other modules reach it through `ICostCalculator` in `Usage/Contracts`, with `IInputTokenEstimator` for input tokens. Each of `input_cost` and `output_cost` is rounded half-to-even on its own before they are added. A cached count above the input count is clamped to it. If a request has no `max_tokens`, the output ceiling is the policy's `defaultMaxOutputTokens`, else 1024.
 - **Input estimate.** The tokenizer named by the Provider Model's `capabilities.tokenizer` (`o200k_base` or `cl100k_base`) counts each message, plus 4 tokens per message. With no (or an unknown) tokenizer the estimate is `ceil(totalUtf8Bytes / 3) + 4 per message`, recorded as `bytes_div_3`.
 
-**Phase 2 recording.** `IUsageLedger.OpenAsync` (step 8) inserts the `inference_request` with `status = running` and `usage_status = unavailable`; `SettleAsync` (step 11) updates it and inserts the `provider_attempt` rows in one transaction, and does nothing if the request is no longer `running`. Totals, `attempt_count`, `had_fallback`, `selected_provider_model_id` and `usage_status` are derived from the Attempts (an Attempt skipped for an open circuit is excluded). Reservations, `usage_record` rows and budget movement are added behind the same two methods in Phase 3. A request that fails before any Attempt (unknown alias, no eligible model) is recorded as `failed` with zero Attempts. Settlement runs on its own 10 s token, retried with backoff, whatever the client did.
+**Phase 3 recording.** `OpenAsync` reserves, `SettleAsync` costs every Attempt through `CostCalculator` (price = the `model_price` row in the configuration snapshot the request was routed on, so the Price in force when the request began), inserts one `usage_record` per Attempt that reached a Provider, fills `provider_attempt.estimated_cost` and the request totals from them, releases the Reservation, adds the sum to `spent_amount` and writes the outbox event, all in one transaction. A non-streaming success without reported usage is `estimated` (input from the request, output from the text received). An ambiguous Attempt is `unavailable` and costed at its worst case, with the request's output ceiling.
+
+**Phase 2 recording (superseded where Phase 3 says so).** `IUsageLedger.OpenAsync` (step 8) inserts the `inference_request` with `status = running` and `usage_status = unavailable`; `SettleAsync` (step 11) updates it and inserts the `provider_attempt` rows in one transaction, and does nothing if the request is no longer `running`. Totals, `attempt_count`, `had_fallback`, `selected_provider_model_id` and `usage_status` are derived from the Attempts (an Attempt skipped for an open circuit is excluded). Reservations, `usage_record` rows and budget movement are added behind the same two methods in Phase 3. A request that fails before any Attempt (unknown alias, no eligible model) is recorded as `failed` with zero Attempts. Settlement runs on its own 10 s token, retried with backoff, whatever the client did.
 
 ## 6. Aggregation
 

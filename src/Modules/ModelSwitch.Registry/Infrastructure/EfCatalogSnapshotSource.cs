@@ -47,7 +47,7 @@ internal sealed class EfCatalogSnapshotSource(IDbContextFactory<RegistryDbContex
                 m.ProviderEnabled,
                 m.ModelEnabled,
                 m.CapabilitiesJson,
-                prices.TryGetValue(m.Id, out var price) ? new CatalogPrice(price.InputPerMillion, price.CachedInputPerMillion, price.OutputPerMillion) : null,
+                prices.TryGetValue(m.Id, out var price) ? new CatalogPrice(price.InputPerMillion, price.CachedInputPerMillion, price.OutputPerMillion, price.Id) : null,
                 Uri.TryCreate(m.Endpoint, UriKind.Absolute, out var endpoint)
                     ? new ProviderModelTarget(
                         m.Id,

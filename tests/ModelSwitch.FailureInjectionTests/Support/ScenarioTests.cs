@@ -93,15 +93,30 @@ public abstract class ScenarioTests(GatewayFixture gateway)
     }
 
     /// <summary>
-    /// Accounting that must hold for any request: <c>inference_request.attempt_count</c> equals its Attempt rows.
-    /// TODO(Phase 3, Usage Records and budgets): also assert one <c>usage_record</c> per Attempt and that
-    /// <c>budget_period.spent_amount + reserved_amount</c> equals the sum of the tenant's Usage Records (the tables do not exist yet).
+    /// Accounting that must hold for any request (testing.md section 3): <c>inference_request.attempt_count</c> equals its Attempt rows,
+    /// every Attempt that reached a Provider has exactly one <c>usage_record</c>, and for the request's Tenant
+    /// <c>budget_period.spent_amount</c> equals the sum of its Usage Records while <c>reserved_amount</c> equals its held Reservations.
     /// </summary>
     protected async Task AssertConsistentAccountingAsync(string requestId)
     {
         var attempts = await ScalarAsync($"select count(*)::text from usage.provider_attempt where inference_request_id = '{requestId}'");
         var counted = await ScalarAsync($"select attempt_count::text from usage.inference_request where id = '{requestId}'");
         attempts.ShouldBe(counted, "inference_request.attempt_count equals the Attempt rows");
+
+        var called = await ScalarAsync($"select count(*)::text from usage.provider_attempt where inference_request_id = '{requestId}' and status <> 'skipped_circuit_open'");
+        var records = await ScalarAsync($"select count(*)::text from usage.usage_record where inference_request_id = '{requestId}'");
+        records.ShouldBe(called, "one usage_record per Attempt that reached a Provider");
+
+        // One statement, so the figures come from one snapshot even while other requests are settling.
+        const string tenant = "(select tenant_id from usage.inference_request where id = '{0}')";
+        var scope = string.Format(CultureInfo.InvariantCulture, tenant, requestId);
+        var budget = (await RowsAsync(
+            $"select (select coalesce(sum(spent_amount), 0) from usage.budget_period where tenant_id = {scope})::text, " +
+            $"(select coalesce(sum(total_cost), 0) from usage.usage_record where tenant_id = {scope})::text, " +
+            $"(select coalesce(sum(reserved_amount), 0) from usage.budget_period where tenant_id = {scope})::text, " +
+            $"(select coalesce(sum(amount), 0) from usage.reservation where tenant_id = {scope} and status = 'held')::text")).Single();
+        decimal.Parse(budget[0], CultureInfo.InvariantCulture).ShouldBe(decimal.Parse(budget[1], CultureInfo.InvariantCulture), "budget_period.spent_amount equals the Usage Records");
+        decimal.Parse(budget[2], CultureInfo.InvariantCulture).ShouldBe(decimal.Parse(budget[3], CultureInfo.InvariantCulture), "reserved_amount equals the held Reservations");
     }
 
     /// <summary>The Attempts of a request as <c>[kind, status, error_class, error_code, http_status, model]</c>, in order.</summary>

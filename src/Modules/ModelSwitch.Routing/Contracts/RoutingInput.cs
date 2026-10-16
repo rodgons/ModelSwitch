@@ -32,7 +32,7 @@ public sealed record ModelCapabilities(
 }
 
 /// <summary>The Price in force, in USD per million tokens.</summary>
-public sealed record PriceInForce(decimal InputPerMillion, decimal OutputPerMillion);
+public sealed record PriceInForce(decimal InputPerMillion, decimal OutputPerMillion, decimal? CachedInputPerMillion = null, Guid? ModelPriceId = null);
 
 /// <summary>A Candidate as the catalog snapshot describes it. Contains no secret.</summary>
 public sealed record CandidateModel(

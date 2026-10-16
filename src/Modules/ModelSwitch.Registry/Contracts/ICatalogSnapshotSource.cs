@@ -4,7 +4,7 @@ namespace ModelSwitch.Registry.Contracts;
 
 /// <summary>The Price in force for a Provider Model, USD per million tokens.</summary>
 /// <param name="CachedInputPerMillion">Null: no discount, cached tokens cost the input rate.</param>
-public sealed record CatalogPrice(decimal InputPerMillion, decimal? CachedInputPerMillion, decimal OutputPerMillion);
+public sealed record CatalogPrice(decimal InputPerMillion, decimal? CachedInputPerMillion, decimal OutputPerMillion, Guid? ModelPriceId = null);
 
 /// <summary>One Provider Model with its Provider's state and Price in force. Contains no secret.</summary>
 /// <param name="CapabilitiesJson">The <c>registry.provider_model.capabilities</c> document, as stored.</param>
