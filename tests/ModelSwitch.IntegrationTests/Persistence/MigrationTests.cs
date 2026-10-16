@@ -21,9 +21,10 @@ public sealed class MigrationTests(PostgresFixture postgres)
         var first = await ApplyAllAsync(services);
         var second = await ApplyAllAsync(services);
 
-        first["identity"].Count.ShouldBe(2);
+        first["identity"].Count.ShouldBe(3);
         first["identity"][0].ShouldEndWith("_Initial");
         first["identity"][1].ShouldEndWith("_Administrators");
+        first["identity"][2].ShouldEndWith("_TenantLimits");
         first["registry"].Count.ShouldBe(3);
         first["registry"][0].ShouldEndWith("_Initial");
         first["registry"][1].ShouldEndWith("_ProviderHealthSnapshot");
@@ -88,6 +89,7 @@ public sealed class MigrationTests(PostgresFixture postgres)
             "identity.audit_record",
             "identity.data_protection_key",
             "identity.tenant",
+            "identity.tenant_limits",
             "registry.__ef_migrations_history",
             "registry.model_price",
             "registry.provider",

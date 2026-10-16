@@ -303,6 +303,55 @@ namespace ModelSwitch.Identity.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ModelSwitch.Identity.Domain.TenantLimitsRow", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.PrimitiveCollection<string[]>("AllowedAliases")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasColumnName("allowed_aliases")
+                        .HasDefaultValueSql("'{*}'");
+
+                    b.Property<decimal?>("BudgetAmount")
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("budget_amount");
+
+                    b.Property<string>("BudgetPeriod")
+                        .HasColumnType("text")
+                        .HasColumnName("budget_period");
+
+                    b.Property<int?>("MaxConcurrent")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_concurrent");
+
+                    b.Property<decimal?>("MaxRequestCost")
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("max_request_cost");
+
+                    b.Property<int?>("RequestsPerMinute")
+                        .HasColumnType("integer")
+                        .HasColumnName("requests_per_minute");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("TenantId");
+
+                    b.ToTable("tenant_limits", "identity", t =>
+                        {
+                            t.HasCheckConstraint("ck_tenant_limits_budget_period", "budget_period is null or budget_period = 'month'");
+
+                            t.HasCheckConstraint("ck_tenant_limits_max_concurrent", "max_concurrent is null or max_concurrent > 0");
+
+                            t.HasCheckConstraint("ck_tenant_limits_requests_per_minute", "requests_per_minute is null or requests_per_minute > 0");
+                        });
+                });
+
             modelBuilder.Entity("ModelSwitch.Identity.Infrastructure.DataProtectionKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -362,6 +411,16 @@ namespace ModelSwitch.Identity.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_api_key_tenant_id");
+                });
+
+            modelBuilder.Entity("ModelSwitch.Identity.Domain.TenantLimitsRow", b =>
+                {
+                    b.HasOne("ModelSwitch.Identity.Domain.Tenant", null)
+                        .WithOne()
+                        .HasForeignKey("ModelSwitch.Identity.Domain.TenantLimitsRow", "TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_tenant_limits_tenant_id");
                 });
 
             modelBuilder.Entity("ModelSwitch.Identity.Domain.Administrator", b =>

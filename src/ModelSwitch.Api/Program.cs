@@ -34,6 +34,7 @@ return await StartupExit.RunAsync(
         builder.Services.AddRoutingModule();
         builder.Services.AddConfigurationSnapshot();
         builder.Services.AddInferenceModule();
+        builder.Services.AddInferenceLimits();
         builder.Services.AddUsageModule();
         builder.Services.AddEvaluationModule();
         builder.Services.AddAdminModule();

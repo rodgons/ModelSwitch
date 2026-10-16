@@ -64,7 +64,8 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 | `MODELSWITCH__Bootstrap__OwnerEmail` / `OwnerPassword` | first run | migrator | ignored once an Administrator exists |
 | `MODELSWITCH__Hosting__EndpointGroups` | | api | `inference,admin` |
 | `MODELSWITCH__Hosting__PublicBaseUrl` | ✔ | api | used for cookie and CSP settings |
-| `MODELSWITCH__Limits__FailureMode` | | api | `Closed` |
+| `MODELSWITCH__Limits__FailureMode` | | api | `Closed`. `Open` lets requests through when Valkey is down (and leaves Valkey out of `/ready`) |
+| `MODELSWITCH__Limits__ValkeyTimeoutMs` | | api | `50`. Budget of one limits call; a slower call counts as Valkey being unavailable |
 | `MODELSWITCH__Limits__MaxRequestBodyBytes` | | api | `1048576` |
 | `MODELSWITCH__Limits__MaxMessages` | | api | `256` |
 | `MODELSWITCH__Streaming__KeepAliveSeconds` | | api | `15`. Silence on an SSE stream after which a `: keep-alive` comment is sent |

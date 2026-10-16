@@ -157,6 +157,9 @@ public sealed class ConfigurationPropagationTests(PostgresFixture postgres)
             {
                 ["ConnectionStrings:Postgres"] = connectionString,
                 ["Security:ApiKeyPepper"] = ModuleServices.Pepper,
+                // These tests never reach the limits step and have no Valkey. Open keeps it out of /ready.
+                ["ConnectionStrings:Valkey"] = "localhost:1",
+                ["Limits:FailureMode"] = "Open",
             }));
     }
 }

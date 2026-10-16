@@ -124,9 +124,11 @@ internal sealed class CountingStream(Stream inner) : Stream
 /// <param name="Completion">Set for a non-streaming call.</param>
 /// <param name="Stream">Set for <c>stream: true</c>.</param>
 /// <param name="IncludeUsage">Whether the client asked for the final usage chunk.</param>
-internal sealed record ChatReply(InferenceResult? Completion, StreamingCompletion? Stream, bool IncludeUsage);
+/// <param name="Rate">The Rate Limit state for the <c>X-RateLimit-*</c> headers, when the Tenant has a Rate Limit.</param>
+/// <param name="Lease">For a stream, the Concurrency lease: the caller releases it when the stream ends. Null otherwise (already released).</param>
+internal sealed record ChatReply(InferenceResult? Completion, StreamingCompletion? Stream, bool IncludeUsage, RateLimitState? Rate = null, LimitLease? Lease = null);
 
-internal sealed class ChatCompletionsService(InferenceOptions options, IInferenceService inference)
+internal sealed class ChatCompletionsService(InferenceOptions options, IInferenceService inference, ILimiter limiter)
 {
     public async Task<Result<ChatReply>> CompleteAsync(ChatCaller caller, Stream body, CancellationToken cancellationToken)
     {
@@ -174,14 +176,41 @@ internal sealed class ChatCompletionsService(InferenceOptions options, IInferenc
                 Timeout = caller.Timeout,
                 InputBytes = (int)Math.Min(counted.BytesRead, int.MaxValue),
             };
-            if (parsed.Value.Stream)
+
+            // Step 6: Rate Limit token and Concurrency lease, after validation and before routing. The lease is released
+            // when the request ends, whatever the outcome; a stream keeps it until the endpoint has finished writing.
+            var acquired = await limiter.AcquireAsync(new LimitRequest(caller.TenantId, caller.RequestId, parsed.Value.Alias, caller.Timeout), cancellationToken);
+            if (acquired.IsFailure)
             {
-                var stream = await inference.StreamAsync(request, cancellationToken);
-                return stream.IsSuccess ? new ChatReply(null, stream.Value, parsed.Value.IncludeUsage) : stream.Error;
+                return acquired.Error;
             }
 
-            var completion = await inference.CompleteAsync(request, cancellationToken);
-            return completion.IsSuccess ? new ChatReply(completion.Value, null, IncludeUsage: false) : completion.Error;
+            var lease = acquired.Value;
+            var handedOver = false;
+            try
+            {
+                if (parsed.Value.Stream)
+                {
+                    var stream = await inference.StreamAsync(request, cancellationToken);
+                    if (stream.IsFailure)
+                    {
+                        return stream.Error;
+                    }
+
+                    handedOver = true;
+                    return new ChatReply(null, stream.Value, parsed.Value.IncludeUsage, lease.Rate, lease);
+                }
+
+                var completion = await inference.CompleteAsync(request, cancellationToken);
+                return completion.IsSuccess ? new ChatReply(completion.Value, null, IncludeUsage: false, lease.Rate) : completion.Error;
+            }
+            finally
+            {
+                if (!handedOver)
+                {
+                    await lease.DisposeAsync();
+                }
+            }
         }
     }
 }

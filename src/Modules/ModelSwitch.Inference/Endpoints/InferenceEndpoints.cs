@@ -53,15 +53,31 @@ internal static class InferenceEndpoints
         }
 
         var reply = result.Value;
+        WriteRateLimitHeaders(http.Response, reply.Rate);
         var created = time.GetUtcNow().ToUnixTimeSeconds();
         return reply.Stream is { } stream
-            ? await StreamAsync(http, stream, reply.IncludeUsage, options, time, created)
+            ? await StreamAsync(http, stream, reply.Lease, reply.IncludeUsage, options, time, created)
             : Results.Json(ChatCompletionWire.ChatCompletion(reply.Completion!, created));
     }
 
-    // The First Token is in hand, so from here the response is a 200 event stream: failures travel inside it (FR-05).
-    private static async Task<IResult> StreamAsync(HttpContext http, StreamingCompletion stream, bool includeUsage, InferenceOptions options, TimeProvider time, long created)
+    // X-RateLimit-Reset is whole seconds until the full allowance is back (api.md section 1).
+    private static void WriteRateLimitHeaders(HttpResponse response, RateLimitState? rate)
     {
+        if (rate is null)
+        {
+            return;
+        }
+
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        response.Headers["X-RateLimit-Limit"] = rate.Limit.ToString(invariant);
+        response.Headers["X-RateLimit-Remaining"] = rate.Remaining.ToString(invariant);
+        response.Headers["X-RateLimit-Reset"] = ((long)Math.Ceiling(rate.Reset.TotalSeconds)).ToString(invariant);
+    }
+
+    // The First Token is in hand, so from here the response is a 200 event stream: failures travel inside it (FR-05).
+    private static async Task<IResult> StreamAsync(HttpContext http, StreamingCompletion stream, LimitLease? lease, bool includeUsage, InferenceOptions options, TimeProvider time, long created)
+    {
+        await using (lease)
         await using (stream)
         {
             var response = http.Response;

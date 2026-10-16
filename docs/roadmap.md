@@ -55,7 +55,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [x] Audit records
 - [ ] Admin endpoints: tenants, keys (create-once display, revoke), limits, model access, providers, models, prices, policies, aliases
 - [x] Encrypted `db:` provider secrets (AES-GCM) + write-only API (`IProviderSecretStore` service; the HTTP endpoint ships with the admin providers endpoints above)
-- [ ] Valkey rate + concurrency limits (one Lua script), failure modes, multi-instance test
+- [x] Valkey rate + concurrency limits (one Lua script), failure modes, multi-instance test
 - [x] Usage Records, CostCalculator, Price versioning, Usage Source
 - [ ] Budget Reservations: reserve/top-up/settle, sweeper job, outbox *(reserve, top-up, settle, outbox write and `SweepAbandonedAsync` are done; tick when the jobs task schedules the sweeper and relays the outbox)*
 - [ ] Jobs infrastructure in the worker (claim, lease, retry, dead-letter)

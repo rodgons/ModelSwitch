@@ -20,7 +20,7 @@ namespace ModelSwitch.IntegrationTests.Infrastructure;
 /// their Capabilities, so they are eligible. <c>balanced</c> (OpenAI protocol), <c>local</c> (Ollama protocol) and
 /// <c>resilient</c> (OpenAI protocol with a Fallback). Use it as a class fixture.
 /// </summary>
-public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
+public sealed class GatewayFixture(PostgresFixture postgres, ValkeyFixture valkey) : IAsyncLifetime
 {
     public const string ChatAlias = "balanced";
     public const string OllamaAlias = "local";
@@ -32,7 +32,7 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
     public const string FallbackModel = "mock-fallback";
 
     private RunningMockProvider? _mock;
-    private Factory? _factory;
+    private WebApplicationFactory<ApiHost>? _factory;
 
     /// <summary>Authenticated with a key that has every Scope.</summary>
     public HttpClient Client { get; private set; } = null!;
@@ -44,6 +44,18 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
     public HttpClient ModelsOnly { get; private set; } = null!;
 
     public string ConnectionString { get; private set; } = null!;
+
+    /// <summary>The Valkey the hosts use. The shared container unless a test points it elsewhere before <see cref="InitializeAsync"/>.</summary>
+    public string? ValkeyConnectionString { get; set; }
+
+    /// <summary>Extra deployment settings (for example <c>Limits:FailureMode</c>) for every host, set before <see cref="InitializeAsync"/>.</summary>
+    public Dictionary<string, string?> Settings { get; } = [];
+
+    /// <summary>The seeded Tenant (<c>acme</c>) that both API Keys belong to.</summary>
+    public Guid TenantId { get; private set; }
+
+    /// <summary>The seeded full-scope API Key, for clients of additional hosts.</summary>
+    public string FullKey { get; private set; } = null!;
 
     public Uri MockAddress => _mock!.BaseAddress;
 
@@ -80,7 +92,9 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
             + PolicyAndAliasSql(OllamaAlias, [("mock-ollama", PrimaryModel, ollamaModels[PrimaryModel])])
             + PolicyAndAliasSql(ResilientAlias, [("mock-openai", PrimaryModel, openAiModels[PrimaryModel]), ("mock-openai", FallbackModel, openAiModels[FallbackModel])]));
 
-        _factory = new Factory(ConnectionString);
+        TenantId = Guid.Parse(await ScalarAsync("select id from identity.tenant where name = 'acme'"));
+        FullKey = full.PlaintextKey;
+        _factory = StartHost();
         Client = Authenticated(full.PlaintextKey);
         ModelsOnly = Authenticated(modelsOnly.PlaintextKey);
         Anonymous = _factory.CreateClient();
@@ -100,6 +114,54 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
         {
             await _mock.DisposeAsync();
         }
+    }
+
+    /// <summary>Another api host on the same database and Valkey, as a second instance of a scaled-out deployment. The caller disposes it.</summary>
+    public WebApplicationFactory<ApiHost> StartHost() => new Factory(ConnectionString, ValkeyConnectionString ?? valkey.ConnectionString, Settings);
+
+    /// <summary>A client for <paramref name="host"/>, authenticated with the seeded full-scope API Key.</summary>
+    public HttpClient ClientFor(WebApplicationFactory<ApiHost> host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        var client = host.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", FullKey);
+        return client;
+    }
+
+    /// <summary>
+    /// A new Tenant with a full-scope API Key and the given limits (null: unlimited), live in every running host. Each test uses its
+    /// own Tenant, so the Valkey counters of one test never reach another.
+    /// </summary>
+    public async Task<(Guid TenantId, string Key)> SeedTenantAsync(string name, int? requestsPerMinute = null, int? maxConcurrent = null)
+    {
+        SeededApiKey seeded;
+        await using (var services = ModuleServices.ForMigrator(ConnectionString))
+        {
+            seeded = await services.GetRequiredService<IIdentitySeeder>().SeedAsync(name, "key", CancellationToken.None);
+        }
+
+        await SetLimitsAsync(seeded.TenantId, requestsPerMinute, maxConcurrent);
+        return (seeded.TenantId, seeded.PlaintextKey);
+    }
+
+    /// <summary>Replaces the Tenant's limits row, as the limits admin endpoint will, and waits for the hosts' snapshots.</summary>
+    public Task SetLimitsAsync(Guid tenantId, int? requestsPerMinute, int? maxConcurrent)
+    {
+        static string Sql(int? value) => value?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null";
+        return WriteConfigurationAsync(
+            $"""
+            delete from identity.tenant_limits where tenant_id = '{tenantId}';
+            insert into identity.tenant_limits (tenant_id, requests_per_minute, max_concurrent, updated_at)
+            values ('{tenantId}', {Sql(requestsPerMinute)}, {Sql(maxConcurrent)}, now());
+            """);
+    }
+
+    public async Task<string> ScalarAsync(string sql)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(sql, connection);
+        return Convert.ToString(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture)!;
     }
 
     /// <summary>A client for the same host, authenticated with <paramref name="plaintextKey"/>.</summary>
@@ -217,7 +279,7 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
     private const string _capabilities =
         """{"streaming":true,"jsonObject":true,"jsonSchema":true,"contextWindow":128000,"maxOutputTokens":16384,"tokenizer":"o200k_base","parameters":["temperature","top_p","seed","stop","presence_penalty","frequency_penalty"]}""";
 
-    private sealed class Factory(string connectionString) : WebApplicationFactory<ApiHost>
+    private sealed class Factory(string connectionString, string valkeyConnectionString, IReadOnlyDictionary<string, string?> settings) : WebApplicationFactory<ApiHost>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -229,7 +291,10 @@ public sealed class GatewayFixture(PostgresFixture postgres) : IAsyncLifetime
                 ["Outbound:AllowedPrivateHosts"] = "127.0.0.1",
                 // One second instead of 15 so the keep-alive test does not take a quarter of a minute.
                 ["Streaming:KeepAliveSeconds"] = "1",
-            }));
+                ["ConnectionStrings:Valkey"] = valkeyConnectionString,
+                // A cold first call (connect, script load) in CI can exceed the production 50 ms budget.
+                ["Limits:ValkeyTimeoutMs"] = "1000",
+            }.Concat(settings)));
         }
     }
 }

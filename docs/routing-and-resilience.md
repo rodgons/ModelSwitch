@@ -200,4 +200,13 @@ These are enforced before routing, using Valkey (ADR-0003). They apply to Reques
 - **Rate Limit**: GCRA (generic cell rate algorithm) per tenant, key `rl:{tenantId}`, one Lua `EVALSHA`, `requests_per_minute` with a burst of `max(1, rpm/10)`.
 - **Concurrency Limit**: a sorted set `cc:{tenantId}` of lease ids scored by expiry, which is the Deadline plus 5 s. Acquire is Lua: remove expired leases, check `ZCARD < max`, then `ZADD`. Release is `ZREM` in a `finally` block. A lease from a crashed instance expires by itself.
 - Both checks happen in **one** round trip, using a single script.
-- On a Valkey error or timeout (budget 50 ms): with `FailureMode=Closed` → `503 limits_unavailable`, and with `Open` → allow and increment `modelswitch.limits.degraded`.
+- On a Valkey error or timeout (budget 50 ms, `Limits:ValkeyTimeoutMs`): with `FailureMode=Closed` → `503 limits_unavailable` with `Retry-After: 1`, and with `Open` → allow and increment `modelswitch.limits.degraded`.
+
+Implementation notes (`Inference`: `ILimiter` in `Contracts/`, `Limiter` decides, `ValkeyLimitStore` runs the script):
+
+- **Atomicity.** The script computes both decisions first and writes only when both pass, so a request refused for concurrency does not spend a Rate Limit token. The rate check comes first: a rate-limited request is refused as `rate_limit_exceeded` without looking at leases.
+- **Server time.** The script reads `TIME` from Valkey, so instances with skewed clocks agree. The key `rl:{tenantId}` holds the GCRA theoretical arrival time and expires on its own once the bucket is full.
+- **Lease size.** The lease expiry is the Deadline of the alias's Routing Policy (shortened by `X-ModelSwitch-Timeout-Ms`, never extended) plus 5 s. An unknown alias gets the default Deadline; routing rejects it next, which releases the lease.
+- **Release.** `Dispose` of the lease runs `ZREM` in the endpoint's `finally`, so it also happens on abort, on any error after step 6, and, for a stream, when the stream ends. A failed release is only logged: the lease expires by itself.
+- **Unlimited Tenants.** A Tenant with neither a Rate Limit nor a Concurrency Limit (no `identity.tenant_limits` row, or both columns null) costs no Valkey call, so a Valkey outage does not reach it even when failing closed.
+- **Headers.** A Tenant with a Rate Limit gets `X-RateLimit-Limit`, `-Remaining` and `-Reset` (whole seconds until the full burst is back) on success, streaming included. A 429 carries `Retry-After` only. A Concurrency 429 says `Retry-After: 1`, because the gateway cannot know when another request of the Tenant will end.
