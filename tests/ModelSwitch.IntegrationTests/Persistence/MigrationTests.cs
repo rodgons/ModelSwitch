@@ -36,7 +36,7 @@ public sealed class MigrationTests(PostgresFixture postgres)
         first["usage"].Count.ShouldBe(2);
         first["usage"][0].ShouldEndWith("_Initial");
         first["usage"][1].ShouldEndWith("_Budgets");
-        first["jobs"].ShouldBe(["outbox_event"]);
+        first["jobs"].ShouldBe(["outbox_event", "job", "processed_event"]);
         second["usage"].ShouldBeEmpty();
         second["config"].ShouldBeEmpty();
         second["jobs"].ShouldBeEmpty();

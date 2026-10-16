@@ -6,7 +6,9 @@ using ModelSwitch.Identity;
 using ModelSwitch.Registry;
 using ModelSwitch.Routing;
 using ModelSwitch.SharedKernel;
+using ModelSwitch.SharedKernel.Jobs;
 using ModelSwitch.Usage;
+using Npgsql;
 
 namespace ModelSwitch.IntegrationTests.Infrastructure;
 
@@ -41,6 +43,19 @@ public static class ModuleServices
     {
         var services = Base(connectionString, time);
         services.AddUsageModule();
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// The jobs infrastructure the worker host registers (enqueuer, processor, scheduler, relay), plus whatever
+    /// <paramref name="configure"/> adds (handlers, outbox consumers, a module). Hosted services are registered but not started.
+    /// </summary>
+    public static ServiceProvider ForJobs(string connectionString, TimeProvider? time = null, Action<IServiceCollection>? configure = null, Action<JobsOptions>? options = null)
+    {
+        var services = Base(connectionString, time);
+        services.AddJobEnqueuer(_ => NpgsqlDataSource.Create(connectionString), options);
+        services.AddJobsWorker();
+        configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
 

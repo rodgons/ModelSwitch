@@ -32,6 +32,11 @@ public sealed class ConfigurationPropagationTests(PostgresFixture postgres)
         snapshotB.Current.Version.ShouldBe(0);
         snapshotB.Current.Routing.AliasToPolicy.ShouldBeEmpty();
 
+        // The 1 s bound is for steady-state NOTIFY delivery. A host's LISTEN connection is opened by a background service after the
+        // host reports started, so under load (full suite, container start) a write could land before it exists and would then wait for
+        // the connect-time refresh. Wait for both LISTEN sessions, then measure.
+        await WaitForListenersAsync(connectionString, expected: 2);
+
         // What an admin write does: change configuration and bump the version in one transaction.
         var version = await WriteConfigurationAsync(
             connectionString,
@@ -138,6 +143,26 @@ public sealed class ConfigurationPropagationTests(PostgresFixture postgres)
         var version = await ConfigVersion.BumpAsync(connection, transaction, TestContext.Current.CancellationToken);
         await transaction.CommitAsync(TestContext.Current.CancellationToken);
         return version;
+    }
+
+    private static async Task WaitForListenersAsync(string connectionString, int expected)
+    {
+        var deadline = Environment.TickCount64 + 30_000;
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        while (true)
+        {
+            await using var command = new NpgsqlCommand(
+                "select count(*) from pg_stat_activity where datname = current_database() and state = 'idle' and query like 'LISTEN %'",
+                connection);
+            if ((long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))! >= expected)
+            {
+                return;
+            }
+
+            Environment.TickCount64.ShouldBeLessThan(deadline, "the hosts did not open their LISTEN connections within 30 s");
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
     }
 
     private static async Task WaitForVersionAsync(IConfigurationSnapshotProvider snapshots, long version, TimeSpan within)
