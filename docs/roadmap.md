@@ -53,7 +53,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 
 - [x] Administrator accounts, cookie sessions, antiforgery, Roles + Tenant Grants, Owner bootstrap
 - [x] Audit records
-- [ ] Admin endpoints: tenants, keys (create-once display, revoke), limits, model access, providers, models, prices, policies, aliases
+- [x] Admin endpoints: tenants, keys (create-once display, revoke), limits, model access, providers, models, prices, policies, aliases
 - [x] Encrypted `db:` provider secrets (AES-GCM) + write-only API (`IProviderSecretStore` service; the HTTP endpoint ships with the admin providers endpoints above)
 - [x] Valkey rate + concurrency limits (one Lua script), failure modes, multi-instance test
 - [x] Usage Records, CostCalculator, Price versioning, Usage Source
