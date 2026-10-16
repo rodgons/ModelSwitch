@@ -94,7 +94,20 @@ internal sealed partial class DatabaseRoles(ILogger<DatabaseRoles> logger)
         }
 
         var statement = (string)(await build.ExecuteScalarAsync(cancellationToken))!;
-        await ExecuteAsync(connection, transaction, statement, cancellationToken);
+
+        // The advisory lock is per database, but roles are per cluster: a migrator for another database
+        // on the same server can create the role between our check and our CREATE. That is success too.
+        await transaction.SaveAsync("create_role", cancellationToken);
+        try
+        {
+            await ExecuteAsync(connection, transaction, statement, cancellationToken);
+        }
+        catch (PostgresException e) when (e.SqlState is PostgresErrorCodes.DuplicateObject or PostgresErrorCodes.UniqueViolation)
+        {
+            await transaction.RollbackAsync("create_role", cancellationToken);
+            return true;
+        }
+
         LogRoleCreated(logger, role);
         return true;
     }
