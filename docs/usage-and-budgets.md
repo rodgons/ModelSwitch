@@ -7,7 +7,7 @@ This document implements FR-06 and FR-07 (spending) and PRD §14.5 ("durable usa
 1. **The Usage Record is authoritative. Telemetry is not.** Metrics and traces may be sampled, dropped or delayed. Usage Records are written transactionally and never sampled.
 2. **Every Attempt gets exactly one Usage Record**, including failed, cancelled and ambiguous Attempts. Every Inference Request gets a `usage_status`.
 3. **Estimated Cost is never presented as a charge.** The API field, the UI label and the export header all say "estimated".
-4. **History is immutable.** A Usage Record keeps the `model_price_id` it was costed with. Changing a Price creates a new row and leaves recorded costs unchanged.
+4. **History is immutable.** A Usage Record keeps the `model_price_id` it was costed with. Changing a Price creates a new row and leaves recorded costs unchanged. The admin API (`POST /admin/models/{id}/prices`) only appends. A Price dated in the future bumps the config version when it is saved, but the snapshot only reads Prices already in force, so it takes effect at the first snapshot rebuild after its `effective_from` (the next config change); date a Price now unless a later switch-over is wanted.
 
 ## 2. Usage Source
 

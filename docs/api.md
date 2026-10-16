@@ -206,28 +206,33 @@ Lists use cursor pagination, `?limit=50&cursor=<opaque>`, and return `{ items, n
 | GET/POST | `/admin/tenants/{tenantId}/api-keys` | V / O. POST returns the raw key **once** |
 | DELETE | `/admin/tenants/{tenantId}/api-keys/{keyId}` | O. Revokes the key (soft, sets `revoked_at`) |
 
-### Providers, models, prices (Owner)
+### Providers, models, prices (Owner to write, Viewer to read)
+
+The catalog holds no Tenant data and no secret, so every Administrator may read it. Every write is audited and bumps the config version in the same transaction. Bodies are validated by hand: any problem is `400 validation_failed` with one `errors` entry per field; a duplicate name, Provider model id or Price instant is `409 conflict`.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET/POST | `/admin/providers` | `{name, adapterType: "openai_compatible"\|"ollama", endpoint, credential?: {secret}\|{envVar}}` |
-| GET/PATCH | `/admin/providers/{id}` | The secret is write-only. Responses show `credential: {kind, configured: true}` |
-| POST | `/admin/providers/{id}/connectivity-check` | Calls the Adapter's `CheckAsync` and returns latency + normalized error |
-| GET/POST | `/admin/providers/{id}/models` | `{providerModelId, displayName, capabilities:{…}, enabled}` |
-| PATCH | `/admin/models/{modelId}` | Capabilities, enabled |
-| GET/POST | `/admin/models/{modelId}/prices` | POST creates a new Price version (`effectiveFrom` ≥ now). Existing Prices are immutable |
+| GET/POST | `/admin/providers` | `{name, adapterType: "openai_compatible"\|"ollama", endpoint, requestTimeoutMs?, enabled?, credential?: {secret}\|{envVar}}`. The `name` is `[a-z0-9][a-z0-9._-]{0,62}` (Policy Candidates are `name/modelId`). The `endpoint` is checked by the outbound destination policy on save (`errors.endpoint`). POST returns 201 |
+| GET/PATCH | `/admin/providers/{id}` | PATCH `{endpoint?, requestTimeoutMs?, enabled?, credential?}`. The name and Adapter type are fixed. The secret is write-only: responses show `credential: {kind: none\|env\|db, configured, updatedAt}`. A `{secret}` replaces the stored one (audit `provider.secret_replaced`, no secret in it); an `{envVar}` (not `MODELSWITCH__*`) switches to `env:NAME` and deletes any stored secret |
+| POST | `/admin/providers/{id}/connectivity-check` | Calls the Adapter's `CheckAsync` with the Provider's credential and returns `{reachable, latencyMs, failure: {class, code, httpStatus}\|null}`. Unreachable is a 200, not an error |
+| GET/POST | `/admin/providers/{id}/models` | `{providerModelId, displayName?, capabilities:{…}, enabled?}`. Capabilities are checked key by key (unknown keys rejected; `tokenizer` is `o200k_base` or `cl100k_base`; `maxOutputTokens` ≤ `contextWindow`). POST returns 201 |
+| PATCH | `/admin/models/{modelId}` | `{displayName?, capabilities?, enabled?}`. `providerModelId` is fixed |
+| GET/POST | `/admin/models/{modelId}/prices` | GET lists newest first and flags the Price `inForce`. POST `{inputPerMillion, cachedInputPerMillion?, outputPerMillion, currency?: "USD", effectiveFrom?}` appends a new Price version (`effectiveFrom` defaults to now and must be ≥ now). Existing Prices are immutable. Only `USD`, values 0 to 9 999 999 999 with ≤ 10 decimals |
+
+Not in the MVP: model discovery through the Adapter's `ListModelsAsync` (the Provider Model is entered by hand).
 
 ### Routing (Owner to write, Viewer to read)
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/admin/routing-policies` | Latest version of each policy |
-| POST | `/admin/routing-policies` | Creates the policy at version 1 |
-| PUT | `/admin/routing-policies/{policyId}` | Validates (→ 400 `validation_failed`) and creates version n+1 (FR-11). Body includes `expectedVersion` for optimistic concurrency → 409 |
-| GET | `/admin/routing-policies/{policyId}/versions[/{version}]` | History |
-| POST | `/admin/routing-policies/validate` | Dry-run validation |
-| POST | `/admin/routing-policies/{policyId}/simulate` | `{tenantId, taskType, requiredCapabilities, estimatedInputTokens}` → the RoutingDecision that would result |
-| GET/PUT/DELETE | `/admin/aliases/{alias}` | Binds an alias to a policy |
+| GET | `/admin/routing-policies` | Latest version of each policy, with the `aliases` pointing at it |
+| POST | `/admin/routing-policies` | `{name, definition}`. Creates the policy at version 1 (201) |
+| PUT | `/admin/routing-policies/{policyId}` | `{definition, expectedVersion}`. Validates (→ 400 `validation_failed`, errors keyed `definition.<path>`) and creates version n+1 (FR-11), which is immediately the version aliases resolve to; to roll back, save the old definition again. A stale `expectedVersion` → 409 |
+| GET | `/admin/routing-policies/{policyId}/versions[/{version}]` | History, newest first. Versions are immutable, with `resolvedCandidates` fixed when saved |
+| POST | `/admin/routing-policies/validate` | Dry-run validation, writes nothing. 200 `{valid, resolvedCandidates}` or 400 |
+| GET/PUT/DELETE | `/admin/aliases/{alias}` | PUT `{policyId, description?}` binds (201 new, 200 rebind) |
+
+`POST /admin/routing-policies/{policyId}/simulate` is planned with the dashboard (Phase 4) and is not served yet.
 
 ### Requests and usage
 

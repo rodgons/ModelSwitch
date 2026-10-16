@@ -63,6 +63,8 @@ public static class ModuleServices
     public static ServiceProvider ForRouting(string connectionString)
     {
         var services = Base(connectionString, time: null);
+        services.AddIdentityModule();
+        services.AddRegistryModule();
         services.AddRoutingModule();
         return services.BuildServiceProvider();
     }
@@ -82,6 +84,7 @@ public static class ModuleServices
             services.AddLogging(logging);
         }
 
+        services.AddIdentityModule();
         services.AddRegistryModule();
         return services.BuildServiceProvider();
     }

@@ -18,6 +18,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+    <ProjectReference Include="../../ModelSwitch.SharedKernel.Http/ModelSwitch.SharedKernel.Http.csproj" />
+    <ProjectReference Include="../ModelSwitch.Identity/ModelSwitch.Identity.csproj" />
     <ProjectReference Include="../../Adapters/ModelSwitch.Adapters.Abstractions/ModelSwitch.Adapters.Abstractions.csproj" />
   </ItemGroup>
 
