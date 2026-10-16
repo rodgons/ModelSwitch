@@ -106,6 +106,20 @@ public sealed class AdminFixture(PostgresFixture postgres) : IAsyncLifetime
         return browser;
     }
 
+    /// <summary>
+    /// Another api host on the same database, as a second instance would be. <paramref name="configure"/> may replace services
+    /// (a <see cref="TimeProvider"/>, a decorated contract).
+    /// </summary>
+    public WebApplicationFactory<ApiHost> StartHost(Action<IServiceCollection>? configure = null) => new Factory(ConnectionString, configure);
+
+    /// <summary>A browser-like client of <paramref name="host"/>, with its own cookie jar.</summary>
+    public static AdminBrowser NewBrowser(WebApplicationFactory<ApiHost> host) => new(host.CreateClient(new WebApplicationFactoryClientOptions
+    {
+        BaseAddress = new Uri("https://localhost"),
+        HandleCookies = true,
+        AllowAutoRedirect = false,
+    }));
+
     /// <summary>A client for the inference API carrying <paramref name="apiKey"/> as its bearer token (none when null).</summary>
     public HttpClient NewApiClient(string? apiKey)
     {
@@ -138,7 +152,7 @@ public sealed class AdminFixture(PostgresFixture postgres) : IAsyncLifetime
         return id;
     }
 
-    private sealed class Factory(string connectionString) : WebApplicationFactory<ApiHost>
+    private sealed class Factory(string connectionString, Action<IServiceCollection>? configure = null) : WebApplicationFactory<ApiHost>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -149,7 +163,11 @@ public sealed class AdminFixture(PostgresFixture postgres) : IAsyncLifetime
                 // The admin tests never reach the limits step; the setting only has to be present.
                 ["ConnectionStrings:Valkey"] = "localhost:1",
             }));
-            builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestRoutes>());
+            builder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IStartupFilter, TestRoutes>();
+                configure?.Invoke(services);
+            });
         }
     }
 
