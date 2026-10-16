@@ -32,3 +32,32 @@ public sealed class GatewayOverheadTests
     public void Overhead_is_never_negative()
         => Request(10, Attempt(1, 0, 20)).GatewayOverhead.ShouldBe(TimeSpan.Zero);
 }
+
+/// <summary>Regression: the second-valued histograms used the SDK's millisecond-sized default buckets, so p95 overhead read as ~5 s.</summary>
+public sealed class InferenceMetricsBucketTests
+{
+    [Fact]
+    public void Latency_histograms_advise_sub_second_bucket_bounds()
+    {
+        using var meters = new ModelSwitch.UnitTests.Support.TestMeterFactory();
+        _ = new InferenceMetrics(meters);
+        var advised = new Dictionary<string, IReadOnlyList<double>?>();
+        using var listener = new System.Diagnostics.Metrics.MeterListener
+        {
+            InstrumentPublished = (instrument, _) =>
+            {
+                if (instrument is System.Diagnostics.Metrics.Histogram<double> histogram && instrument.Meter.Scope == meters)
+                {
+                    advised[instrument.Name] = histogram.Advice?.HistogramBucketBoundaries;
+                }
+            },
+        };
+        listener.Start();
+
+        foreach (var name in new[] { "modelswitch.inference.duration", "modelswitch.inference.ttft", "modelswitch.inference.gateway_overhead" })
+        {
+            advised[name].ShouldNotBeNull().ShouldContain(0.05);
+            advised[name]!.ShouldContain(0.1);
+        }
+    }
+}

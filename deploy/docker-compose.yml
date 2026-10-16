@@ -30,5 +30,21 @@ services:
       timeout: 3s
       retries: 20
 
+  # Local telemetry backend (docs/observability.md section 6): Grafana, Tempo, Loki and Prometheus in one container, with the
+  # provisioned "ModelSwitch Gateway" dashboard. `docker compose --profile observability up -d otel-lgtm`, then point the api and
+  # worker at it with OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-lgtm:4317.
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.35.0
+    profiles: ["observability"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+      # OTLP on loopback, for an api or worker run outside Compose (`dotnet run`).
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    volumes:
+      - ./grafana/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/modelswitch.yaml:ro
+      - ./grafana/dashboards:/otel-lgtm/grafana/conf/provisioning/dashboards/modelswitch:ro
+
 volumes:
   postgres-data:

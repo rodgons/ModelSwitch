@@ -17,9 +17,9 @@ This document covers FR-10 and NFR-05. The README quick-start is derived from it
 | `proxy` | `caddy:2` | default | api, web |
 | `mock-provider` | `modelswitch/mock-provider` | `demo` | — |
 | `ollama` | `ollama/ollama` | `ollama` | — |
-| `otel-lgtm` | `grafana/otel-lgtm` | `observability` | — |
+| `otel-lgtm` | `grafana/otel-lgtm:0.35.0` (publishes `127.0.0.1:3000` Grafana and `127.0.0.1:4317/4318` OTLP) | `observability` | — |
 
-Only `proxy` publishes a host port (default `8080`). PostgreSQL and Valkey publish ports (on `127.0.0.1`) only in a local `compose.override.yaml`: copy `deploy/compose.override.example.yaml` to the repository root, where it is gitignored and merged automatically.
+Only `proxy` publishes a host port (default `8080`), apart from the optional `otel-lgtm`, which publishes Grafana and OTLP on `127.0.0.1`. PostgreSQL and Valkey publish ports (on `127.0.0.1`) only in a local `compose.override.yaml`: copy `deploy/compose.override.example.yaml` to the repository root, where it is gitignored and merged automatically.
 
 The images are .NET 10 multi-stage builds. Runtime images use `mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled` and run as a non-root user. `HEALTHCHECK` uses `/health`.
 

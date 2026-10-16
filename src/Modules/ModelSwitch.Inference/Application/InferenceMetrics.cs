@@ -10,6 +10,15 @@ namespace ModelSwitch.Inference.Application;
 /// </summary>
 internal sealed class InferenceMetrics
 {
+    /// <summary>
+    /// Bucket bounds in seconds for the latency histograms. The SDK's defaults (0, 5, 10, 25 …) suit milliseconds; with them every
+    /// sub-second overhead falls in one bucket and p95 reads as about 5 s.
+    /// </summary>
+    internal static readonly IReadOnlyList<double> SecondsBuckets =
+        [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10, 30, 60, 120];
+
+    private static readonly InstrumentAdvice<double> _seconds = new() { HistogramBucketBoundaries = SecondsBuckets };
+
     private readonly Counter<long> _requests;
     private readonly Histogram<double> _duration;
     private readonly Histogram<double> _ttft;
@@ -23,9 +32,9 @@ internal sealed class InferenceMetrics
         ArgumentNullException.ThrowIfNull(meters);
         var meter = meters.Create(GatewayTelemetry.Name);
         _requests = meter.CreateCounter<long>("modelswitch.inference.requests", "{request}", "Inference Requests that ended, by outcome.");
-        _duration = meter.CreateHistogram<double>("modelswitch.inference.duration", "s", "Time from receipt to the end of the Inference Request.");
-        _ttft = meter.CreateHistogram<double>("modelswitch.inference.ttft", "s", "Time to the First Token of a stream.");
-        _overhead = meter.CreateHistogram<double>("modelswitch.inference.gateway_overhead", "s", "Request time outside Adapter calls and backoff waits (NFR-01).");
+        _duration = meter.CreateHistogram("modelswitch.inference.duration", "s", "Time from receipt to the end of the Inference Request.", tags: null, advice: _seconds);
+        _ttft = meter.CreateHistogram("modelswitch.inference.ttft", "s", "Time to the First Token of a stream.", tags: null, advice: _seconds);
+        _overhead = meter.CreateHistogram("modelswitch.inference.gateway_overhead", "s", "Request time outside Adapter calls and backoff waits (NFR-01).", tags: null, advice: _seconds);
         _attempts = meter.CreateCounter<long>("modelswitch.attempts", "{attempt}", "Attempts, by Provider Model, kind and outcome.");
         _fallbacks = meter.CreateCounter<long>("modelswitch.fallbacks", "{fallback}", "Fallback Attempts.");
         _settlementFailures = meter.CreateCounter<long>("modelswitch.settlement.failures", "{request}", "Requests whose settlement gave up and was left to the sweeper.");

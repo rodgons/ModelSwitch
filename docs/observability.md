@@ -79,4 +79,6 @@ Built-in ASP.NET Core, HttpClient, Npgsql and runtime metrics are also enabled. 
 
 ## 6. Local stack
 
-`docker compose --profile observability up` adds `grafana/otel-lgtm` (Grafana, Tempo, Loki, Prometheus/Mimir in one container) on `http://localhost:3000`. `deploy/grafana/` holds a provisioned "ModelSwitch Gateway" dashboard built on the metrics above.
+`docker compose --profile observability up` adds `grafana/otel-lgtm` (Grafana, Tempo, Loki, Prometheus in one container, pinned by tag) on `http://localhost:3000`, with OTLP published on loopback (`4317` gRPC, `4318` HTTP) for an api or worker run outside Compose. `deploy/grafana/` holds the provisioned "ModelSwitch Gateway" dashboard (folder *ModelSwitch*): request rate and status, errors by code, latency, TTFT and gateway-overhead percentiles, Attempts by kind and status, Fallbacks, circuit state, tokens, Estimated Cost by alias, limit rejections, and the worker's outbox lag, job queue and settlement failures.
+
+In Prometheus the instruments appear with OTLP's naming translation: dots become underscores, counters gain `_total` and units become suffixes, e.g. `modelswitch_inference_requests_total`, `modelswitch_inference_gateway_overhead_seconds_bucket`, `modelswitch_estimated_cost_USD_total`, `modelswitch_outbox_lag_seconds`. The latency histograms advise bucket bounds in seconds (1 ms to 120 s, `InferenceMetrics.SecondsBuckets`), because the SDK's default bounds are sized for milliseconds.
