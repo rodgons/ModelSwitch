@@ -53,34 +53,16 @@ export function describeVariance(
   return `${variance.runs} runs: mean ${formatScore(variance.mean)}, standard deviation ${formatScore(variance.stdDev)}, range ${formatScore(variance.min)}–${formatScore(variance.max)}`
 }
 
-interface ResultLike {
-  externalId: string
-  ordinal: number
-}
-
-/** Every Case id any run has a result for, in upload order. */
-export function caseChoices<T extends ResultLike>(
-  runs: readonly { runId: string; results: readonly T[] }[],
-): string[] {
-  const ordinals = new Map<string, number>()
-  for (const run of runs) for (const r of run.results) ordinals.set(r.externalId, r.ordinal)
-  return [...ordinals.entries()].sort(([, a], [, b]) => a - b).map(([id]) => id)
-}
-
-/** One Case's result in each run, in run order; null where the run has none (not reached yet, or cancelled before it). */
-export function pivotCase<T extends ResultLike>(
-  runs: readonly { runId: string; results: readonly T[] }[],
-  externalId: string,
-): { runId: string; result: T | null }[] {
-  return runs.map((run) => ({
-    runId: run.runId,
-    result: run.results.find((r) => r.externalId === externalId) ?? null,
-  }))
-}
-
 export interface DiffPart {
   kind: 'same' | 'added' | 'removed'
   text: string
+}
+
+const linePrefixes: Record<DiffPart['kind'], string> = { added: '+', removed: '-', same: ' ' }
+
+/** A line diff's gutter, as in a unified diff: `+` added, `-` removed, a space for an unchanged line. */
+export function diffLinePrefix(kind: DiffPart['kind']): string {
+  return linePrefixes[kind]
 }
 
 function parseJson(text: string): unknown {

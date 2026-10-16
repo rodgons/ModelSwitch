@@ -146,6 +146,12 @@ public sealed class EvaluationRunTests(GatewayFixture gateway) : IClassFixture<G
         errored.GetProperty("inferenceRequestId").ValueKind.ShouldBe(JsonValueKind.Null);
         (await AdminBrowser.JsonAsync(await op.GetAsync($"/admin/evaluations/{runId}/results?status=failed"))).GetProperty("items").GetArrayLength().ShouldBe(1);
 
+        // The Case drill-down asks for one Case's result by its external id: one request per run, no paging.
+        var byCase = (await AdminBrowser.JsonAsync(await op.GetAsync($"/admin/evaluations/{runId}/results?externalId=c-2"))).GetProperty("items").EnumerateArray().Single();
+        byCase.GetProperty("externalId").GetString().ShouldBe("c-2");
+        byCase.GetProperty("status").GetString().ShouldBe("failed");
+        (await AdminBrowser.JsonAsync(await op.GetAsync($"/admin/evaluations/{runId}/results?externalId=C-2"))).GetProperty("items").GetArrayLength().ShouldBe(0, "exact match");
+
         // The request detail page follows the candidate request back to its Case.
         var request = await AdminBrowser.JsonAsync(await op.GetAsync($"/admin/requests/{requestId}"));
         request.GetProperty("evaluationCase").GetProperty("externalId").GetString().ShouldBe("c-1");

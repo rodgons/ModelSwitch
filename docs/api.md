@@ -297,7 +297,7 @@ Viewers read and Operators write inside their Tenant Grant; a run or Comparison 
 | POST | `/admin/evaluations/estimate` | Operator | Same body and validation, writes nothing → 200 `EvaluationEstimateView` |
 | GET | `/admin/evaluations` | Viewer | Comparisons newest first, each with its runs: `{items: ComparisonView[], nextCursor}`. Filters `tenantId`, `datasetId`, `status` (a Comparison with at least one run in that status), `limit`, `cursor` |
 | GET | `/admin/evaluations/{runId}` | Viewer | `RunDetailView` |
-| GET | `/admin/evaluations/{runId}/results` | Viewer | Case Results in upload order: `{items: CaseResultView[], nextCursor}`. Filters `status` (`passed`, `failed`, `errored`, `skipped`), `limit`, `cursor` |
+| GET | `/admin/evaluations/{runId}/results` | Viewer | Case Results in upload order: `{items: CaseResultView[], nextCursor}`. Filters `status` (`passed`, `failed`, `errored`, `skipped`), `externalId` (the Case's dataset `id`, exact match: the Case drill-down reads one Case per run with it), `limit`, `cursor` |
 | POST | `/admin/evaluations/{runId}/cancel` | Operator | → 200 `{id, status: "cancelled"}`; 409 `conflict` when the run has already finished |
 | POST | `/admin/evaluations/{runId}/rerun` | Operator | "Run again": a new Comparison named `<name> (run again)` with one run whose Run Configuration is a copy of the frozen one (same Policy Versions, so the same `configSha256`) and the same `maxEstimatedCost` → **202** `{comparisonId, runIds}` |
 | POST | `/admin/evaluations/{runId}/aggregates/recompute` | Operator | Recomputes a finished run's aggregates from its stored Case Results, stores and returns them (the aggregates object); 409 `conflict` while queued or running |

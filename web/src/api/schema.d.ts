@@ -1957,6 +1957,7 @@ export interface paths {
       parameters: {
         query?: {
           status?: string
+          externalId?: string
           limit?: string
           cursor?: string
         }

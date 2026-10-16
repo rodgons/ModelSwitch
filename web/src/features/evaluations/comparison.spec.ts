@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  caseChoices,
   costAxisMax,
   describeVariance,
+  diffLinePrefix,
   diffOutputs,
-  pivotCase,
   pollInterval,
   scatterPoints,
 } from './comparison'
@@ -52,37 +51,6 @@ describe('run-to-run variance', () => {
   })
 })
 
-describe('Case drill-down', () => {
-  const result = (externalId: string, ordinal: number, outputText = '') => ({
-    externalId,
-    ordinal,
-    outputText,
-  })
-
-  it('lists every Case any run has a result for, in upload order', () => {
-    expect(
-      caseChoices([
-        { runId: 'r1', results: [result('c-2', 1), result('c-1', 0)] },
-        { runId: 'r2', results: [result('c-3', 2), result('c-1', 0)] },
-      ]),
-    ).toEqual(['c-1', 'c-2', 'c-3'])
-  })
-
-  it('lines up one Case across runs, with a gap where a run has no result yet', () => {
-    const pivot = pivotCase(
-      [
-        { runId: 'r1', results: [result('c-1', 0, 'yes')] },
-        { runId: 'r2', results: [] },
-      ],
-      'c-1',
-    )
-    expect(pivot).toEqual([
-      { runId: 'r1', result: result('c-1', 0, 'yes') },
-      { runId: 'r2', result: null },
-    ])
-  })
-})
-
 describe('output diff between two runs', () => {
   it('diffs JSON outputs field by field after pretty-printing', () => {
     const diff = diffOutputs('{"name":"Ana","email":"a@x"}', '{"email":"a@x", "name":"Bob"}')
@@ -105,5 +73,11 @@ describe('output diff between two runs', () => {
 
   it('treats a missing output as empty', () => {
     expect(diffOutputs(null, 'hi').parts).toEqual([{ kind: 'added', text: 'hi' }])
+  })
+
+  it('marks each line of a line diff with a unified-diff gutter', () => {
+    expect(diffLinePrefix('added')).toBe('+')
+    expect(diffLinePrefix('removed')).toBe('-')
+    expect(diffLinePrefix('same')).toBe(' ')
   })
 })

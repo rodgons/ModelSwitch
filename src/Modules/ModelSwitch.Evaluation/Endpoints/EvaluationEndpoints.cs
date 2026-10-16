@@ -68,8 +68,8 @@ internal static class EvaluationEndpoints
     private static async Task<IResult> GetRunAsync(HttpContext http, Guid runId, EvaluationRunQueries queries)
         => Json(http, await queries.GetAsync(runId, http.RequestAborted));
 
-    private static async Task<IResult> ListResultsAsync(HttpContext http, Guid runId, EvaluationRunQueries queries, string? status, string? limit, string? cursor)
-        => Json(http, await queries.ResultsAsync(runId, status, limit, cursor, http.RequestAborted));
+    private static async Task<IResult> ListResultsAsync(HttpContext http, Guid runId, EvaluationRunQueries queries, string? status, string? externalId, string? limit, string? cursor)
+        => Json(http, await queries.ResultsAsync(runId, status, externalId, limit, cursor, http.RequestAborted));
 
     private static async Task<IResult> CancelRunAsync(HttpContext http, Guid runId, EvaluationRunService runs)
         => Json(http, await runs.CancelAsync(runId, http.RequestAborted));

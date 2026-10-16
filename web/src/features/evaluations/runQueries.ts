@@ -18,7 +18,8 @@ export const runKeys = {
   run: (id: string) => ['evaluations', 'run', id] as const,
   results: (id: string, status: string, cursor: string | null) =>
     ['evaluations', 'results', id, status, cursor] as const,
-  allResults: (id: string) => ['evaluations', 'all-results', id] as const,
+  caseResult: (id: string, externalId: string) =>
+    ['evaluations', 'case-result', id, externalId] as const,
 }
 
 const defined = (entries: Record<string, string | null>) =>
@@ -107,35 +108,34 @@ export function useResults(
   })
 }
 
-/**
- * Every Case Result of a run, page after page (at most 5,000 Cases, so at most 25 pages of 200). The results endpoint has no Case
- * filter, so the drill-down loads them once, on demand, and lines Cases up by id across runs.
- */
-async function fetchAllResults(runId: string) {
-  const items: Schemas['CaseResultView'][] = []
-  let cursor: string | null = null
-  do {
-    const page: Schemas['PagedResultOfCaseResultView'] = data(
-      await api.GET('/admin/evaluations/{runId}/results', {
-        params: { path: { runId }, query: { limit: '200', ...defined({ cursor }) } },
-      }),
-    )
-    items.push(...page.items)
-    cursor = page.nextCursor
-  } while (cursor)
-  return items
+/** One Case's result in a run, by the Case's external id (exact match), or null when the run has none for it yet. */
+export async function fetchCaseResult(
+  runId: string,
+  externalId: string,
+): Promise<Schemas['CaseResultView'] | null> {
+  const page = data(
+    await api.GET('/admin/evaluations/{runId}/results', {
+      params: { path: { runId }, query: { externalId, limit: '1' } },
+    }),
+  )
+  return page.items[0] ?? null
 }
 
-export function useAllResults(ids: MaybeRefOrGetter<string[]>, enabled: MaybeRefOrGetter<boolean>) {
+/** The Case drill-down: one Case's result in each run, one request per run, once a Case id is chosen. */
+export function useCaseResults(
+  ids: MaybeRefOrGetter<string[]>,
+  externalId: MaybeRefOrGetter<string>,
+) {
   return useQueries({
-    queries: computed(() =>
-      toValue(ids).map((id) => ({
-        queryKey: runKeys.allResults(id),
-        queryFn: () => fetchAllResults(id),
-        enabled: toValue(enabled),
+    queries: computed(() => {
+      const caseId = toValue(externalId)
+      return toValue(ids).map((id) => ({
+        queryKey: runKeys.caseResult(id, caseId),
+        queryFn: () => fetchCaseResult(id, caseId),
+        enabled: caseId !== '',
         staleTime: 30_000,
-      })),
-    ),
+      }))
+    }),
   })
 }
 

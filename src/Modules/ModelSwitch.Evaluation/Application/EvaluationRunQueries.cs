@@ -161,8 +161,11 @@ internal sealed class EvaluationRunQueries(IDbContextFactory<EvaluationDbContext
             run.CompletedAt);
     }
 
-    /// <summary>Case Results in upload order, paginated (cursor: the Case ordinal), optionally of one status.</summary>
-    public async Task<Result<PagedResult<CaseResultView>>> ResultsAsync(Guid runId, string? status, string? limit, string? cursor, CancellationToken cancellationToken)
+    /// <summary>
+    /// Case Results in upload order, paginated (cursor: the Case ordinal), optionally of one status and of one Case by its external
+    /// <c>id</c> (exact match; the Case drill-down reads one Case across a Comparison's runs with one request per run).
+    /// </summary>
+    public async Task<Result<PagedResult<CaseResultView>>> ResultsAsync(Guid runId, string? status, string? externalId, string? limit, string? cursor, CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         var found = await runs.FindRunAsync(db, runId, cancellationToken);
@@ -210,6 +213,11 @@ internal sealed class EvaluationRunQueries(IDbContextFactory<EvaluationDbContext
         if (status is not null)
         {
             query = query.Where(r => r.Result.Status == status);
+        }
+
+        if (externalId is not null)
+        {
+            query = query.Where(r => r.ExternalId == externalId);
         }
 
         if (afterOrdinal is { } last)

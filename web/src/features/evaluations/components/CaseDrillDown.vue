@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import * as stylex from '@stylexjs/stylex'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import Button from '@/shared/components/Button.vue'
 import { link, typo } from '@/shared/components/components.styles'
@@ -10,6 +10,7 @@ import LoadingState from '@/shared/components/LoadingState.vue'
 import Money from '@/shared/components/Money.vue'
 import SelectInput from '@/shared/components/SelectInput.vue'
 import StatusBadge from '@/shared/components/StatusBadge.vue'
+import TextInput from '@/shared/components/TextInput.vue'
 import { formatDuration, formatScore, formatTokens } from '@/shared/format'
 import Facts from '@/shared/layout/Facts.vue'
 import Grid from '@/shared/layout/Grid.vue'
@@ -17,30 +18,31 @@ import Inline from '@/shared/layout/Inline.vue'
 import Section from '@/shared/layout/Section.vue'
 import Stack from '@/shared/layout/Stack.vue'
 import Toolbar from '@/shared/layout/Toolbar.vue'
-import { caseChoices, diffOutputs, pivotCase } from '../comparison'
+import { diffLinePrefix, diffOutputs } from '../comparison'
 import { code } from '../evaluations.styles'
 import { compactJson } from '../json'
-import { useAllResults } from '../runQueries'
+import { useCaseResults } from '../runQueries'
 
 /**
  * One Case across every run of the Comparison: each run's status, score, prediction, output and cost side by side, the request
- * that produced it, and a diff between two runs' outputs.
+ * that produced it, and a diff between two runs' outputs. The Case is chosen by its dataset id, and each run is asked for that one
+ * Case's result (one request per run).
  */
 const props = defineProps<{ runs: { runId: string; label: string }[]; initialCase?: string }>()
-const loaded = ref(!!props.initialCase)
 const ids = computed(() => props.runs.map((r) => r.runId))
-const results = useAllResults(ids, loaded)
+const caseInput = ref(props.initialCase ?? '')
+const selected = ref(props.initialCase ?? '')
+const show = () => {
+  selected.value = caseInput.value.trim()
+}
+const results = useCaseResults(ids, selected)
 const pending = computed(() => results.value.some((q) => q.isPending))
 const failure = computed(() => results.value.find((q) => q.error)?.error ?? null)
-const perRun = computed(() =>
-  props.runs.map((r, i) => ({ runId: r.runId, results: results.value[i]?.data ?? [] })),
+/** Each run's result for the chosen Case, in run order; null where the run has none (not reached yet, or cancelled before it). */
+const pivot = computed(() =>
+  props.runs.map((r, i) => ({ runId: r.runId, result: results.value[i]?.data ?? null })),
 )
-const choices = computed(() => caseChoices(perRun.value))
-const selected = ref(props.initialCase ?? '')
-watch(choices, (list) => {
-  if (!selected.value || !list.includes(selected.value)) selected.value = list[0] ?? ''
-})
-const pivot = computed(() => (selected.value ? pivotCase(perRun.value, selected.value) : []))
+const found = computed(() => pivot.value.some((p) => p.result))
 const labelOf = (runId: string) => props.runs.find((r) => r.runId === runId)?.label ?? runId
 
 const left = ref(props.runs[0]?.runId ?? '')
@@ -69,25 +71,23 @@ const s = {
 <template>
   <Section title="Case drill-down" surface>
     <Stack :gap="16">
-      <template v-if="!loaded">
-        <span v-bind="s.caption"
-          >Load every run's Case Results to compare one Case across runs. Large runs take a few
-          seconds.</span
-        >
-        <div><Button @click="loaded = true">Load Case Results</Button></div>
-      </template>
+      <form novalidate @submit.prevent="show">
+        <Toolbar>
+          <Field v-slot="{ id }" label="Case id" help="The Case's id in the dataset, exactly."
+            ><TextInput :id="id" v-model="caseInput" mono
+          /></Field>
+          <Button type="submit">Show</Button>
+        </Toolbar>
+      </form>
+      <span v-if="!selected" v-bind="s.caption"
+        >Enter a Case id to compare that Case across runs.</span
+      >
       <LoadingState v-else-if="pending" />
       <ErrorState v-else-if="failure" :error="failure" />
-      <span v-else-if="!choices.length" v-bind="s.caption">No Case has a result yet.</span>
+      <span v-else-if="!found" v-bind="s.caption"
+        >No run has a result for Case <code>{{ selected }}</code> yet.</span
+      >
       <template v-else>
-        <Toolbar>
-          <Field v-slot="{ id }" label="Case id"
-            ><SelectInput
-              :id="id"
-              v-model="selected"
-              :options="choices.map((c) => ({ value: c, label: c }))"
-          /></Field>
-        </Toolbar>
         <Grid min="card" :gap="16">
           <Stack v-for="entry in pivot" :key="entry.runId" :gap="8">
             <span v-bind="s.mono">{{ labelOf(entry.runId) }}</span>
@@ -150,7 +150,7 @@ const s = {
             v-if="diff"
             v-bind="s.block"
             aria-label="Output diff"
-          ><span v-for="(part, index) in diff.parts" :key="index" v-bind="s.line(part.kind)">{{ diff.mode === 'lines' ? `${part.kind === 'added' ? '+' : part.kind === 'removed' ? '-' : ' '} ${part.text}` : part.text }}</span></pre>
+          ><span v-for="(part, index) in diff.parts" :key="index" v-bind="s.line(part.kind)">{{ diff.mode === 'lines' ? `${diffLinePrefix(part.kind)} ${part.text}` : part.text }}</span></pre>
           <span v-bind="s.caption"
             >Removed text is struck through, added text is highlighted; JSON outputs are compared
             field by field.</span
