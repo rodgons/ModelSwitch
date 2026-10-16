@@ -3,9 +3,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using ModelSwitch.Identity.Application;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Identity.Domain;
-using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Configuration;
-using ModelSwitch.Usage.Contracts;
 using Npgsql;
 
 namespace ModelSwitch.Identity.Infrastructure;
@@ -25,7 +23,7 @@ internal static class AdminWrite
     }
 }
 
-internal sealed class EfTenantAdminStore(IDbContextFactory<IdentityDbContext> contexts, IAuditWriter audit, IBudgets budgets) : ITenantAdminStore
+internal sealed class EfTenantAdminStore(IDbContextFactory<IdentityDbContext> contexts, IAuditWriter audit, ITenantBudgets budgets) : ITenantAdminStore
 {
     public async Task<IReadOnlyList<Tenant>> ListAsync(TenantGrant grant, int limit, (DateTimeOffset CreatedAt, Guid Id)? after, CancellationToken cancellationToken)
     {
@@ -105,7 +103,7 @@ internal sealed class EfTenantAdminStore(IDbContextFactory<IdentityDbContext> co
         // The Budget lives in the usage schema (the Reservation UPDATE consults it); it joins this transaction.
         await budgets.SetMonthlyLimitAsync(
             change.TenantId,
-            change.BudgetAmount is { } amount ? Money.FromUsd(amount) : null,
+            change.BudgetAmount,
             transaction.GetDbTransaction(),
             cancellationToken);
         await AdminWrite.CommitAsync(db, transaction, audit, entry, cancellationToken);

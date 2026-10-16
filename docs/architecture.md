@@ -143,11 +143,11 @@ Only `Contracts/` and the `*Module.cs` entry point are `public`. Everything else
 
 | Module | Owns (schema) | Exposes (Contracts) | Depends on |
 |---|---|---|---|
-| Identity | `identity` | `IApiKeyAuthenticator`, `ITenantDirectory`, `IAuditWriter`, current-principal accessors | — |
-| Registry | `registry` | `IProviderCatalog` (snapshot of providers, models, capabilities, current prices), `IAdapterFactory`, `IProviderHealth` | Adapters.Abstractions |
-| Routing | `routing` | `IRouter.Decide(RoutingInput) → RoutingDecision`, `IPolicyStore` | Registry, Identity (tenant model access) |
+| Identity | `identity` | `IApiKeyAuthenticator`, `ITenantDirectory`, `IAuditWriter`, current-principal accessors, `ITenantBudgets` (seam implemented by Usage) | — |
+| Registry | `registry` | `IProviderCatalog` (snapshot of providers, models, capabilities, current prices), `IAdapterFactory`, `IProviderHealth` | Adapters.Abstractions, Identity (audit, current administrator) |
+| Routing | `routing` | `IRouter.Decide(RoutingInput) → RoutingDecision`, `IPolicyStore` | Registry, Identity (tenant model access, audit) |
 | Inference | — (writes through Usage) | `IInferenceService` (used by the HTTP endpoint and by Evaluation), `ILimiter` (step 6, Rate and Concurrency Limits over Valkey; the HTTP use case calls it, so Evaluation traffic is not limited) | Routing, Registry, Usage, Identity, Adapters.Abstractions (runs Attempts through `IProviderAdapter`) |
-| Usage | `usage` | `IUsageLedger` (open/settle requests, Reservations), `IUsageQueries` | Registry (prices) |
+| Usage | `usage` | `IUsageLedger` (open/settle requests, Reservations), `IUsageQueries` | Registry (prices), Identity (implements `ITenantBudgets` for the admin limits endpoint) |
 | Evaluation | `evaluation` | — (endpoints and worker jobs only) | Inference, Usage |
 | Admin | — | — | Contracts/queries of all modules |
 

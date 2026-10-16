@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using ModelSwitch.Identity.Contracts;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Jobs;
 using ModelSwitch.SharedKernel.Persistence;
@@ -29,6 +30,7 @@ public static class UsageModule
         services.AddUsageContext(_appConnection);
         services.TryAddSingleton<IUsageLedger, EfUsageLedger>();
         services.TryAddSingleton<IBudgets, EfBudgets>();
+        services.TryAddSingleton<ITenantBudgets, TenantBudgetsAdapter>();
         services.TryAddSingleton<IReservationSweeper, EfReservationSweeper>();
         services.AddJobHandler<ReservationSweepJob>();
         services.AddRecurringJob(ReservationSweepJob.JobKind, ReservationSweepJob.Interval);

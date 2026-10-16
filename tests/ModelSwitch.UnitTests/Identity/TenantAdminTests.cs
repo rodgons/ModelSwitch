@@ -3,9 +3,7 @@ using Microsoft.Extensions.Time.Testing;
 using ModelSwitch.Identity.Application;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Identity.Domain;
-using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Errors;
-using ModelSwitch.Usage.Contracts;
 using Shouldly;
 
 namespace ModelSwitch.UnitTests.Identity;
@@ -114,18 +112,14 @@ internal sealed class FakeApiKeyAdminStore : IApiKeyAdminStore
     }
 }
 
-internal sealed class FakeBudgets : IBudgets
+internal sealed class FakeBudgets : ITenantBudgets
 {
-    public Dictionary<Guid, Money> Limits { get; } = [];
+    public Dictionary<Guid, decimal> Limits { get; } = [];
 
-    public Task SetMonthlyLimitAsync(Guid tenantId, Money? limit, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task<decimal?> GetMonthlyLimitAsync(Guid tenantId, CancellationToken cancellationToken)
+        => Task.FromResult<decimal?>(Limits.TryGetValue(tenantId, out var limit) ? limit : null);
 
-    public Task SetMonthlyLimitAsync(Guid tenantId, Money? limit, DbTransaction transaction, CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public Task<Money?> GetMonthlyLimitAsync(Guid tenantId, CancellationToken cancellationToken)
-        => Task.FromResult<Money?>(Limits.TryGetValue(tenantId, out var limit) ? limit : null);
-
-    public Task<BudgetStatus?> GetCurrentAsync(Guid tenantId, CancellationToken cancellationToken) => Task.FromResult<BudgetStatus?>(null);
+    public Task SetMonthlyLimitAsync(Guid tenantId, decimal? amount, DbTransaction transaction, CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 public sealed class TenantServiceTests
@@ -332,7 +326,7 @@ public sealed class TenantServiceTests
     public async Task A_null_budget_removes_it()
     {
         var tenant = _store.AddTenant("Acme");
-        _budgets.Limits[tenant.Id] = Money.FromUsd(5);
+        _budgets.Limits[tenant.Id] = 5m;
 
         var result = await Service().SetLimitsAsync(tenant.Id, new UpdateLimitsRequest(null, null, null, null), CancellationToken.None);
 

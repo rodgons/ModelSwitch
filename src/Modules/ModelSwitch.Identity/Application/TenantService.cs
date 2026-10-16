@@ -2,7 +2,6 @@ using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Identity.Domain;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Errors;
-using ModelSwitch.Usage.Contracts;
 
 namespace ModelSwitch.Identity.Application;
 
@@ -38,7 +37,7 @@ internal sealed record TenantDetailView(Guid Id, string Name, string Status, Dat
 /// </summary>
 internal sealed class TenantService(
     ITenantAdminStore store,
-    IBudgets budgets,
+    ITenantBudgets budgets,
     ICurrentAdministrator current,
     ITenantGrantChecker grants,
     VerifiedKeyCache keyCache,
@@ -199,7 +198,7 @@ internal sealed class TenantService(
         var audit = new AuditEntry(AuditActions.TenantLimitsChanged, "tenant", tenantId.ToString())
         {
             TenantId = tenantId,
-            Before = SummariseLimits(beforeRow?.RequestsPerMinute, beforeRow?.MaxConcurrent, beforeRow?.MaxRequestCost, beforeBudget?.Amount),
+            Before = SummariseLimits(beforeRow?.RequestsPerMinute, beforeRow?.MaxConcurrent, beforeRow?.MaxRequestCost, beforeBudget),
             After = SummariseLimits(requestsPerMinute, maxConcurrent, maxRequestCost, budget),
         };
         await store.SaveLimitsAsync(new TenantLimitsChange(tenantId, requestsPerMinute, maxConcurrent, maxRequestCost, budget, time.GetUtcNow()), audit, cancellationToken);
@@ -248,7 +247,7 @@ internal sealed class TenantService(
             TenantRules.ToWire(tenant.Status),
             tenant.CreatedAt,
             tenant.UpdatedAt,
-            ToView(row?.RequestsPerMinute, row?.MaxConcurrent, row?.MaxRequestCost, budget?.Amount),
+            ToView(row?.RequestsPerMinute, row?.MaxConcurrent, row?.MaxRequestCost, budget),
             new ModelAccessView(row?.AllowedAliases ?? [TenantRules.Wildcard]));
     }
 
