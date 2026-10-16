@@ -11,11 +11,8 @@ internal sealed record CaseError(string Code, string Message);
 /// <summary>The <c>case_result.error_code</c> values the Evaluation domain itself produces.</summary>
 internal static class CaseErrorCodes
 {
-    /// <summary>
-    /// A Prompt Version variable is absent from the Case input (evaluation.md section 2). Not in the api.md section 2 closed
-    /// set yet: it is a Case Result code, never an HTTP response.
-    /// </summary>
-    public const string TemplateVariableMissing = "template_variable_missing";
+    /// <summary>A Prompt Version variable is absent from the Case input (evaluation.md section 2). A Case Result code, never an HTTP response.</summary>
+    public static readonly string TemplateVariableMissing = ErrorCode.TemplateVariableMissing.Value;
 
     /// <summary>The judge model's reply did not follow the required format, so there is no score (the judge, a Provider, failed).</summary>
     public static readonly string JudgeReplyUnparseable = ErrorCode.ProviderError.Value;

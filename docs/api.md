@@ -161,6 +161,7 @@ Every error has one code from this closed set. The `type` groups codes and maps 
 | `deadline_exceeded` | 504 | `timeout_error` | Deadline exceeded | Maybe |
 | `stream_interrupted` | — (SSE event) | `provider_error` | Stream interrupted | Maybe, but the output may be partial |
 | `run_cost_cap_reached` | — (Evaluation Run `error`) | `budget_error` | Run cost cap reached | No. The run's `maxEstimatedCost` would be exceeded; remaining Cases are `skipped` |
+| `template_variable_missing` | — (Case Result `error_code`) | `invalid_request_error` | Template variable missing | No. A Prompt Version variable is absent from the Case `input`; the Case is `errored` |
 | `internal_error` | 500 | `api_error` | Internal error | Maybe |
 | `validation_failed` | 400 | `invalid_request_error` | Validation failed | No. Admin API only (policy, dataset, limits… bodies) |
 | `unauthenticated` | 401 | `authentication_error` | Unauthenticated | No. Admin API only (no session, or wrong email or password; the same answer for an unknown account, a deactivated one and a lockout) |

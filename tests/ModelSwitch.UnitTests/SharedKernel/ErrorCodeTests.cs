@@ -29,6 +29,7 @@ public sealed class ErrorCodeTests
         ("deadline_exceeded", 504, "timeout_error"),
         ("stream_interrupted", null, "provider_error"),
         ("run_cost_cap_reached", null, "budget_error"),
+        ("template_variable_missing", null, "invalid_request_error"),
         ("internal_error", 500, "api_error"),
         ("validation_failed", 400, "invalid_request_error"),
         ("unauthenticated", 401, "authentication_error"),

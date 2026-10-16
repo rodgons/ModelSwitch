@@ -42,7 +42,7 @@ Each Evaluator has a kind, a semantic **version** (bumped whenever its scoring c
 
 Rules:
 - An unparseable output is a **failed** Case (score 0, `status=failed`) and is counted in aggregates. It is never dropped.
-- Provider errors make a Case **errored** (no score). Aggregates report quality over scored Cases **and** the errored rate, as two separate numbers (FR-09: failed cases included in failure stats).
+- Provider errors make a Case **errored** (no score). A judge reply that does not follow the required `{"score": 0..1, "reason"?: string}` format counts as a Provider error (`provider_error`): the judge failed to answer usably. Aggregates report quality over scored Cases **and** the errored rate, as two separate numbers (FR-09: failed cases included in failure stats).
 - `llm_judge` results are labelled as model-judged in the UI. Judge calls are made through the same `IInferenceService`. Each one is its own Inference Request (Request Origin `evaluation`, same `evaluation_run_id`), so it has ordinary Usage Records and counts toward the Budget and the run's cost cap. Its tokens and cost are stored on the Case Result in separate `judge_*` columns. Run aggregates report `cost.candidate`, `cost.judge` and `cost.total`. The Comparison view lines configurations up on **candidate** cost, the comparable number, and shows judge cost as a separate labelled column. The request detail page shows "judge for Case X of run Y" by following the Case Result's link.
 - All metric code lives in the Evaluation module's `Domain/Metrics` as pure functions with golden-value unit tests (e.g. scikit-learn-computed fixtures for P/R/F1).
 

@@ -26,6 +26,7 @@ public sealed class ErrorCode
     public static readonly ErrorCode DeadlineExceeded = new("deadline_exceeded", 504, "timeout_error", "Deadline exceeded");
     public static readonly ErrorCode StreamInterrupted = new("stream_interrupted", null, "provider_error", "Stream interrupted");
     public static readonly ErrorCode RunCostCapReached = new("run_cost_cap_reached", null, "budget_error", "Run cost cap reached");
+    public static readonly ErrorCode TemplateVariableMissing = new("template_variable_missing", null, "invalid_request_error", "Template variable missing");
     public static readonly ErrorCode InternalError = new("internal_error", 500, "api_error", "Internal error");
     public static readonly ErrorCode ValidationFailed = new("validation_failed", 400, "invalid_request_error", "Validation failed");
     public static readonly ErrorCode Unauthenticated = new("unauthenticated", 401, "authentication_error", "Unauthenticated");
@@ -56,6 +57,7 @@ public sealed class ErrorCode
         DeadlineExceeded,
         StreamInterrupted,
         RunCostCapReached,
+        TemplateVariableMissing,
         InternalError,
         ValidationFailed,
         Unauthenticated,
