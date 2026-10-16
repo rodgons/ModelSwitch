@@ -40,7 +40,7 @@ export const upload = stylex.create({
     fontFamily: font.sans,
     fontSize: text.bodySize,
     color: color.fgDefault,
-    minHeight: '32px',
+    minHeight: space.s32,
     maxWidth: '100%',
     outline: { default: 'none', ':focus-visible': `2px solid ${color.focusRing}` },
     outlineOffset: '2px',

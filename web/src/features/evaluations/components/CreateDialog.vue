@@ -36,25 +36,46 @@ watch(tenantOptions, (options) => {
   if (!form.tenantId && options.length) form.tenantId = options[0]!.value
 })
 
-const noun = computed(() => (props.kind === 'dataset' ? 'Dataset' : 'Prompt'))
-const save = useFormMutation(
-  async () => {
-    if (props.kind === 'dataset') {
+/** What differs per kind: its name, whether it has a task kind, the lists it refreshes, and how it is created (returns its page). */
+interface KindConfig {
+  noun: string
+  hasTaskKind: boolean
+  invalidates: readonly unknown[]
+  create: () => Promise<string>
+}
+const kinds: Record<typeof props.kind, KindConfig> = {
+  dataset: {
+    noun: 'Dataset',
+    hasTaskKind: true,
+    invalidates: evaluationKeys.datasets,
+    create: async () => {
       const created = data(
         await api.POST('/admin/datasets', {
           body: { tenantId: form.tenantId || null, name: form.name, taskKind: form.taskKind },
         }),
       )
       return `/evaluations/datasets/${created.id}`
-    }
-    const created = data(
-      await api.POST('/admin/prompts', {
-        body: { tenantId: form.tenantId || null, name: form.name },
-      }),
-    )
-    return `/evaluations/prompts/${created.id}`
+    },
   },
-  [props.kind === 'dataset' ? evaluationKeys.datasets : evaluationKeys.prompts],
+  prompt: {
+    noun: 'Prompt',
+    hasTaskKind: false,
+    invalidates: evaluationKeys.prompts,
+    create: async () => {
+      const created = data(
+        await api.POST('/admin/prompts', {
+          body: { tenantId: form.tenantId || null, name: form.name },
+        }),
+      )
+      return `/evaluations/prompts/${created.id}`
+    },
+  },
+}
+const config = computed(() => kinds[props.kind])
+const noun = computed(() => config.value.noun)
+const save = useFormMutation(
+  () => config.value.create(),
+  [config.value.invalidates],
   (path) => {
     visible.value = false
     void router.push(path)
@@ -78,7 +99,7 @@ const save = useFormMutation(
           ><SelectInput :id="id" v-model="form.tenantId" :options="tenantOptions"
         /></Field>
         <Field
-          v-if="kind === 'dataset'"
+          v-if="config.hasTaskKind"
           v-slot="{ id }"
           label="Task kind"
           help="Decides what each Case's expected value is and which Evaluators fit."
