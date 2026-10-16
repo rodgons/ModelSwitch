@@ -7,7 +7,7 @@ This document implements FR-06 and FR-07 (spending) and PRD §14.5 ("durable usa
 1. **The Usage Record is authoritative. Telemetry is not.** Metrics and traces may be sampled, dropped or delayed. Usage Records are written transactionally and never sampled.
 2. **Every Attempt gets exactly one Usage Record**, including failed, cancelled and ambiguous Attempts. Every Inference Request gets a `usage_status`.
 3. **Estimated Cost is never presented as a charge.** The API field, the UI label and the export header all say "estimated".
-4. **History is immutable.** A Usage Record keeps the `model_price_id` it was costed with. Changing a Price creates a new row and leaves recorded costs unchanged.
+4. **History is immutable.** A Usage Record keeps the `model_price_id` it was costed with. Changing a Price creates a new row and leaves recorded costs unchanged. The admin API (`POST /admin/models/{id}/prices`) only appends. A Price dated in the future bumps the config version when it is saved, but the snapshot only reads Prices already in force, so it takes effect at the first snapshot rebuild after its `effective_from` (the next config change); date a Price now unless a later switch-over is wanted.
 
 ## 2. Usage Source
 
@@ -57,7 +57,7 @@ INSERT outbox_event('usage.request_completed', {requestId, tenantId, …})
 
 If settlement fails (e.g. the database is briefly unavailable), it is retried in-process with backoff for up to 10 s, then handed to the sweeper. The client response is **not** delayed past that. For non-streaming responses settlement happens after the response is written, and for streaming responses after `[DONE]`.
 
-**Sweep** (worker, every 30 s; the core is `IReservationSweeper.SweepAbandonedAsync`, scheduling belongs to the jobs infrastructure): Reservations with `status='held' AND expires_at < now()` mean the instance died or settlement failed for good. For each one, in its own transaction, the sweeper:
+**Sweep** (worker, every 30 s; the core is `IReservationSweeper.SweepAbandonedAsync`, run by the recurring `usage.sweep_reservations` job): Reservations with `status='held' AND expires_at < now()` mean the instance died or settlement failed for good. For each one, in its own transaction, the sweeper:
 - marks the request `abandoned`, `error_code = internal_error`, `usage_status = unavailable`
 - writes one `usage_record` with `usage_source = unavailable` and cost = the held amount (pessimistic: treated as possibly billed), and the `usage.request_completed` outbox event
 - locks the request row before the Reservation, as settlement does, and does nothing if the request is no longer `running`

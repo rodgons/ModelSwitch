@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ModelSwitch.Routing.Application;
 using ModelSwitch.Routing.Contracts;
+using ModelSwitch.Routing.Endpoints;
 using ModelSwitch.Routing.Infrastructure;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Persistence;
@@ -22,6 +23,8 @@ public static class RoutingModule
         services.TryAddSingleton<Contracts.IRouter, Router>();
         services.TryAddSingleton<IPolicyDefinitionValidator, PolicyDefinitionValidator>();
         services.AddRoutingContext(_appConnection);
+        services.TryAddSingleton<PolicyAdminService>();
+        services.TryAddSingleton<AliasAdminService>();
         services.TryAddSingleton<EfPolicyStore>();
         services.TryAddSingleton<IPolicyStore>(provider => provider.GetRequiredService<EfPolicyStore>());
         services.TryAddSingleton<IPolicyCatalogSource>(provider => provider.GetRequiredService<EfPolicyStore>());
@@ -37,7 +40,11 @@ public static class RoutingModule
         return services;
     }
 
-    public static IEndpointRouteBuilder MapRoutingEndpoints(this IEndpointRouteBuilder app) => app;
+    public static IEndpointRouteBuilder MapRoutingEndpoints(this IEndpointRouteBuilder app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        return RoutingAdminEndpoints.Map(app);
+    }
 
     private static void AddRoutingContext(this IServiceCollection services, string connectionKey)
     {

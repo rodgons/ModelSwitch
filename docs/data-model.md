@@ -141,11 +141,22 @@ Indexes: `(tenant_id, started_at desc)`, `(started_at desc)`, `(status, started_
 
 ## Background processing (`jobs` schema, shared infrastructure)
 
-**outbox_event**: `id`, `type`, `payload jsonb`, `occurred_at`, `published_at null`. Index `(published_at) where published_at is null`. Created by plain idempotent DDL in the Migrator (`JobsSchemaMigrator`, in `ModelSwitch.Configuration`), written through `SharedKernel.Outbox.OutboxWriter` in the writer's own transaction. Settlement and the sweeper append `usage.request_completed` with metadata only (ids, alias, status, tokens, cost).
+**outbox_event**: `id`, `type`, `payload jsonb`, `occurred_at`, `published_at null`, `attempts`, `next_attempt_at null`, `last_error null`. Index `(published_at) where published_at is null`. Written through `SharedKernel.Outbox.OutboxWriter` in the writer's own transaction. Settlement and the sweeper append `usage.request_completed` with metadata only (ids, alias, status, tokens, cost). The relay (below) sets `published_at`; `attempts`, `next_attempt_at` and `last_error` record a consumer failure and its backoff.
 
 **processed_event**: `consumer text`, `event_id uuid`, `processed_at`, pk both. This is the idempotency guard (NFR-06).
 
-**job**: `id`, `kind`, `payload jsonb`, `status (pending|running|succeeded|failed|dead)`, `attempts`, `max_attempts`, `run_after`, `locked_by text null`, `locked_until timestamptz null`, `last_error text null`, `created_at`, `updated_at`. Claimed with `FOR UPDATE SKIP LOCKED` where `status='pending' and run_after<=now()` or the lease has expired (crash recovery, NFR-02).
+**job**: `id`, `kind`, `payload jsonb`, `status (pending|running|succeeded|dead)`, `attempts`, `max_attempts`, `run_after`, `locked_by text null`, `locked_until timestamptz null`, `last_error text null`, `dedupe_key text null` (unique where not null), `created_at`, `updated_at`. A failed attempt that will be retried goes back to `pending` with a later `run_after`, so there is no separate `failed` state.
+
+All three tables are created by plain idempotent DDL in the Migrator (`SharedKernel.Jobs.JobsSchemaMigrator`; the `jobs` schema is shared infrastructure, owned by no module).
+
+### How the worker uses them
+
+- **Enqueue.** `IJobEnqueuer.EnqueueAsync(connection, transaction, request)` inserts in the caller's transaction, so the job exists only if the caller commits. `DedupeKey` makes a second enqueue a no-op, and `UniqueWhileActive` skips the enqueue while a job of that kind is pending or running.
+- **Claim.** One `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING` takes a job where `status='pending' and run_after<=now`, or `status='running' and locked_until<now and attempts<max_attempts` (the worker died). Claiming increments `attempts` and sets `locked_by` and `locked_until = now + LeaseDuration` (60 s). A `running` job whose lease expired on its last attempt is set to `dead` instead.
+- **Heartbeat.** While the handler runs, the worker extends `locked_until` every 15 s. Every outcome update is guarded by `locked_by` and `attempts`, so a worker that lost its lease cannot overwrite the new owner. A lost lease cancels the handler's token.
+- **Retry and dead-letter.** A handler exception sets `last_error` (exception type and a bounded message, never payload content) and the job returns to `pending` with `run_after = now + 5 s * 2^(attempts-1)` (cap 15 min). At `max_attempts` (default 5), or on `PermanentJobFailureException`, the job becomes `dead` and stays for inspection until retention removes it. A worker that is stopping hands its job back without spending an attempt.
+- **Recurring jobs.** Each replica tries to insert the job for the current slot (`floor(now / interval)`) with `dedupe_key = kind@slot`. The unique index lets exactly one insert win, so a recurring job runs once per interval however many replicas exist. A slot missed while every worker was down is skipped. The Reservation sweeper is `usage.sweep_reservations`, every 30 s.
+- **Outbox relay.** Per event, in one transaction: lock the oldest due unpublished event (`FOR UPDATE SKIP LOCKED`) whose type has a registered consumer, insert `(consumer, event_id)` into `processed_event` (a conflict means the consumer already ran), call the consumer on the same connection and transaction, then set `published_at`. A throwing consumer rolls the whole event back and delays it with the same exponential backoff, without blocking later events. Events with no registered consumer stay unpublished, so the Phase 4 usage rollup consumer will still receive the backlog.
 
 ## Retention
 

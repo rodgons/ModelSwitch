@@ -5,7 +5,7 @@ namespace ModelSwitch.SharedKernel.Outbox;
 /// <summary>
 /// The write side of the transactional outbox (architecture.md section 3, data-model.md "Background processing"). A module
 /// appends its event on its own connection and transaction, so the event commits or rolls back with the change that caused it.
-/// The relay that publishes <c>jobs.outbox_event</c> rows belongs to the worker's jobs infrastructure.
+/// The worker's <c>OutboxRelay</c> (<c>SharedKernel.Jobs</c>) publishes <c>jobs.outbox_event</c> rows to registered consumers.
 /// </summary>
 public static class OutboxWriter
 {
