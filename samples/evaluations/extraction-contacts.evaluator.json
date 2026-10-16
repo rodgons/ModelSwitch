@@ -1,0 +1,12 @@
+{
+  "kind": "json_fields",
+  "version": "1",
+  "config": {
+    "defaultComparator": "exact",
+    "fields": {
+      "name": { "comparator": "casefold" },
+      "email": { "comparator": "casefold" }
+    },
+    "passThreshold": 1
+  }
+}

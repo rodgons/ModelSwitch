@@ -1,0 +1,9 @@
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "Classify the support ticket into exactly one intent: billing, bug, feature_request or account_access. Reply with only the label, in lowercase, with no punctuation or explanation."
+    },
+    { "role": "user", "content": "{{ticket}}" }
+  ]
+}

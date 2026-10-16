@@ -11,7 +11,7 @@ namespace ModelSwitch.Evaluation.Domain.Metrics;
 internal static partial class TokenF1
 {
     // Python's string.punctuation.
-    private const string AsciiPunctuation = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+    private const string _asciiPunctuation = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
     public static decimal Score(string prediction, string reference)
     {
@@ -51,7 +51,7 @@ internal static partial class TokenF1
         var withoutPunctuation = new StringBuilder(lower.Length);
         foreach (var c in lower)
         {
-            if (!AsciiPunctuation.Contains(c, StringComparison.Ordinal))
+            if (!_asciiPunctuation.Contains(c, StringComparison.Ordinal))
             {
                 withoutPunctuation.Append(c);
             }

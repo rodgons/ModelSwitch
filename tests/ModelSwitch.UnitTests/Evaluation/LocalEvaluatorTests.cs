@@ -31,12 +31,12 @@ public sealed class ExactMatchEvaluatorTests
 
 public sealed class JsonFieldsEvaluatorTests
 {
-    private const string Expected = """{"name":"Ana Silva","email":"ana@example.com"}""";
+    private const string _expected = """{"name":"Ana Silva","email":"ana@example.com"}""";
 
     [Fact]
     public void All_fields_matching_passes_with_score_one_and_predicted_is_the_parsed_object()
     {
-        var score = Score("json_fields", "{}", Expected, """{"name":"Ana Silva","email":"ana@example.com","extra":1}""");
+        var score = Score("json_fields", "{}", _expected, """{"name":"Ana Silva","email":"ana@example.com","extra":1}""");
 
         score.Status.ShouldBe(CaseStatus.Passed);
         score.Score.ShouldBe(1m);
@@ -48,7 +48,7 @@ public sealed class JsonFieldsEvaluatorTests
     [Fact]
     public void The_score_is_the_fraction_of_expected_fields_matched_and_the_default_pass_threshold_is_one()
     {
-        var score = Score("json_fields", "{}", Expected, """{"name":"Ana Silva","email":"ANA@example.com"}""");
+        var score = Score("json_fields", "{}", _expected, """{"name":"Ana Silva","email":"ANA@example.com"}""");
 
         score.Score.ShouldBe(0.5m);
         score.Status.ShouldBe(CaseStatus.Failed);
@@ -57,12 +57,12 @@ public sealed class JsonFieldsEvaluatorTests
 
     [Fact]
     public void A_pass_threshold_below_one_passes_partial_matches()
-        => Score("json_fields", """{"passThreshold":0.5}""", Expected, """{"name":"Ana Silva"}""").Status.ShouldBe(CaseStatus.Passed);
+        => Score("json_fields", """{"passThreshold":0.5}""", _expected, """{"name":"Ana Silva"}""").Status.ShouldBe(CaseStatus.Passed);
 
     [Fact]
     public void A_missing_field_does_not_match_unless_null_is_expected()
     {
-        Score("json_fields", "{}", Expected, """{"name":"Ana Silva"}""").Score.ShouldBe(0.5m);
+        Score("json_fields", "{}", _expected, """{"name":"Ana Silva"}""").Score.ShouldBe(0.5m);
         Score("json_fields", "{}", """{"name":null,"email":"bob@example.org"}""", """{"email":"bob@example.org"}""").Score.ShouldBe(1m);
         Score("json_fields", "{}", """{"name":null}""", """{"name":null}""").Score.ShouldBe(1m);
         Score("json_fields", "{}", """{"name":null}""", """{"name":"Bob"}""").Score.ShouldBe(0m);
@@ -73,13 +73,13 @@ public sealed class JsonFieldsEvaluatorTests
     {
         const string config = """{"fields":{"email":{"comparator":"casefold"}}}""";
 
-        Score("json_fields", config, Expected, """{"name":"Ana Silva","email":" ANA@Example.com "}""").Score.ShouldBe(1m);
-        Score("json_fields", config, Expected, """{"name":"ana silva","email":"ana@example.com"}""").Score.ShouldBe(0.5m);
+        Score("json_fields", config, _expected, """{"name":"Ana Silva","email":" ANA@Example.com "}""").Score.ShouldBe(1m);
+        Score("json_fields", config, _expected, """{"name":"ana silva","email":"ana@example.com"}""").Score.ShouldBe(0.5m);
     }
 
     [Fact]
     public void The_default_comparator_applies_to_fields_without_their_own()
-        => Score("json_fields", """{"defaultComparator":"casefold"}""", Expected, """{"name":"ANA SILVA","email":"ana@EXAMPLE.com"}""").Score.ShouldBe(1m);
+        => Score("json_fields", """{"defaultComparator":"casefold"}""", _expected, """{"name":"ANA SILVA","email":"ana@EXAMPLE.com"}""").Score.ShouldBe(1m);
 
     [Fact]
     public void Exact_comparator_compares_json_values_numbers_by_value_and_strings_ordinally()
@@ -118,7 +118,7 @@ public sealed class JsonFieldsEvaluatorTests
     [Fact]
     public void Unparseable_output_fails_with_score_zero_and_flags_the_parse_failure()
     {
-        var score = Score("json_fields", "{}", Expected, "Sure! The name is Ana.");
+        var score = Score("json_fields", "{}", _expected, "Sure! The name is Ana.");
 
         score.Status.ShouldBe(CaseStatus.Failed);
         score.Score.ShouldBe(0m);
@@ -129,18 +129,18 @@ public sealed class JsonFieldsEvaluatorTests
 
     [Fact]
     public void Output_that_is_json_but_not_an_object_is_a_parse_failure()
-        => Score("json_fields", "{}", Expected, "[1,2]").ScoreDetails.GetProperty("parseFailure").GetBoolean().ShouldBeTrue();
+        => Score("json_fields", "{}", _expected, "[1,2]").ScoreDetails.GetProperty("parseFailure").GetBoolean().ShouldBeTrue();
 
     [Fact]
     public void Output_wrapped_in_a_markdown_json_fence_is_accepted()
     {
-        Score("json_fields", "{}", Expected, "```json\n{\"name\":\"Ana Silva\",\"email\":\"ana@example.com\"}\n```").Score.ShouldBe(1m);
-        Score("json_fields", "{}", Expected, "  ```\n{\"name\":\"Ana Silva\",\"email\":\"ana@example.com\"}```  ").Score.ShouldBe(1m);
+        Score("json_fields", "{}", _expected, "```json\n{\"name\":\"Ana Silva\",\"email\":\"ana@example.com\"}\n```").Score.ShouldBe(1m);
+        Score("json_fields", "{}", _expected, "  ```\n{\"name\":\"Ana Silva\",\"email\":\"ana@example.com\"}```  ").Score.ShouldBe(1m);
     }
 
     [Fact]
     public void Json_with_prose_around_it_is_still_a_parse_failure()
-        => Score("json_fields", "{}", Expected, "Here you go: {\"name\":\"Ana Silva\",\"email\":\"ana@example.com\"}")
+        => Score("json_fields", "{}", _expected, "Here you go: {\"name\":\"Ana Silva\",\"email\":\"ana@example.com\"}")
             .ScoreDetails.GetProperty("parseFailure").GetBoolean().ShouldBeTrue();
 
     [Fact]
@@ -159,12 +159,12 @@ public sealed class JsonFieldsEvaluatorTests
 
 public sealed class ClassificationEvaluatorTests
 {
-    private const string Config = """{"labels":["billing","bug","feature"]}""";
+    private const string _config = """{"labels":["billing","bug","feature"]}""";
 
     [Fact]
     public void The_trimmed_output_matching_the_expected_label_passes()
     {
-        var score = Score("classification", Config, "\"billing\"", " billing\n");
+        var score = Score("classification", _config, "\"billing\"", " billing\n");
 
         score.Status.ShouldBe(CaseStatus.Passed);
         score.Score.ShouldBe(1m);
@@ -174,7 +174,7 @@ public sealed class ClassificationEvaluatorTests
     [Fact]
     public void Another_label_fails_with_that_label_predicted()
     {
-        var score = Score("classification", Config, "\"billing\"", "bug");
+        var score = Score("classification", _config, "\"billing\"", "bug");
 
         score.Status.ShouldBe(CaseStatus.Failed);
         score.Score.ShouldBe(0m);
@@ -189,7 +189,7 @@ public sealed class ClassificationEvaluatorTests
     [InlineData("")]
     public void Output_matching_no_label_exactly_is_unparseable_and_failed(string output)
     {
-        var score = Score("classification", Config, "\"billing\"", output);
+        var score = Score("classification", _config, "\"billing\"", output);
 
         score.Status.ShouldBe(CaseStatus.Failed);
         score.Score.ShouldBe(0m);
@@ -199,7 +199,7 @@ public sealed class ClassificationEvaluatorTests
 
     [Fact]
     public void An_expected_label_that_is_not_a_string_errors_the_case()
-        => Score("classification", Config, "{\"label\":\"billing\"}", "billing").Status.ShouldBe(CaseStatus.Errored);
+        => Score("classification", _config, "{\"label\":\"billing\"}", "billing").Status.ShouldBe(CaseStatus.Errored);
 }
 
 public sealed class ReferenceSimilarityEvaluatorTests

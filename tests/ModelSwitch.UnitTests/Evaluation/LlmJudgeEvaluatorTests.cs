@@ -6,9 +6,9 @@ namespace ModelSwitch.UnitTests.Evaluation;
 
 public sealed class LlmJudgeEvaluatorTests
 {
-    private const string Config = """{"judgeAlias":"judge","rubric":"Score 1 if the answer names the capital correctly."}""";
+    private const string _config = """{"judgeAlias":"judge","rubric":"Score 1 if the answer names the capital correctly."}""";
 
-    private static IJudgedEvaluator Judge(string config = Config) => (IJudgedEvaluator)Create("llm_judge", config);
+    private static IJudgedEvaluator Judge(string config = _config) => (IJudgedEvaluator)Create("llm_judge", config);
 
     private static CaseContext Context(string expected = "\"Paris\"")
         => new(Json("""{"question":"Capital of France?"}"""), Json(expected), "It is Paris.");

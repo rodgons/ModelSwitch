@@ -5,7 +5,7 @@ namespace ModelSwitch.UnitTests.Evaluation;
 
 public sealed class MetricsTests
 {
-    private const decimal Tolerance = 0.0000001m;
+    private const decimal _tolerance = 0.0000001m;
 
     [Fact]
     public void Accuracy_is_correct_over_total_and_null_when_there_is_nothing_to_score()
@@ -46,20 +46,20 @@ public sealed class MetricsTests
         report.Labels.ShouldBe(["billing", "bug", "feature"]);
         var billing = report.PerClass[0];
         billing.Label.ShouldBe("billing");
-        billing.Precision.ShouldBe(0.6666667m, Tolerance);
-        billing.Recall.ShouldBe(0.6666667m, Tolerance);
-        billing.F1.ShouldBe(0.6666667m, Tolerance);
+        billing.Precision.ShouldBe(0.6666667m, _tolerance);
+        billing.Recall.ShouldBe(0.6666667m, _tolerance);
+        billing.F1.ShouldBe(0.6666667m, _tolerance);
         billing.Support.ShouldBe(3);
 
         var bug = report.PerClass[1];
-        bug.Precision.ShouldBe(0.6666667m, Tolerance);
+        bug.Precision.ShouldBe(0.6666667m, _tolerance);
         bug.Recall.ShouldBe(0.5m);
-        bug.F1.ShouldBe(0.5714286m, Tolerance);
+        bug.F1.ShouldBe(0.5714286m, _tolerance);
         bug.Support.ShouldBe(4);
 
         var feature = report.PerClass[2];
         feature.Precision.ShouldBe(0.5m);
-        feature.Recall.ShouldBe(0.3333333m, Tolerance);
+        feature.Recall.ShouldBe(0.3333333m, _tolerance);
         feature.F1.ShouldBe(0.4m);
         feature.Support.ShouldBe(3);
     }
@@ -69,7 +69,7 @@ public sealed class MetricsTests
     {
         var report = ClassificationMetrics.Compute(_yTrue, _yPred);
 
-        report.MacroF1!.Value.ShouldBe(0.5460317m, Tolerance);
+        report.MacroF1!.Value.ShouldBe(0.5460317m, _tolerance);
         report.Accuracy.ShouldBe(0.5m);
     }
 
@@ -99,7 +99,7 @@ public sealed class MetricsTests
         report.PerClass[1].F1.ShouldBe(0m);
         report.PerClass[2].Support.ShouldBe(0);
         report.PerClass[2].Recall.ShouldBe(0m);
-        report.MacroF1!.Value.ShouldBe(0.1666667m, Tolerance);
+        report.MacroF1!.Value.ShouldBe(0.1666667m, _tolerance);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class MetricsTests
 
         accuracy.Keys.ShouldBe(["email", "name"]);
         accuracy["name"].ShouldBe(0.5m);
-        accuracy["email"].ShouldBe(0.6666667m, Tolerance);
+        accuracy["email"].ShouldBe(0.6666667m, _tolerance);
     }
 
     [Fact]

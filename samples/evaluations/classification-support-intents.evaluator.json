@@ -1,0 +1,7 @@
+{
+  "kind": "classification",
+  "version": "1",
+  "config": {
+    "labels": ["billing", "bug", "feature_request", "account_access"]
+  }
+}
