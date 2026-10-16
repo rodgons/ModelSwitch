@@ -20,6 +20,7 @@ const links = [
   { to: '/providers', label: 'Providers', short: 'Pr' },
   { to: '/routing', label: 'Routing', short: 'Ro' },
   { to: '/tenants', label: 'Tenants', short: 'Te' },
+  { to: '/evaluations', label: 'Evaluations', short: 'Ev' },
 ]
 const themes: { value: ThemeChoice; label: string }[] = [
   { value: 'system', label: 'System' },
