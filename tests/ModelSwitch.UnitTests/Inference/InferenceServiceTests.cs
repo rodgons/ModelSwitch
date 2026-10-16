@@ -30,6 +30,7 @@ public sealed class InferenceServiceTests : IDisposable
     private readonly FakeSnapshots _snapshots = new();
     private readonly FakeAdapters _adapters = new();
     private readonly FakeLedger _ledger = new();
+    private readonly FakePolicyStore _policies = new();
     private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero));
     private readonly ProviderHealth _health;
 
@@ -44,10 +45,12 @@ public sealed class InferenceServiceTests : IDisposable
     private InferenceService Service(IProviderHealth? health = null) => new(
         _snapshots,
         new Router(),
+        _policies,
         new InputTokenEstimator(),
         health ?? _health,
         new AttemptExecutor(_adapters, health ?? _health, new InputTokenEstimator(), new RandomJitterSource(), _time, NullLogger<AttemptExecutor>.Instance),
         _ledger,
+        new CostCalculator(),
         new InferenceMetrics(_meters),
         new LimitsMetrics(_meters),
         _time,
@@ -781,6 +784,172 @@ public sealed class InferenceServiceTests : IDisposable
 
         result.Error.Code.ShouldBe(ErrorCode.ModelNotFound);
         _ledger.Settled.Single().ErrorCode.ShouldBe("model_not_found");
+    }
+
+    // ---- Evaluation traffic: Request Origin, pinned targets and what a Case Result records ----
+
+    private static readonly Guid _runId = Guid.CreateVersion7();
+
+    // m1 and m2 are both in the catalog, whichever ones the policy lists.
+    private static ConfigurationSnapshot WithBothModels(ConfigurationSnapshot snapshot)
+        => snapshot with { Routing = snapshot.Routing with { Models = new Dictionary<Guid, CandidateModel> { [_target.ProviderModelId] = Model(_target), [_other.ProviderModelId] = Model(_other) } } };
+
+    private static InferenceRequest EvaluationRequest(InferenceTarget target)
+        => new(Guid.CreateVersion7(), Guid.CreateVersion7(), target, new NeutralChatRequest([new NeutralMessage(MessageRole.User, "hi")]))
+        {
+            Origin = RequestOrigin.Evaluation,
+            EvaluationRunId = _runId,
+        };
+
+    public static TheoryData<RequestOrigin, bool, bool, bool> OriginCases() => new()
+    {
+        // origin, has API Key, has run, valid
+        { RequestOrigin.Evaluation, false, true, true },
+        { RequestOrigin.Evaluation, false, false, false },
+        { RequestOrigin.Evaluation, true, true, false },
+        { RequestOrigin.Api, true, false, true },
+        { RequestOrigin.Api, true, true, false },
+    };
+
+    [Theory]
+    [MemberData(nameof(OriginCases))]
+    public void Evaluation_traffic_carries_its_run_and_no_api_key_and_only_it_carries_a_run(RequestOrigin origin, bool hasKey, bool hasRun, bool valid)
+    {
+        var request = Request() with
+        {
+            Origin = origin,
+            ApiKeyId = hasKey ? Guid.CreateVersion7() : null,
+            EvaluationRunId = hasRun ? _runId : null,
+        };
+
+        (request.OriginViolation() is null).ShouldBe(valid);
+    }
+
+    [Fact]
+    public async Task A_request_breaking_the_origin_invariants_is_refused_before_anything_is_recorded()
+    {
+        var request = EvaluationRequest(InferenceTarget.For("balanced")) with { EvaluationRunId = null };
+
+        await Should.ThrowAsync<ArgumentException>(() => Service().CompleteAsync(request, CancellationToken.None));
+        await Should.ThrowAsync<ArgumentException>(() => Service().StreamAsync(request, CancellationToken.None));
+        _ledger.Opened.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_evaluation_request_is_opened_with_its_origin_and_run_and_no_api_key()
+    {
+        await Service().CompleteAsync(EvaluationRequest(InferenceTarget.For("balanced")), CancellationToken.None);
+
+        var opened = _ledger.Opened.Single();
+        (opened.Origin, opened.ApiKeyId, opened.EvaluationRunId, opened.RequestedAlias).ShouldBe((RequestOrigin.Evaluation, (Guid?)null, (Guid?)_runId, "balanced"));
+        opened.Reservation.ShouldNotBeNull("the Budget applies to Evaluation traffic");
+    }
+
+    [Fact]
+    public void A_request_built_from_a_target_takes_its_alias_from_it()
+    {
+        EvaluationRequest(InferenceTarget.For("balanced", _policyId, 3)).Alias.ShouldBe("balanced");
+        EvaluationRequest(InferenceTarget.Pinned(_other.ProviderModelId)).Alias.ShouldBeEmpty();
+        Request().Target.ShouldBe(new InferenceTarget.ModelAlias("balanced"));
+    }
+
+    [Fact]
+    public async Task A_pinned_policy_version_that_is_the_latest_is_taken_from_the_snapshot()
+    {
+        var result = await Service().CompleteAsync(EvaluationRequest(InferenceTarget.For("balanced", _policyId, 1)), CancellationToken.None);
+
+        result.IsSuccess.ShouldBeTrue();
+        _policies.Reads.ShouldBe(0);
+        _ledger.Settled.Single().PolicyVersion.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task An_older_pinned_policy_version_is_read_from_the_store_and_routed_on()
+    {
+        // The latest version (2) lists m1; the frozen version 1 listed m2.
+        _snapshots.Current = WithBothModels(Snapshot(1, [_target], policyVersion: 2));
+        _policies.Versions[(_policyId, 1)] = Snapshot(1, [_other]).Routing.Policies[_policyId];
+        var bound = new List<Guid>();
+        _adapters.OnBind = target => bound.Add(target.ProviderModelId);
+
+        var result = await Service().CompleteAsync(EvaluationRequest(InferenceTarget.For("balanced", _policyId, 1)), CancellationToken.None);
+
+        result.IsSuccess.ShouldBeTrue();
+        bound.ShouldBe([_other.ProviderModelId]);
+        var settled = _ledger.Settled.Single();
+        (settled.PolicyId, settled.PolicyVersion).ShouldBe(((Guid?)_policyId, (int?)1));
+    }
+
+    [Fact]
+    public async Task An_unknown_pinned_policy_version_is_model_not_found_and_recorded()
+    {
+        var result = await Service().CompleteAsync(EvaluationRequest(InferenceTarget.For("balanced", _policyId, 9)), CancellationToken.None);
+
+        result.Error.Code.ShouldBe(ErrorCode.ModelNotFound);
+        _adapters.Adapter.Calls.ShouldBe(0);
+        _ledger.Settled.Single().ErrorCode.ShouldBe("model_not_found");
+    }
+
+    [Fact]
+    public async Task A_pinned_provider_model_bypasses_routing_and_is_recorded_under_provider_slash_model()
+    {
+        // m2 is in the catalog but no policy lists it; the Tenant may use every alias, so it may pin any model.
+        _snapshots.Current = WithBothModels(Snapshot(1, [_target]));
+        var bound = new List<Guid>();
+        _adapters.OnBind = target => bound.Add(target.ProviderModelId);
+
+        var result = await Service().CompleteAsync(EvaluationRequest(InferenceTarget.Pinned(_other.ProviderModelId)), CancellationToken.None);
+
+        result.Value.Alias.ShouldBe("p/m2");
+        bound.ShouldBe([_other.ProviderModelId]);
+        _ledger.Opened.Single().RequestedAlias.ShouldBe("p/m2");
+        var settled = _ledger.Settled.Single();
+        (settled.PolicyId, settled.PolicyVersion).ShouldBe(((Guid?)null, (int?)null));
+        settled.RoutingDecisionJson.ShouldNotBeNull().ShouldContain("\"strategy\":\"pinned\"");
+        settled.MaxOutputTokens.ShouldBe(PinnedRouting.DefaultMaxOutputTokens);
+    }
+
+    [Fact]
+    public async Task A_pinned_provider_model_the_tenant_cannot_reach_is_model_not_allowed()
+    {
+        var tenant = Guid.CreateVersion7();
+        _snapshots.Current = WithBothModels(Snapshot(1, [_target], limits: new Dictionary<Guid, TenantLimits> { [tenant] = new(tenant, null, null, null, ["balanced"]) }));
+
+        var result = await Service().CompleteAsync(EvaluationRequest(InferenceTarget.Pinned(_other.ProviderModelId)) with { TenantId = tenant }, CancellationToken.None);
+
+        result.Error.Code.ShouldBe(ErrorCode.ModelNotAllowed);
+        _adapters.Adapter.Calls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_success_reports_the_provider_model_tokens_estimated_cost_and_latency()
+    {
+        // m1 is priced 1 USD per million input tokens and 2 per million output tokens.
+        _adapters.Adapter.Outcome = new CompletionOutcome.Success("hello", FinishReason.Stop, new NeutralUsage(300, 400, null));
+
+        var result = (await Service().CompleteAsync(EvaluationRequest(InferenceTarget.For("balanced")), CancellationToken.None)).Value;
+
+        result.ProviderModelId.ShouldBe(_target.ProviderModelId);
+        (result.InputTokens, result.OutputTokens).ShouldBe(((int?)300, (int?)400));
+        result.EstimatedCost.ShouldBe(Money.FromUsd(0.0011m));
+        result.Latency.ShouldBe(TimeSpan.Zero, "the fake clock did not move");
+        result.ToString().ShouldNotContain("hello");
+    }
+
+    private sealed class FakePolicyStore : IPolicyStore
+    {
+        public Dictionary<(Guid PolicyId, int Version), PolicySnapshot> Versions { get; } = [];
+
+        public int Reads { get; private set; }
+
+        public Task<PolicySnapshot?> GetActiveForAliasAsync(string modelAlias, CancellationToken cancellationToken)
+            => throw new NotSupportedException("Inference reads the latest version from the configuration snapshot.");
+
+        public Task<PolicySnapshot?> GetVersionAsync(Guid policyId, int version, CancellationToken cancellationToken)
+        {
+            Reads++;
+            return Task.FromResult(Versions.GetValueOrDefault((policyId, version)));
+        }
     }
 
     private sealed class FakeLedger : IUsageLedger

@@ -12,10 +12,14 @@ internal sealed class Router : IRouter
     public RoutingOutcome Decide(RoutingInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        var snapshot = input.Snapshot;
+        if (input.PinnedProviderModelId is { } pinned)
+        {
+            return DecidePinned(input, pinned);
+        }
 
+        var snapshot = input.Snapshot;
         if (!snapshot.AliasToPolicy.TryGetValue(input.Alias, out var policyId)
-            || !snapshot.Policies.TryGetValue(policyId, out var policy))
+            || !snapshot.Policies.TryGetValue(policyId, out var latest))
         {
             return Fail(null, ErrorCode.ModelNotFound, "The requested model does not exist.");
         }
@@ -25,6 +29,8 @@ internal sealed class Router : IRouter
             return Fail(null, ErrorCode.ModelNotAllowed, "The API key's tenant may not use the requested model.");
         }
 
+        // A run that froze its Policy Version keeps it, whatever the alias resolves to now (evaluation.md section 4).
+        var policy = input.PinnedPolicy ?? latest;
         var definition = policy.Definition;
         var (candidateIds, ruleMatched) = SelectCandidates(definition, input);
         var maxOutput = input.MaxOutputTokens ?? definition.DefaultMaxOutputTokens;
@@ -36,7 +42,7 @@ internal sealed class Router : IRouter
         for (var listed = 0; listed < candidateIds.Count; listed++)
         {
             var id = candidateIds[listed];
-            var verdict = Evaluate(id, snapshot, definition, input, required, maxOutput, costLimit);
+            var verdict = Evaluate(id, snapshot, definition.AllowedProviders, input, required, maxOutput, costLimit);
             if (verdict.Reason is not null)
             {
                 excluded.Add(new ExcludedCandidate(id, verdict.Reason));
@@ -55,7 +61,49 @@ internal sealed class Router : IRouter
 
         var decision = new RoutingDecision(
             policy.PolicyId, policy.Version, definition.Strategy, ruleMatched, maxOutput, ordered, excluded, definition.Execution);
+        return Conclude(decision, input);
+    }
 
+    /// <summary>
+    /// A request pinned to one Provider Model (evaluation.md section 4): no policy, a single Candidate, the Tenant's model access and
+    /// every Eligibility filter but <c>provider_not_allowed</c> (a policy setting), with the Tenant's cost limit only.
+    /// </summary>
+    private static RoutingOutcome DecidePinned(RoutingInput input, Guid providerModelId)
+    {
+        var snapshot = input.Snapshot;
+        if (!snapshot.Models.ContainsKey(providerModelId))
+        {
+            return Fail(null, ErrorCode.ModelNotFound, "The requested Provider Model does not exist.");
+        }
+
+        if (!input.Access.AllowsPinned(providerModelId, snapshot))
+        {
+            return Fail(null, ErrorCode.ModelNotAllowed, "The tenant may not use the requested Provider Model: none of its allowed aliases routes to it.");
+        }
+
+        var maxOutput = input.MaxOutputTokens ?? PinnedRouting.DefaultMaxOutputTokens;
+        var required = input.RequiredCapabilities.Distinct(StringComparer.Ordinal).OrderBy(c => c, StringComparer.Ordinal).ToList();
+        var verdict = Evaluate(providerModelId, snapshot, allowedProviders: null, input, required, maxOutput, input.Access.MaxRequestCost);
+        var decision = new RoutingDecision(
+            PolicyId: null,
+            PolicyVersion: null,
+            PolicyStrategy.Static,
+            RuleMatched: null,
+            maxOutput,
+            verdict.Candidate is { } candidate ? [candidate] : [],
+            verdict.Reason is { } reason ? [new ExcludedCandidate(providerModelId, reason)] : [],
+            PinnedRouting.Execution)
+        {
+            Pinned = true,
+        };
+        return Conclude(decision, input);
+    }
+
+    // What an empty eligible list means (routing-and-resilience.md section 1, "Outcomes when the eligible list is empty").
+    private static RoutingOutcome Conclude(RoutingDecision decision, RoutingInput input)
+    {
+        var ordered = decision.Ordered;
+        var excluded = decision.Excluded;
         if (ordered.Count > 0)
         {
             return new RoutingOutcome(decision, null, null);
@@ -113,7 +161,7 @@ internal sealed class Router : IRouter
     private static Verdict Evaluate(
         Guid id,
         RoutingSnapshot snapshot,
-        PolicyDefinition definition,
+        IReadOnlySet<string>? allowedProviders,
         RoutingInput input,
         List<string> required,
         int maxOutput,
@@ -136,7 +184,7 @@ internal sealed class Router : IRouter
             return new Verdict(EligibilityReason.ContextWindow, null);
         }
 
-        if (definition.AllowedProviders is { } allowed && !allowed.Contains(model.ProviderName))
+        if (allowedProviders is { } allowed && !allowed.Contains(model.ProviderName))
         {
             return new Verdict(EligibilityReason.ProviderNotAllowed, null);
         }

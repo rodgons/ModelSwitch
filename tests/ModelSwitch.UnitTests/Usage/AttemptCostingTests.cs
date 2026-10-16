@@ -115,4 +115,25 @@ public sealed class AttemptCostingTests
         draft.InputCost.Amount.ShouldBe(0.0000005m);
         draft.TotalCost.Amount.ShouldBe(0.000001m);
     }
+
+    [Fact]
+    public void A_requests_estimated_cost_is_the_sum_of_its_usage_records_and_skips_circuit_open_attempts()
+    {
+        AttemptRecord[] attempts =
+        [
+            Attempt(AttemptStatus.Ambiguous, UsageSource.Unavailable, 1_000, null),
+            Attempt(AttemptStatus.SkippedCircuitOpen, UsageSource.Unavailable, null, null),
+            Attempt(AttemptStatus.Succeeded, UsageSource.Reported, 1_000_000, 500_000, cached: 400_000),
+        ];
+
+        var cost = _calculator.RequestEstimatedCost(attempts, 2_000);
+
+        // Ambiguous: 1000 x 2/1e6 + 2000 x 8/1e6 = 0.018 (worst case); reported: 5.4 (see above); skipped: nothing.
+        cost.Amount.ShouldBe(5.418m);
+        cost.ShouldBe(attempts.Select(a => AttemptCosting.Cost(a, 2_000, _calculator)).Where(d => d is not null).Aggregate(Money.Zero, (sum, d) => sum + d!.TotalCost));
+    }
+
+    [Fact]
+    public void A_request_without_attempts_costs_nothing()
+        => _calculator.RequestEstimatedCost([], 1024).ShouldBe(Money.Zero);
 }

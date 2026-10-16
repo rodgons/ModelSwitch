@@ -148,15 +148,20 @@ Only `Contracts/` and the `*Module.cs` entry point are `public`. Everything else
 | Module | Owns (schema) | Exposes (Contracts) | Depends on |
 |---|---|---|---|
 | Identity | `identity` | `IApiKeyAuthenticator`, `ITenantDirectory`, `IAuditWriter`, `ConfigWrite` (audit + config bump on the caller's transaction), current-principal accessors, `ITenantBudgets` (seam implemented by Usage) | SharedKernel.Http (admin endpoints) |
-| Registry | `registry` | `IProviderCatalog` (snapshot of providers, models, capabilities, current prices), `IAdapterFactory`, `IProviderHealth`, `IProviderHealthSnapshots` (every instance's written health) | Adapters.Abstractions, Identity (audit, current administrator), SharedKernel.Http (admin endpoints) |
-| Routing | `routing` | `IRouter.Decide(RoutingInput) → RoutingDecision`, `IPolicyStore` | Registry, Identity (tenant model access, audit), SharedKernel.Http (admin endpoints) |
-| Inference | — (writes through Usage) | `IInferenceService` (used by the HTTP endpoint and by Evaluation), `ILimiter` (step 6, Rate and Concurrency Limits over Valkey; the HTTP use case calls it, so Evaluation traffic is not limited) | Routing, Registry, Usage, Identity, Configuration (snapshot), SharedKernel.Http, Adapters.Abstractions (runs Attempts through `IProviderAdapter`) |
+| Registry | `registry` | `IProviderCatalog` (snapshot of providers, models, capabilities, current prices; `FindEnabledByIdAsync` checks a pinned Provider Model at run creation), `IAdapterFactory`, `IProviderHealth`, `IProviderHealthSnapshots` (every instance's written health) | Adapters.Abstractions, Identity (audit, current administrator), SharedKernel.Http (admin endpoints) |
+| Routing | `routing` | `IRouter.Decide(RoutingInput) → RoutingDecision`, `IPolicyStore` (`GetActiveForAliasAsync` freezes an alias's current Policy Version at run creation; `GetVersionAsync` loads a frozen one) | Registry, Identity (tenant model access, audit), SharedKernel.Http (admin endpoints) |
+| Inference | — (writes through Usage) | `IInferenceService` (used by the HTTP endpoint and by Evaluation; `InferenceRequest.Target` is an alias, an alias pinned to a Policy Version, or a pinned Provider Model), `ILimiter` (step 6, Rate and Concurrency Limits over Valkey; the HTTP use case calls it, so Evaluation traffic is not limited) | Routing, Registry, Usage, Identity, Configuration (snapshot), SharedKernel.Http, Adapters.Abstractions (runs Attempts through `IProviderAdapter`) |
 | Usage | `usage` | `IUsageLedger` (open/settle requests, Reservations), `IUsageQueries` | Registry (prices), Identity (implements `ITenantBudgets` for the admin limits endpoint) |
-| Evaluation | `evaluation` | — (endpoints and worker jobs only) | Inference, Usage |
+| Evaluation | `evaluation` | — (endpoints and worker jobs only) | Inference, Usage, Routing (`IPolicyStore`, at run creation), Registry (`IProviderCatalog`, at run creation) |
 | Admin | — | — (endpoints only: `/admin/overview`, `/admin/requests`, `/admin/usage`, `/admin/provider-health`) | Identity (current Administrator, Tenant Grant), Registry (`ICatalogSnapshotSource` for names, `IProviderHealthSnapshots`), Usage (`IUsageQueries`) |
 | Configuration (not a module; owns `config`) | `config` | `ConfigurationSnapshot`, snapshot and `config_version` access | Identity, Registry, Routing (their snapshot loaders), SharedKernel.Http (readiness) |
 
-`IInferenceService` is the deep seam of the system. Evaluation calls it in-process with the same Tenant, routing, limits and accounting as an external client, so evaluation results reflect what production traffic would get.
+`IInferenceService` is the deep seam of the system. Evaluation calls it in-process with the same Tenant, routing, Budget and accounting as an external client, so evaluation results reflect what production traffic would get. The differences are deliberate and all on the request (`InferenceRequest`):
+
+- **Target.** `Target` is an `InferenceTarget`: `ModelAlias` (HTTP traffic: the latest Policy Version), `PinnedPolicyVersion` (an alias routed on the Policy Version a run froze at creation) or `PinnedProviderModel` (one Provider Model, bypassing routing). See [routing-and-resilience.md §1](routing-and-resilience.md#pinned-targets).
+- **Origin.** Evaluation traffic has `Origin = Evaluation`, its `EvaluationRunId` and no `ApiKeyId`; a request that breaks these invariants (`InferenceRequest.OriginViolation`) is a caller bug and throws `ArgumentException` before anything is recorded.
+- **Limits.** The Rate and Concurrency Limits (step 6) are taken by the HTTP use case, not by `IInferenceService`, so Evaluation traffic never takes them. The Budget Reservation, the per-request cost cap and the Tenant's allowed aliases apply to both.
+- **Result.** `InferenceResult` also carries, for in-process callers only (never on the wire), the Provider Model that answered, the request's input and output token totals, its Estimated Cost (`ICostCalculator.RequestEstimatedCost`, the amount settlement books) and its latency. Failures are `Result` errors from the closed set, as for HTTP.
 
 ## 5. Inference request lifecycle
 

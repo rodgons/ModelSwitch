@@ -37,4 +37,11 @@ public interface ICostCalculator
     /// the Routing Policy's <c>defaultMaxOutputTokens</c>, otherwise <see cref="DefaultMaxOutputTokens"/>.
     /// </summary>
     int ResolveMaxOutputTokens(int? requested, int? policyDefault);
+
+    /// <summary>
+    /// A request's Estimated Cost: the sum of the Usage Records settlement writes for <paramref name="attempts"/> (each priced with
+    /// its <see cref="AttemptRecord.Pricing"/>; an ambiguous one at its worst case with <paramref name="maxOutputTokens"/>). It is the
+    /// amount <see cref="IUsageLedger.SettleAsync"/> books, so an in-process caller can report it without reading it back.
+    /// </summary>
+    Money RequestEstimatedCost(IReadOnlyList<AttemptRecord> attempts, int maxOutputTokens);
 }

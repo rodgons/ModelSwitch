@@ -40,4 +40,19 @@ internal sealed class CostCalculator : ICostCalculator
         => requested is > 0 ? requested.Value
             : policyDefault is > 0 ? policyDefault.Value
             : ICostCalculator.DefaultMaxOutputTokens;
+
+    public Money RequestEstimatedCost(IReadOnlyList<AttemptRecord> attempts, int maxOutputTokens)
+    {
+        ArgumentNullException.ThrowIfNull(attempts);
+        var total = Money.Zero;
+        foreach (var attempt in attempts)
+        {
+            if (AttemptCosting.Cost(attempt, maxOutputTokens, this) is { } draft)
+            {
+                total += draft.TotalCost;
+            }
+        }
+
+        return total;
+    }
 }

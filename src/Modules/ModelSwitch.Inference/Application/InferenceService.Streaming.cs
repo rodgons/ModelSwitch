@@ -11,10 +11,10 @@ internal sealed partial class InferenceService
 {
     public async Task<Result<StreamingCompletion>> StreamAsync(InferenceRequest request, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        CheckOrigin(request);
         var received = time.GetUtcNow();
 
-        var routed = Route(request, received, streaming: true);
+        var routed = await RouteAsync(request, received, streaming: true, cancellationToken);
         var opened = await OpenAsync(request, routed, streaming: true, received, cancellationToken);
         if (opened.IsFailure)
         {
@@ -50,7 +50,7 @@ internal sealed partial class InferenceService
         }
 
         var run = new StreamRun(this, time, request, opened.Value.Request, routed, attempts, started.Value, received);
-        return new StreamingCompletion(request.RequestId, request.Alias, run.ReadAsync, run.AbandonAsync);
+        return new StreamingCompletion(request.RequestId, routed.RequestedAlias, run.ReadAsync, run.AbandonAsync);
     }
 
     /// <summary>

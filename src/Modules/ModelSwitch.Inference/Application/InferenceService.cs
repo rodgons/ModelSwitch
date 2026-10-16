@@ -22,10 +22,12 @@ namespace ModelSwitch.Inference.Application;
 internal sealed partial class InferenceService(
     IConfigurationSnapshotProvider configuration,
     IRouter router,
+    IPolicyStore policies,
     IInputTokenEstimator estimator,
     IProviderHealth health,
     AttemptExecutor executor,
     IUsageLedger ledger,
+    ICostCalculator costs,
     InferenceMetrics metrics,
     LimitsMetrics limits,
     TimeProvider time,
@@ -39,8 +41,12 @@ internal sealed partial class InferenceService(
     // The distinct tokenizers a snapshot's models name never change within a snapshot, so they are worked out once per snapshot.
     private static readonly ConditionalWeakTable<ConfigurationSnapshot, string[]> _tokenizers = [];
 
-    /// <summary>What routing decided, kept for the settlement: the Policy Version and the Routing Decision.</summary>
+    /// <summary>
+    /// What routing decided, kept for the settlement: the Policy Version and the Routing Decision. <see cref="RequestedAlias"/> is what
+    /// the request is recorded and echoed under: the alias, or <c>provider/model</c> for a pinned Provider Model.
+    /// </summary>
     private sealed record Routed(
+        string RequestedAlias,
         Guid? PolicyId,
         int? PolicyVersion,
         string? DecisionJson,
@@ -60,10 +66,10 @@ internal sealed partial class InferenceService(
 
     public async Task<Result<InferenceResult>> CompleteAsync(InferenceRequest request, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        CheckOrigin(request);
 
         var received = time.GetUtcNow();
-        var routed = Route(request, received, streaming: false);
+        var routed = await RouteAsync(request, received, streaming: false, cancellationToken);
         var opened = await OpenAsync(request, routed, streaming: false, received, cancellationToken);
         if (opened.IsFailure)
         {
@@ -98,7 +104,7 @@ internal sealed partial class InferenceService(
             result.IsSuccess ? null : result.Error.Code.Value,
             ttftMs: null,
             attempts);
-        return result;
+        return result.IsSuccess ? WithAccounting(result.Value, routed, attempts, received) : result;
     }
 
     private async Task<Result<InferenceResult>> ExecuteAsync(InferenceRequest request, Routed routed, List<AttemptRecord> attempts, CancellationToken cancellationToken)
@@ -115,18 +121,88 @@ internal sealed partial class InferenceService(
         }
 
         var success = executed.Value;
-        return new InferenceResult(request.RequestId, request.Alias, success.Text, success.FinishReason, success.Usage, attempts.Count(a => a.Status != AttemptStatus.SkippedCircuitOpen));
+        return new InferenceResult(request.RequestId, routed.RequestedAlias, success.Text, success.FinishReason, success.Usage, attempts.Count(a => a.Status != AttemptStatus.SkippedCircuitOpen));
     }
 
     /// <summary>
-    /// Step 7. A pure function of the snapshot taken here: the same instance serves the whole request, so a configuration
-    /// change in between never mixes two Policy Versions. Routing failures keep their Decision for the record.
+    /// What an in-process caller records about a finished request (an Evaluation Case Result): the Provider Model used, the token
+    /// totals and the Estimated Cost, worked out exactly as settlement does, and the latency.
     /// </summary>
-    private Routed Route(InferenceRequest request, DateTimeOffset received, bool streaming)
+    private InferenceResult WithAccounting(InferenceResult result, Routed routed, List<AttemptRecord> attempts, DateTimeOffset received)
     {
+        var called = attempts.Where(a => a.Status != AttemptStatus.SkippedCircuitOpen).ToList();
+        return result with
+        {
+            ProviderModelId = attempts.LastOrDefault(a => a.Status == AttemptStatus.Succeeded)?.ProviderModelId,
+            InputTokens = SumOrNull(called.Select(a => a.InputTokens)),
+            OutputTokens = SumOrNull(called.Select(a => a.OutputTokens)),
+            EstimatedCost = costs.RequestEstimatedCost(Priced(routed, attempts), MaxOutputTokensOf(routed)),
+            Latency = time.GetUtcNow() - received,
+        };
+    }
+
+    private static int? SumOrNull(IEnumerable<int?> values)
+    {
+        long total = 0;
+        var any = false;
+        foreach (var value in values)
+        {
+            if (value is { } v)
+            {
+                total += v;
+                any = true;
+            }
+        }
+
+        return any ? (int)Math.Min(total, int.MaxValue) : null;
+    }
+
+    private static int MaxOutputTokensOf(Routed routed)
+        => routed.Chat?.MaxOutputTokens is { } max and > 0 ? max : ICostCalculator.DefaultMaxOutputTokens;
+
+    /// <summary>A caller bug (Request Origin invariants of data-model.md), refused before anything is recorded.</summary>
+    private static void CheckOrigin(InferenceRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.OriginViolation() is { } violation)
+        {
+            throw new ArgumentException(violation, nameof(request));
+        }
+    }
+
+    /// <summary>
+    /// Step 7, for any <see cref="InferenceTarget"/>. Reads the configuration snapshot once (the same instance serves the whole
+    /// request). A pinned Policy Version that is not the snapshot's latest is read from the policy store (immutable, cached there).
+    /// </summary>
+    private async Task<Routed> RouteAsync(InferenceRequest request, DateTimeOffset received, bool streaming, CancellationToken cancellationToken)
+    {
+        var snapshot = configuration.Current;
+        PolicySnapshot? pinnedPolicy = null;
+        if (request.Target is InferenceTarget.PinnedPolicyVersion pinned)
+        {
+            pinnedPolicy = snapshot.Routing.Policies.TryGetValue(pinned.PolicyId, out var latest) && latest.Version == pinned.PolicyVersion
+                ? latest
+                : await policies.GetVersionAsync(pinned.PolicyId, pinned.PolicyVersion, cancellationToken);
+            if (pinnedPolicy is null)
+            {
+                var error = new Error(ErrorCode.ModelNotFound, "The pinned Policy Version does not exist.");
+                return new Routed(pinned.Alias, null, null, null, error, null, null, snapshot.Routing) { Streaming = streaming };
+            }
+        }
+
+        return Route(request, snapshot, pinnedPolicy, received, streaming);
+    }
+
+    /// <summary>
+    /// A pure function of the snapshot taken by <see cref="RouteAsync"/>, so a configuration change in between never mixes two Policy
+    /// Versions. Routing failures keep their Decision for the record.
+    /// </summary>
+    private Routed Route(InferenceRequest request, ConfigurationSnapshot snapshot, PolicySnapshot? pinnedPolicy, DateTimeOffset received, bool streaming)
+    {
+        var requested = RequestedAlias(request, snapshot);
         using var span = GatewayTelemetry.StartSpan(GatewayTelemetry.Spans.Route);
-        span?.SetTag(GatewayTelemetry.Attributes.RequestModel, request.Alias);
-        var routed = Decide(request, received, streaming) with { Streaming = streaming };
+        span?.SetTag(GatewayTelemetry.Attributes.RequestModel, requested);
+        var routed = Decide(request, requested, snapshot, pinnedPolicy, received, streaming) with { Streaming = streaming };
         if (span is not null)
         {
             span.SetTag(GatewayTelemetry.Attributes.PolicyId, routed.PolicyId?.ToString());
@@ -144,39 +220,56 @@ internal sealed partial class InferenceService(
         return routed;
     }
 
-    private Routed Decide(InferenceRequest request, DateTimeOffset received, bool streaming)
+    /// <summary>
+    /// The name the request is recorded (<c>requested_alias</c>) and echoed under. A pinned Provider Model has no alias, so it is
+    /// <c>provider/model</c>, the notation of policy definitions, which can never collide with an alias (aliases have no <c>/</c>).
+    /// </summary>
+    private static string RequestedAlias(InferenceRequest request, ConfigurationSnapshot snapshot) => request.Target switch
     {
-        var snapshot = configuration.Current;
+        InferenceTarget.PinnedProviderModel pinned => snapshot.Routing.Models.TryGetValue(pinned.ProviderModelId, out var model)
+            ? $"{model.ProviderName}/{model.ProviderModelIdentifier}"
+            : pinned.ProviderModelId.ToString("D", System.Globalization.CultureInfo.InvariantCulture),
+        InferenceTarget.PinnedPolicyVersion pinned => pinned.Alias,
+        InferenceTarget.ModelAlias alias => alias.Alias,
+        _ => request.Alias,
+    };
+
+    private Routed Decide(InferenceRequest request, string requested, ConfigurationSnapshot snapshot, PolicySnapshot? pinnedPolicy, DateTimeOffset received, bool streaming)
+    {
         var texts = ChatInput.Texts(request.Chat);
         var input = new RoutingInput(
             request.TenantId,
-            request.Alias,
+            requested,
             snapshot.AccessFor(request.TenantId),
             request.TaskType,
             RequiredCapabilities(request, streaming),
             EstimateInput(snapshot, texts),
             request.Chat.MaxOutputTokens,
             snapshot.Routing,
-            health.OpenCircuits());
+            health.OpenCircuits())
+        {
+            PinnedPolicy = pinnedPolicy,
+            PinnedProviderModelId = (request.Target as InferenceTarget.PinnedProviderModel)?.ProviderModelId,
+        };
 
         var outcome = router.Decide(input);
         var decision = outcome.Decision;
         var json = decision is null ? null : RoutingDecisionJson.Write(decision);
         if (outcome.Error is not null || decision is null)
         {
-            return new Routed(decision?.PolicyId, decision?.PolicyVersion, json, outcome.Error! with { RetryAfter = outcome.RetryAfter }, null, null, snapshot.Routing);
+            return new Routed(requested, decision?.PolicyId, decision?.PolicyVersion, json, outcome.Error! with { RetryAfter = outcome.RetryAfter }, null, null, snapshot.Routing);
         }
 
         var settings = decision.Execution;
         var deadline = received + TimeSpan.FromMilliseconds(settings.DeadlineMs);
-        if (request.Timeout is { } requested && received + requested < deadline)
+        if (request.Timeout is { } timeout && received + timeout < deadline)
         {
-            deadline = received + requested;
+            deadline = received + timeout;
         }
 
         // The Reservation and the Routing Decision were costed at this ceiling, so the Provider is held to it.
         var chat = request.Chat with { MaxOutputTokens = decision.EffectiveMaxOutputTokens };
-        return new Routed(decision.PolicyId, decision.PolicyVersion, json, null, new ExecutionPlan(decision.Ordered, settings, deadline), chat, snapshot.Routing);
+        return new Routed(requested, decision.PolicyId, decision.PolicyVersion, json, null, new ExecutionPlan(decision.Ordered, settings, deadline), chat, snapshot.Routing);
     }
 
     private static List<string> RequiredCapabilities(InferenceRequest request, bool streaming)
@@ -257,7 +350,7 @@ internal sealed partial class InferenceService(
                 request.ApiKeyId,
                 request.EvaluationRunId,
                 request.ClientRequestId,
-                request.Alias,
+                routed.RequestedAlias,
                 request.TaskType,
                 streaming,
                 request.InputBytes,
@@ -281,6 +374,9 @@ internal sealed partial class InferenceService(
         return (opened.Value, routed);
     }
 
+    private static List<AttemptRecord> Priced(Routed routed, List<AttemptRecord> attempts)
+        => [.. attempts.Select(a => a with { Pricing = PricingOf(routed, a.ProviderModelId) })];
+
     private static AttemptPricing? PricingOf(Routed routed, Guid providerModelId)
         => routed.Catalog is { } catalog && catalog.Models.TryGetValue(providerModelId, out var model) && model.Price is { } price
             ? new AttemptPricing(price.ModelPriceId, new PriceRates(price.InputPerMillion, price.CachedInputPerMillion, price.OutputPerMillion))
@@ -302,7 +398,7 @@ internal sealed partial class InferenceService(
             routed.PolicyVersion,
             routed.DecisionJson,
             ttftMs,
-            [.. attempts.Select(a => a with { Pricing = PricingOf(routed, a.ProviderModelId) })],
+            Priced(routed, attempts),
             routed.Chat?.MaxOutputTokens);
 
         Completed(request, routed, StatusName(outcome), errorCode, opened.StartedAt, ttftMs, attempts);
@@ -359,7 +455,7 @@ internal sealed partial class InferenceService(
     {
         var telemetry = new RequestTelemetry(
             request.RequestId,
-            request.Alias,
+            routed.RequestedAlias,
             routed.Streaming,
             status,
             errorCode,
@@ -368,7 +464,7 @@ internal sealed partial class InferenceService(
             ttftMs is { } ms ? TimeSpan.FromMilliseconds(ms) : null,
             attempts);
         metrics.Completed(telemetry);
-        LogCompleted(logger, request.RequestId, status, request.Alias, telemetry.SelectedProviderModelId, telemetry.CalledAttempts, (long)telemetry.Duration.TotalMilliseconds, errorCode);
+        LogCompleted(logger, request.RequestId, status, routed.RequestedAlias, telemetry.SelectedProviderModelId, telemetry.CalledAttempts, (long)telemetry.Duration.TotalMilliseconds, errorCode);
     }
 
     private static string StatusName(RequestOutcome outcome) => outcome switch

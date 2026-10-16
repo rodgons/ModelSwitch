@@ -85,11 +85,11 @@ Owned by `ModelSwitch.Configuration` (infrastructure, not a domain module), crea
 | api_key_id | uuid null | null exactly when `origin = evaluation` (check constraint) |
 | evaluation_run_id | uuid null | set exactly when `origin = evaluation` (check constraint); candidate and judge calls both carry it |
 | client_request_id | text null | |
-| requested_alias | text | |
+| requested_alias | text | the Model Alias; `<providerName>/<providerModelId>` for a request pinned to one Provider Model (Evaluation only) |
 | task_type | text null | |
-| policy_id, policy_version | uuid, int null | null if routing failed before policy resolution |
+| policy_id, policy_version | uuid, int null | null if routing failed before policy resolution, or for a pinned Provider Model (no policy consulted) |
 | selected_provider_model_id | uuid null | the model that produced the final outcome |
-| routing_decision | jsonb null | ordered candidates, exclusions with reasons, rule matched |
+| routing_decision | jsonb null | ordered candidates, exclusions with reasons, rule matched; `strategy` is `pinned` for a pinned Provider Model |
 | streaming | bool | |
 | status | text | `running`, `succeeded`, `failed`, `cancelled`, `abandoned` |
 | error_code | text null | from the closed error-code set |

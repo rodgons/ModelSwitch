@@ -1,12 +1,49 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using ModelSwitch.Routing.Contracts;
 
 namespace ModelSwitch.Routing.Infrastructure;
 
-/// <summary>Reads the latest Policy Version of an alias's policy. The runtime configuration snapshot will replace per-request reads.</summary>
+/// <summary>
+/// Reads Policy Versions: the latest of an alias's policy, every policy's latest for the configuration snapshot, and any one version
+/// by number (for a run that froze it). The request hot path reads the snapshot instead.
+/// </summary>
 internal sealed class EfPolicyStore(IDbContextFactory<RoutingDbContext> contexts, IPolicyDefinitionValidator validator) : IPolicyStore, IPolicyCatalogSource
 {
+    // Policy Versions are immutable (data-model.md), so a version read once never changes. Bounded: cleared when it fills up.
+    private const int _versionCacheCapacity = 256;
+    private readonly ConcurrentDictionary<(Guid PolicyId, int Version), PolicySnapshot> _versions = new();
+
+    public async Task<PolicySnapshot?> GetVersionAsync(Guid policyId, int version, CancellationToken cancellationToken)
+    {
+        if (_versions.TryGetValue((policyId, version), out var cached))
+        {
+            return cached;
+        }
+
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var row = await (
+            from p in db.Policies.AsNoTracking()
+            join v in db.PolicyVersions.AsNoTracking() on p.Id equals v.PolicyId
+            where p.Id == policyId && v.Version == version
+            select new { p.Id, p.Name, v.Version, v.DefinitionJson, v.ResolvedCandidatesJson })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (row is null)
+        {
+            return null;
+        }
+
+        var snapshot = ToSnapshot(row.Id, row.Name, row.Version, row.DefinitionJson, row.ResolvedCandidatesJson);
+        if (_versions.Count >= _versionCacheCapacity)
+        {
+            _versions.Clear();
+        }
+
+        _versions[(policyId, version)] = snapshot;
+        return snapshot;
+    }
+
     public async Task<PolicySnapshot?> GetActiveForAliasAsync(string modelAlias, CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);

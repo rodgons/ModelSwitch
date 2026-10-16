@@ -21,4 +21,10 @@ public interface IProviderCatalog
     /// <see cref="ProviderModelTarget"/> from the configuration snapshot instead (architecture.md section 6).
     /// </summary>
     Task<ProviderModelTarget?> FindEnabledAsync(string providerName, string providerModelIdentifier, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Finds an enabled Provider Model (of an enabled Provider) by its id. Null when it is unknown or either is disabled. Reads the
+    /// database: an Evaluation Run calls it once, at creation, to check a pinned <c>providerModelId</c> target.
+    /// </summary>
+    Task<ProviderModelTarget?> FindEnabledByIdAsync(Guid providerModelId, CancellationToken cancellationToken);
 }
