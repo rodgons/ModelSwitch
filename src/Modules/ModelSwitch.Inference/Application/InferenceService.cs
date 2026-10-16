@@ -69,7 +69,7 @@ internal sealed partial class InferenceService(
         CheckOrigin(request);
 
         var received = time.GetUtcNow();
-        var routed = await RouteAsync(request, received, streaming: false, cancellationToken);
+        var routed = await RouteAsync(request, received, streaming: false, default, cancellationToken);
         var opened = await OpenAsync(request, routed, streaming: false, received, cancellationToken);
         if (opened.IsFailure)
         {
@@ -106,6 +106,26 @@ internal sealed partial class InferenceService(
             attempts);
         return result.IsSuccess ? WithAccounting(result.Value, routed, attempts, received) : result;
     }
+
+    public async Task<Result<WorstCaseEstimate>> EstimateWorstCaseAsync(InferenceRequest request, int additionalInputTokens, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentOutOfRangeException.ThrowIfNegative(additionalInputTokens);
+        var routed = await RouteAsync(request, time.GetUtcNow(), streaming: false, new RouteOptions(additionalInputTokens, Estimate: true), cancellationToken);
+        if (routed.Plan is not { } plan)
+        {
+            return routed.Error!;
+        }
+
+        return new WorstCaseEstimate(Hold(plan), MaxOutputTokensOf(routed));
+    }
+
+    /// <summary>A Reservation's amount: the most expensive Candidate's worst case times <c>min(maxAttempts, 2)</c>.</summary>
+    private static Money Hold(ExecutionPlan plan)
+        => Money.FromUsd(plan.Candidates.Max(c => c.WorstCaseEstimatedCost) * Math.Min(plan.Settings.MaxAttempts, 2)).Round();
+
+    /// <summary>How a routing pass differs for a worst-case estimate: extra input tokens, and no rejection metric.</summary>
+    private readonly record struct RouteOptions(int AdditionalInputTokens, bool Estimate);
 
     private async Task<Result<InferenceResult>> ExecuteAsync(InferenceRequest request, Routed routed, List<AttemptRecord> attempts, CancellationToken cancellationToken)
     {
@@ -174,7 +194,7 @@ internal sealed partial class InferenceService(
     /// Step 7, for any <see cref="InferenceTarget"/>. Reads the configuration snapshot once (the same instance serves the whole
     /// request). A pinned Policy Version that is not the snapshot's latest is read from the policy store (immutable, cached there).
     /// </summary>
-    private async Task<Routed> RouteAsync(InferenceRequest request, DateTimeOffset received, bool streaming, CancellationToken cancellationToken)
+    private async Task<Routed> RouteAsync(InferenceRequest request, DateTimeOffset received, bool streaming, RouteOptions options, CancellationToken cancellationToken)
     {
         var snapshot = configuration.Current;
         PolicySnapshot? pinnedPolicy = null;
@@ -190,19 +210,19 @@ internal sealed partial class InferenceService(
             }
         }
 
-        return Route(request, snapshot, pinnedPolicy, received, streaming);
+        return Route(request, snapshot, pinnedPolicy, received, streaming, options);
     }
 
     /// <summary>
     /// A pure function of the snapshot taken by <see cref="RouteAsync"/>, so a configuration change in between never mixes two Policy
     /// Versions. Routing failures keep their Decision for the record.
     /// </summary>
-    private Routed Route(InferenceRequest request, ConfigurationSnapshot snapshot, PolicySnapshot? pinnedPolicy, DateTimeOffset received, bool streaming)
+    private Routed Route(InferenceRequest request, ConfigurationSnapshot snapshot, PolicySnapshot? pinnedPolicy, DateTimeOffset received, bool streaming, RouteOptions options)
     {
         var requested = RequestedAlias(request, snapshot);
         using var span = GatewayTelemetry.StartSpan(GatewayTelemetry.Spans.Route);
         span?.SetTag(GatewayTelemetry.Attributes.RequestModel, requested);
-        var routed = Decide(request, requested, snapshot, pinnedPolicy, received, streaming) with { Streaming = streaming };
+        var routed = Decide(request, requested, snapshot, pinnedPolicy, received, streaming, options.AdditionalInputTokens) with { Streaming = streaming };
         if (span is not null)
         {
             span.SetTag(GatewayTelemetry.Attributes.PolicyId, routed.PolicyId?.ToString());
@@ -212,7 +232,7 @@ internal sealed partial class InferenceService(
             span.SetTag(GatewayTelemetry.Attributes.Result, routed.Error?.Code.Value ?? "routed");
         }
 
-        if (routed.Error?.Code == ErrorCode.RequestCostLimitExceeded)
+        if (routed.Error?.Code == ErrorCode.RequestCostLimitExceeded && !options.Estimate)
         {
             limits.Rejected("request_cost");
         }
@@ -234,7 +254,7 @@ internal sealed partial class InferenceService(
         _ => request.Alias,
     };
 
-    private Routed Decide(InferenceRequest request, string requested, ConfigurationSnapshot snapshot, PolicySnapshot? pinnedPolicy, DateTimeOffset received, bool streaming)
+    private Routed Decide(InferenceRequest request, string requested, ConfigurationSnapshot snapshot, PolicySnapshot? pinnedPolicy, DateTimeOffset received, bool streaming, int additionalInputTokens)
     {
         var texts = ChatInput.Texts(request.Chat);
         var input = new RoutingInput(
@@ -243,7 +263,7 @@ internal sealed partial class InferenceService(
             snapshot.AccessFor(request.TenantId),
             request.TaskType,
             RequiredCapabilities(request, streaming),
-            EstimateInput(snapshot, texts),
+            EstimateInput(snapshot, texts, additionalInputTokens),
             request.Chat.MaxOutputTokens,
             snapshot.Routing,
             health.OpenCircuits())
@@ -293,16 +313,16 @@ internal sealed partial class InferenceService(
     }
 
     // One estimate per tokenizer the snapshot's models declare (routing-and-resilience.md section 1); the byte estimate covers the rest.
-    private Routing.Contracts.InputTokenEstimate EstimateInput(ConfigurationSnapshot snapshot, IReadOnlyList<string> texts)
+    private Routing.Contracts.InputTokenEstimate EstimateInput(ConfigurationSnapshot snapshot, IReadOnlyList<string> texts, int additionalInputTokens)
     {
         var tokenizers = _tokenizers.GetValue(snapshot, static s => s.Tokenizers());
         var byTokenizer = new Dictionary<string, int>(tokenizers.Length, StringComparer.Ordinal);
         foreach (var tokenizer in tokenizers)
         {
-            byTokenizer[tokenizer] = estimator.Estimate(texts, tokenizer).Tokens;
+            byTokenizer[tokenizer] = estimator.Estimate(texts, tokenizer).Tokens + additionalInputTokens;
         }
 
-        return new Routing.Contracts.InputTokenEstimate(byTokenizer, estimator.Estimate(texts, tokenizer: null).Tokens);
+        return new Routing.Contracts.InputTokenEstimate(byTokenizer, estimator.Estimate(texts, tokenizer: null).Tokens + additionalInputTokens);
     }
 
     // When nothing could be called because every circuit is open, the client is told when the first one lets a probe through.
@@ -336,8 +356,7 @@ internal sealed partial class InferenceService(
         var expiresAt = received + (streaming ? StreamReservationGrace : ReservationGrace);
         if (routed.Plan is { } plan)
         {
-            var worst = plan.Candidates.Max(c => c.WorstCaseEstimatedCost);
-            hold = Money.FromUsd(worst * Math.Min(plan.Settings.MaxAttempts, 2)).Round();
+            hold = Hold(plan);
             expiresAt = plan.Deadline + (streaming ? StreamReservationGrace : ReservationGrace);
         }
 

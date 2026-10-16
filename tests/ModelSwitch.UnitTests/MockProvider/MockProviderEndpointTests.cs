@@ -65,6 +65,16 @@ public sealed class MockProviderEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_judge_model_replies_in_the_llm_judge_format()
+    {
+        using var response = await PostAsync("/v1/chat/completions", Chat("mock-judge", stream: false));
+
+        var json = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        var reply = JsonNode.Parse(json["choices"]![0]!["message"]!["content"]!.GetValue<string>())!;
+        reply["score"]!.GetValue<decimal>().ShouldBe(0.75m);
+    }
+
+    [Fact]
     public async Task OpenAi_stream_ends_with_usage_and_done()
     {
         using var response = await PostAsync("/v1/chat/completions", Chat("mock-fixed?tokens=3", stream: true));

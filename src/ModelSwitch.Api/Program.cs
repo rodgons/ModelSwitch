@@ -15,8 +15,10 @@ using ModelSwitch.Routing;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Http;
+using ModelSwitch.SharedKernel.Jobs;
 using ModelSwitch.Telemetry;
 using ModelSwitch.Usage;
+using Npgsql;
 
 // Invalid deployment configuration exits with code 78 and names the variable (FR-10).
 return await StartupExit.RunAsync(
@@ -41,6 +43,9 @@ return await StartupExit.RunAsync(
         builder.Services.AddUsageModule();
         builder.Services.AddEvaluationModule();
         builder.Services.AddAdminModule();
+
+        // Creating an Evaluation Run enqueues its evaluation.run job in the same transaction; the worker runs it.
+        builder.Services.AddJobEnqueuer(provider => NpgsqlDataSource.Create(provider.GetRequiredService<IConfiguration>()["ConnectionStrings:Postgres"]!));
 
         // GET /openapi/v1.json: the dashboard's TypeScript client is generated from it (frontend.md section 1).
         builder.Services.AddOpenApi(options => options.AddSchemaTransformer(OpenApiNumbers.NumbersOnly));

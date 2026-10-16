@@ -4,12 +4,19 @@ namespace ModelSwitch.MockProvider;
 
 /// <summary>
 /// The behaviour encoded in a mock model id: <c>mock-echo</c> echoes the last user message,
-/// <c>mock-fixed?latency=300&amp;tokens=50</c> returns a fixed-size output after a fixed latency. Any other name behaves like <c>mock-fixed</c>
+/// <c>mock-fixed?latency=300&amp;tokens=50</c> returns a fixed-size output after a fixed latency, <c>mock-judge</c> answers like an
+/// <c>llm_judge</c> judge model (<see cref="JudgeReply"/>, one chunk). Any other name behaves like <c>mock-fixed</c>
 /// so tests can use <c>mock-a</c>, <c>mock-b</c> as distinct models.
 /// </summary>
 internal sealed record ModelSpec(string Name, bool Echo, TimeSpan Latency, int Tokens)
 {
     public const int DefaultTokens = 20;
+
+    /// <summary>The model id that replies with <see cref="JudgeReply"/>.</summary>
+    public const string JudgeModel = "mock-judge";
+
+    /// <summary>A reply in the <c>llm_judge</c> format: <c>{"score": 0..1, "reason"?: string}</c>.</summary>
+    public const string JudgeReply = """{"score":0.75,"reason":"mock judge"}""";
 
     public static bool TryParse(string? model, out ModelSpec? spec, out string? error)
     {

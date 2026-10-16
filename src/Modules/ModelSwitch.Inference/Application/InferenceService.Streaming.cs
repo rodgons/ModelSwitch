@@ -14,7 +14,7 @@ internal sealed partial class InferenceService
         CheckOrigin(request);
         var received = time.GetUtcNow();
 
-        var routed = await RouteAsync(request, received, streaming: true, cancellationToken);
+        var routed = await RouteAsync(request, received, streaming: true, default, cancellationToken);
         var opened = await OpenAsync(request, routed, streaming: true, received, cancellationToken);
         if (opened.IsFailure)
         {

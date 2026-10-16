@@ -4,9 +4,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ModelSwitch.Evaluation.Application;
+using ModelSwitch.Evaluation.Contracts;
 using ModelSwitch.Evaluation.Endpoints;
 using ModelSwitch.Evaluation.Infrastructure;
 using ModelSwitch.SharedKernel.Hosting;
+using ModelSwitch.SharedKernel.Jobs;
 using ModelSwitch.SharedKernel.Persistence;
 
 namespace ModelSwitch.Evaluation;
@@ -17,8 +19,9 @@ public static class EvaluationModule
     private const string _migratorConnection = "ConnectionStrings:PostgresMigrator";
 
     /// <summary>
-    /// Registers the Dataset and Prompt services over the app-role connection (<c>ConnectionStrings:Postgres</c>). They need the
-    /// Identity module's current Administrator, Tenant Grant checker, Tenant directory and audit writer.
+    /// Registers the Dataset, Prompt and Evaluation Run services and the <c>evaluation.run</c> job handler (app-role connection). They need the
+    /// Identity module's current Administrator, Tenant Grant, Tenant directory and audit writer, IPolicyStore, IProviderCatalog,
+    /// IInferenceService, IEvaluationSpend and the host's IJobEnqueuer.
     /// </summary>
     public static IServiceCollection AddEvaluationModule(this IServiceCollection services)
     {
@@ -27,6 +30,14 @@ public static class EvaluationModule
         services.TryAddSingleton<EvaluationAccess>();
         services.TryAddSingleton<DatasetService>();
         services.TryAddSingleton<PromptService>();
+        services.TryAddSingleton<RunPlanner>();
+        services.TryAddSingleton<CaseCosting>();
+        services.TryAddSingleton<EvaluationRunService>();
+        services.TryAddSingleton<EvaluationRunQueries>();
+        services.TryAddSingleton<RunExporter>();
+        services.TryAddSingleton<RunExecutor>();
+        services.TryAddSingleton<IEvaluationCaseLinks, EvaluationCaseLinks>();
+        services.AddJobHandler<EvaluationRunJob>();
         return services;
     }
 

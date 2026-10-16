@@ -21,6 +21,9 @@
     <ProjectReference Include="../ModelSwitch.Identity/ModelSwitch.Identity.csproj" />
     <ProjectReference Include="../ModelSwitch.Inference/ModelSwitch.Inference.csproj" />
     <ProjectReference Include="../ModelSwitch.Usage/ModelSwitch.Usage.csproj" />
+    <!-- Contracts only: IPolicyStore and IProviderCatalog freeze a Run Configuration's targets at creation. -->
+    <ProjectReference Include="../ModelSwitch.Routing/ModelSwitch.Routing.csproj" />
+    <ProjectReference Include="../ModelSwitch.Registry/ModelSwitch.Registry.csproj" />
   </ItemGroup>
 
 </Project>

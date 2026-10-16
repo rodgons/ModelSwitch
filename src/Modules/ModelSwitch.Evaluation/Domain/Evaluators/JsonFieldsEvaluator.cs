@@ -50,6 +50,9 @@ internal sealed class JsonFieldsEvaluator(FieldComparator defaultComparator, IRe
 
     public decimal PassThreshold { get; } = passThreshold;
 
+    /// <summary>The field names the config gives a comparator of their own.</summary>
+    public IReadOnlyCollection<string> ConfiguredFields => [.. fields.Keys];
+
     public static Result<IEvaluator> Create(JsonConfigReader config)
     {
         var defaultName = config.String("defaultComparator") ?? FieldComparator.Exact;

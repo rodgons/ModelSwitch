@@ -69,6 +69,7 @@ internal sealed record UsageRecordDetailView(
 
 /// <summary>Everything recorded about one Inference Request (GET /admin/requests/{id}).</summary>
 /// <param name="TraceUrl">A link to the trace when <c>Telemetry:TraceUrlTemplate</c> is set and the request has a trace id.</param>
+/// <param name="EvaluationCase">For Request Origin <c>evaluation</c>: the Case Result the request was the candidate or judge call of, or null.</param>
 internal sealed record RequestDetailView(
     RequestSummaryView Request,
     string? ClientRequestId,
@@ -81,7 +82,12 @@ internal sealed record RequestDetailView(
     string? TraceUrl,
     RoutingDecisionView? RoutingDecision,
     IReadOnlyList<AttemptTimelineView> Attempts,
-    IReadOnlyList<UsageRecordDetailView> UsageRecords);
+    IReadOnlyList<UsageRecordDetailView> UsageRecords,
+    EvaluationCaseView? EvaluationCase = null);
+
+/// <summary>"Candidate (or judge) for Case <c>externalId</c> of run <c>runId</c>" (evaluation.md section 3).</summary>
+/// <param name="Role"><c>candidate</c> or <c>judge</c>.</param>
+internal sealed record EvaluationCaseView(Guid RunId, Guid CaseId, string ExternalId, string Role);
 
 /// <summary>A Candidate routing left out, and why (an eligibility reason code, routing-and-resilience.md section 1).</summary>
 internal sealed record ExcludedCandidateView(Guid Model, string Reason);

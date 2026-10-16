@@ -150,6 +150,15 @@ public sealed record InferenceResult(Guid RequestId, string Alias, string Text, 
 }
 
 /// <summary>
+/// The most an Inference Request could take from the Budget, worked out exactly as its Reservation would be (usage-and-budgets.md
+/// section 4): the worst case of the most expensive routed Candidate (input estimate at the full input rate plus the output ceiling at
+/// the output rate) times <c>min(maxAttempts, 2)</c>.
+/// </summary>
+/// <param name="Amount">The Reservation the request would hold.</param>
+/// <param name="MaxOutputTokens">The output-token ceiling the request would be routed and held to.</param>
+public sealed record WorstCaseEstimate(Money Amount, int MaxOutputTokens);
+
+/// <summary>
 /// The deep seam of the system (architecture.md section 4): everything between a validated request and a normalized
 /// completion. The HTTP endpoint and, later, Evaluation both call it in-process.
 /// </summary>
@@ -177,4 +186,14 @@ public interface IInferenceService
     /// After that the stream carries the failure itself (<see cref="StreamPart.Interrupted"/>); it is never replayed.
     /// </summary>
     Task<Result<StreamingCompletion>> StreamAsync(InferenceRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Routes <paramref name="request"/> as <see cref="CompleteAsync"/> would, on the current snapshot, and returns its worst case
+    /// (<see cref="WorstCaseEstimate"/>) without recording, reserving or calling anything. <paramref name="additionalInputTokens"/>
+    /// are added to the input estimate, for input that is not known yet (an <c>llm_judge</c> call quotes the candidate's output,
+    /// at most its output ceiling). Fails with the routing errors of <see cref="CompleteAsync"/> (<c>model_not_found</c>,
+    /// <c>model_not_allowed</c>, <c>no_eligible_model</c>, <c>request_cost_limit_exceeded</c>, <c>provider_unavailable</c>). Evaluation
+    /// uses it for a run's cost estimate and its <c>maxEstimatedCost</c> check (evaluation.md section 4).
+    /// </summary>
+    Task<Result<WorstCaseEstimate>> EstimateWorstCaseAsync(InferenceRequest request, int additionalInputTokens, CancellationToken cancellationToken);
 }

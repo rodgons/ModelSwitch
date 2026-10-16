@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using System.Text.Json.Nodes;
 using ModelSwitch.Evaluation.Application;
+using ModelSwitch.Evaluation.Domain.Runs;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Http;
@@ -37,8 +39,60 @@ internal static class EvaluationEndpoints
         admin.MapGet("/prompts/{promptId:guid}/versions", ListPromptVersionsAsync).Produces<PagedResult<PromptVersionView>>().RequireAuthorization(AdminPolicies.Viewer);
         admin.MapPost("/prompts/{promptId:guid}/versions", CreatePromptVersionAsync).Produces<PromptVersionView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Operator);
         admin.MapGet("/prompts/{promptId:guid}/versions/{version:int}", GetPromptVersionAsync).Produces<PromptVersionView>().RequireAuthorization(AdminPolicies.Viewer);
+
+        admin.MapPost("/evaluations", CreateEvaluationAsync).Produces<CreatedEvaluationView>(StatusCodes.Status202Accepted).RequireAuthorization(AdminPolicies.Operator);
+        admin.MapPost("/evaluations/estimate", EstimateEvaluationAsync).Produces<EvaluationEstimateView>().RequireAuthorization(AdminPolicies.Operator);
+        admin.MapGet("/evaluations", ListEvaluationsAsync).Produces<PagedResult<ComparisonView>>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapGet("/evaluations/{runId:guid}", GetRunAsync).Produces<RunDetailView>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapGet("/evaluations/{runId:guid}/results", ListResultsAsync).Produces<PagedResult<CaseResultView>>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapPost("/evaluations/{runId:guid}/cancel", CancelRunAsync).Produces<CancelledRunView>().RequireAuthorization(AdminPolicies.Operator);
+        admin.MapPost("/evaluations/{runId:guid}/rerun", RunAgainAsync).Produces<CreatedEvaluationView>(StatusCodes.Status202Accepted).RequireAuthorization(AdminPolicies.Operator);
+        admin.MapPost("/evaluations/{runId:guid}/aggregates/recompute", RecomputeAggregatesAsync).Produces<JsonNode>().RequireAuthorization(AdminPolicies.Operator);
+        admin.MapGet("/evaluations/{runId:guid}/export", ExportRunAsync).Produces(StatusCodes.Status200OK, contentType: "text/csv").RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapGet("/comparisons/{comparisonId:guid}", GetComparisonAsync).Produces<ComparisonDetailView>().RequireAuthorization(AdminPolicies.Viewer);
         return app;
     }
+
+    private static async Task<IResult> CreateEvaluationAsync(HttpContext http, CreateEvaluationRequest? request, EvaluationRunService runs)
+        => Respond(
+            http,
+            await runs.CreateAsync(request ?? Empty, http.RequestAborted),
+            created => Results.Json(created, statusCode: StatusCodes.Status202Accepted));
+
+    private static async Task<IResult> EstimateEvaluationAsync(HttpContext http, CreateEvaluationRequest? request, EvaluationRunService runs)
+        => Json(http, await runs.EstimateAsync(request ?? Empty, http.RequestAborted));
+
+    private static async Task<IResult> ListEvaluationsAsync(HttpContext http, EvaluationRunQueries queries, string? tenantId, string? datasetId, string? status, string? limit, string? cursor)
+        => Json(http, await queries.ListAsync(tenantId, datasetId, status, limit, cursor, http.RequestAborted));
+
+    private static async Task<IResult> GetRunAsync(HttpContext http, Guid runId, EvaluationRunQueries queries)
+        => Json(http, await queries.GetAsync(runId, http.RequestAborted));
+
+    private static async Task<IResult> ListResultsAsync(HttpContext http, Guid runId, EvaluationRunQueries queries, string? status, string? limit, string? cursor)
+        => Json(http, await queries.ResultsAsync(runId, status, limit, cursor, http.RequestAborted));
+
+    private static async Task<IResult> CancelRunAsync(HttpContext http, Guid runId, EvaluationRunService runs)
+        => Json(http, await runs.CancelAsync(runId, http.RequestAborted));
+
+    private static async Task<IResult> RunAgainAsync(HttpContext http, Guid runId, EvaluationRunService runs)
+        => Respond(
+            http,
+            await runs.RunAgainAsync(runId, http.RequestAborted),
+            created => Results.Json(created, statusCode: StatusCodes.Status202Accepted));
+
+    private static async Task<IResult> RecomputeAggregatesAsync(HttpContext http, Guid runId, EvaluationRunService runs)
+        => Json(http, await runs.RecomputeAggregatesAsync(runId, http.RequestAborted));
+
+    private static async Task<IResult> ExportRunAsync(HttpContext http, Guid runId, RunExporter exporter, string? format)
+        => Respond(
+            http,
+            await exporter.OpenAsync(runId, format, http.RequestAborted),
+            export => Results.Stream(stream => export.WriteAsync(stream, http.RequestAborted), export.ContentType, export.FileName));
+
+    private static async Task<IResult> GetComparisonAsync(HttpContext http, Guid comparisonId, EvaluationRunQueries queries)
+        => Json(http, await queries.ComparisonAsync(comparisonId, http.RequestAborted));
+
+    private static CreateEvaluationRequest Empty => new(null, null, null, null, null, null, null);
 
     private static async Task<IResult> ListDatasetsAsync(HttpContext http, DatasetService datasets, string? tenantId, string? limit, string? cursor)
         => Json(http, await datasets.ListAsync(tenantId, limit, cursor, http.RequestAborted));

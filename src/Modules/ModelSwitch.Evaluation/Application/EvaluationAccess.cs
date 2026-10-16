@@ -13,6 +13,8 @@ internal static class EvaluationAuditActions
     public const string DatasetVersioned = "dataset.versioned";
     public const string PromptCreated = "prompt.created";
     public const string PromptVersioned = "prompt.versioned";
+    public const string EvaluationCreated = "evaluation.created";
+    public const string EvaluationCancelled = "evaluation.cancelled";
 }
 
 /// <summary>

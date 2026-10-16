@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using ModelSwitch.Evaluation.Contracts;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Registry.Contracts;
 using ModelSwitch.SharedKernel;
@@ -18,6 +19,7 @@ internal sealed class DashboardService(
     IUsageQueries usage,
     ICatalogSnapshotSource catalog,
     IProviderHealthSnapshots health,
+    IEvaluationCaseLinks evaluationCases,
     IConfiguration configuration,
     TimeProvider time)
 {
@@ -59,6 +61,7 @@ internal sealed class DashboardService(
 
         var names = await NamesAsync(cancellationToken);
         var timeline = detail.Attempts.Select(a => Timeline(a, names)).ToList();
+        var link = detail.EvaluationRunId is null ? null : await evaluationCases.FindByRequestAsync(requestId, cancellationToken);
         return new RequestDetailView(
             Summary(detail.Request, names, timeline),
             detail.ClientRequestId,
@@ -85,7 +88,8 @@ internal sealed class DashboardService(
                 u.OutputCost,
                 u.TotalCost,
                 u.Currency,
-                u.RecordedAt))]);
+                u.RecordedAt))],
+            link is null ? null : new EvaluationCaseView(link.RunId, link.CaseId, link.ExternalId, link.Role));
     }
 
     public async Task<Result<UsageReportView>> UsageAsync(DashboardQueryString query, CancellationToken cancellationToken)

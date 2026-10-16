@@ -94,6 +94,11 @@ internal static class PlanResolver
 
     private static List<string> BuildChunks(ModelSpec model, IReadOnlyList<MockMessage> messages)
     {
+        if (model.Name == ModelSpec.JudgeModel)
+        {
+            return [ModelSpec.JudgeReply];
+        }
+
         string[] words;
         if (model.Echo)
         {
