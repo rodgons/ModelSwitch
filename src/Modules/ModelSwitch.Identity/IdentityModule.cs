@@ -42,6 +42,7 @@ public static class IdentityModule
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, ApiKeyUsageWriter>());
         services.TryAddSingleton<IApiKeyAuthenticator, ApiKeyAuthenticator>();
         services.TryAddSingleton<ITenantLimitsSource, EfTenantLimitsSource>();
+        services.TryAddSingleton<ITenantDirectory, EfTenantDirectory>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IReadinessCheck, PostgresReadinessCheck>());
         services.AddAdministratorServices();
         services.AddHttpContextAccessor();

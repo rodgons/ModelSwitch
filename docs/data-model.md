@@ -129,19 +129,23 @@ Indexes: `(tenant_id, started_at desc)`, `(started_at desc)`, `(status, started_
 
 ## `evaluation`
 
-**dataset**: `id`, `tenant_id`, `name`, `task_kind text (extraction|classification|free_text)`, `latest_version int`, `created_at`. `unique(tenant_id, name)`.
+Owned by `ModelSwitch.Evaluation` (`EvaluationDbContext`, one EF migration history `evaluation.__ef_migrations_history`). There are no foreign keys to other schemas: `tenant_id` is checked against Identity (`ITenantDirectory`) when a Dataset or Prompt is created, and every query filters it by the caller's Tenant Grant in the application services. Every foreign key below is `ON DELETE CASCADE`, so deleting a Dataset (or Prompt) removes everything under it (see Retention).
 
-**dataset_version**: `dataset_id`, `version`, `case_count`, `content_sha256`, `scoring_schema jsonb` (expected-output schema, label set for classification), `created_at`, `created_by_admin_id`. pk `(dataset_id, version)`.
+**dataset**: `id`, `tenant_id`, `name`, `task_kind text check (extraction|classification|free_text)`, `latest_version int check (>= 0)` (0 until the first upload; moved only by `UPDATE … SET latest_version = latest_version + 1 … RETURNING`, whose row lock gives concurrent uploads distinct numbers), `created_at`. `unique(tenant_id, name)`, index `(tenant_id, id)`.
 
-**eval_case**: `id`, `dataset_id`, `dataset_version`, `external_id text` (from the JSONL, unique within the version), `input jsonb`, `expected jsonb`, `metadata jsonb`, `ordinal int`
+**dataset_version**: `dataset_id fk`, `version check (>= 1)`, `case_count check (>= 1)`, `content_sha256 text check (64 lower-case hex)` (canonicalization in [api.md](api.md#evaluation)), `scoring_schema jsonb` (`{taskKind, labels}` for classification, `{taskKind, fields}` for extraction, `{taskKind}` for free text), `created_at`, `created_by_admin_id null`. pk `(dataset_id, version)`. Append-only.
 
-**prompt** / **prompt_version**: `prompt(id, tenant_id, name)`, `prompt_version(prompt_id, version, template jsonb /* messages with {{var}} */, created_at)`. Immutable versions.
+**eval_case**: `id`, `dataset_id`, `dataset_version` (fk to `dataset_version`), `external_id text` (from the JSONL), `input jsonb`, `expected jsonb`, `metadata jsonb null`, `ordinal int check (>= 0)` (position in the upload). `unique(dataset_id, dataset_version, external_id)`, `unique(dataset_id, dataset_version, ordinal)`. Append-only.
 
-**comparison**: `id`, `tenant_id`, `dataset_id`, `dataset_version`, `name`, `created_at`, `created_by_admin_id`
+**prompt**: `id`, `tenant_id`, `name`, `latest_version int check (>= 0)` (moved like `dataset.latest_version`), `created_at`. `unique(tenant_id, name)`, index `(tenant_id, id)`.
 
-**evaluation_run**: `id`, `comparison_id`, `tenant_id`, `dataset_id`, `dataset_version`, `run_configuration jsonb` (target alias **or** pinned provider_model_id, prompt_id+version, generation params, evaluator kind+version+config, concurrency), `config_sha256`, `max_estimated_cost numeric null`, `status (queued|running|succeeded|failed|cancelled)`, `cases_total`, `cases_done`, `cases_failed`, `aggregates jsonb null`, `started_at`, `completed_at`, `error text null`
+**prompt_version**: `prompt_id fk`, `version check (>= 1)`, `template jsonb` (`{"messages":[{"role","content"}],"responseFormat"?}`, messages with `{{var}}`), `created_at`, `created_by_admin_id null`. pk `(prompt_id, version)`. Append-only.
 
-**case_result**: `id`, `run_id`, `case_id`, `status (passed|failed|errored|skipped)`, `score numeric(6,5) null`, `predicted jsonb null`, `output_text text null`, `score_details jsonb`, `inference_request_id uuid null`, `input_tokens`, `output_tokens`, `estimated_cost` (these three are the candidate call only), `judge_inference_request_id uuid null`, `judge_input_tokens null`, `judge_output_tokens null`, `judge_estimated_cost null` (`llm_judge` only), `latency_ms`, `error_code null`. `unique(run_id, case_id)`, which makes resuming idempotent.
+**comparison**: `id`, `tenant_id`, `dataset_id`, `dataset_version` (fk to `dataset_version`), `name`, `created_at`, `created_by_admin_id null`. Index `(tenant_id, id)`.
+
+**evaluation_run**: `id`, `comparison_id fk`, `tenant_id`, `dataset_id`, `dataset_version` (fk to `dataset_version`), `run_configuration jsonb` (target alias **or** pinned provider_model_id, prompt_id+version, generation params, evaluator kind+version+config, concurrency), `config_sha256 check (64 lower-case hex)`, `max_estimated_cost numeric(20,10) null check (>= 0)` (USD), `status check (queued|running|succeeded|failed|cancelled)`, `cases_total`, `cases_done`, `cases_failed` (check `0 <= cases_failed <= cases_done <= cases_total`), `aggregates jsonb null`, `created_at`, `started_at null`, `completed_at null`, `error text null`. Indexes `(comparison_id)`, `(tenant_id, id)`, `(dataset_id, dataset_version)`.
+
+**case_result**: `id`, `run_id fk`, `case_id fk` (to `eval_case`), `status check (passed|failed|errored|skipped)`, `score numeric(6,5) null check (0..1, and null when errored or skipped)`, `predicted jsonb null`, `output_text text null`, `score_details jsonb`, `inference_request_id uuid null`, `input_tokens null`, `output_tokens null`, `estimated_cost numeric(20,10) null` (these three are the candidate call only; null when no call was made), `judge_inference_request_id uuid null`, `judge_input_tokens null`, `judge_output_tokens null`, `judge_estimated_cost null` (`llm_judge` only), `latency_ms null`, `error_code null`, `created_at`. `unique(run_id, case_id)`, which makes resuming idempotent; indexes `(case_id)`, `(inference_request_id)`, `(judge_inference_request_id) where not null` (the request detail page links back to the Case Result).
 
 ## Background processing (`jobs` schema, shared infrastructure)
 
@@ -181,7 +185,7 @@ All three tables are created by plain idempotent DDL in the Migrator (`SharedKer
 ## Database roles (least privilege, NFR-03)
 
 - `modelswitch_migrator`: owns the schemas and runs DDL. Used only by the migrator.
-- `modelswitch_app`: DML on all module tables except `UPDATE`/`DELETE` on `audit_record`, `model_price` and `routing_policy_version`. Used by api and worker.
+- `modelswitch_app`: DML on all module tables except `UPDATE`/`DELETE` on `audit_record`, `model_price`, `routing_policy_version`, `dataset_version`, `eval_case` and `prompt_version`. Used by api and worker. Deleting a `dataset` or `prompt` still removes its versions and Cases, because PostgreSQL runs `ON DELETE CASCADE` with the privileges of the referencing table's owner (the migrator role).
 - `modelswitch_retention`: `DELETE` on retention-managed tables. Used only by the worker's retention job.
 
 The migrator creates the runtime roles and re-applies these grants after every migration run ([deployment.md](deployment.md#4-database-initialization)). The EF migrations history table is not granted to `modelswitch_app`.

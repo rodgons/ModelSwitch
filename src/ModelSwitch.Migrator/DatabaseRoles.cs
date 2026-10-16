@@ -13,7 +13,12 @@ internal sealed partial class DatabaseRoles(ILogger<DatabaseRoles> logger)
     public const string RetentionRole = "modelswitch_retention";
 
     // Append-only by design: the app role may INSERT and SELECT but never UPDATE or DELETE these.
-    private static readonly string[] _appendOnlyTables = ["audit_record", "model_price", "routing_policy_version"];
+    // Immutable versions (FR-11) included: a Dataset delete still cascades to them, because PostgreSQL runs referential actions
+    // with the privileges of the referencing table's owner.
+    private static readonly string[] _appendOnlyTables =
+    [
+        "audit_record", "model_price", "routing_policy_version", "dataset_version", "eval_case", "prompt_version",
+    ];
 
     // Functions the worker's roles may run: SECURITY DEFINER maintenance owned by the migrator role (data-model.md "Partitioning").
     private static readonly string[] _maintenanceFunctions = ["maintain_request_partitions"];
