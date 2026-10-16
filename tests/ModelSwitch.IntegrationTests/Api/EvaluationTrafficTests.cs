@@ -89,6 +89,24 @@ public sealed class EvaluationTrafficTests(GatewayFixture gateway) : IClassFixtu
     }
 
     [Fact]
+    public async Task The_worst_case_estimate_is_the_reservation_the_same_request_holds_and_records_nothing()
+    {
+        var request = Request(gateway.TenantId, InferenceTarget.For(GatewayFixture.ResilientAlias));
+        var requests = await gateway.ScalarAsync("select count(*) from usage.inference_request");
+
+        var estimate = (await Inference.EstimateWorstCaseAsync(request, 0, CancellationToken.None)).Value;
+        var larger = (await Inference.EstimateWorstCaseAsync(request, 1000, CancellationToken.None)).Value;
+
+        (await gateway.ScalarAsync("select count(*) from usage.inference_request")).ShouldBe(requests);
+        (await Inference.CompleteAsync(request, CancellationToken.None)).IsSuccess.ShouldBeTrue();
+        decimal.Parse(await gateway.ScalarAsync($"select amount from usage.reservation where inference_request_id = '{request.RequestId}'"), CultureInfo.InvariantCulture)
+            .ShouldBe(estimate.Amount.Amount);
+        estimate.MaxOutputTokens.ShouldBe(1024);
+        larger.Amount.Amount.ShouldBeGreaterThan(estimate.Amount.Amount, "additional input tokens are costed at the input rate");
+        (await Inference.EstimateWorstCaseAsync(Request(gateway.TenantId, InferenceTarget.For("no-such-alias")), 0, CancellationToken.None)).Error.Code.ShouldBe(ErrorCode.ModelNotFound);
+    }
+
+    [Fact]
     public async Task Evaluation_traffic_is_not_held_to_the_tenants_rate_limit_while_api_traffic_is()
     {
         var (tenantId, key) = await gateway.SeedTenantAsync("eval-rate", requestsPerMinute: 1);

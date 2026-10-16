@@ -1806,6 +1806,372 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/admin/evaluations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: {
+          tenantId?: string
+          datasetId?: string
+          status?: string
+          limit?: string
+          cursor?: string
+        }
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PagedResultOfComparisonView']
+          }
+        }
+      }
+    }
+    put?: never
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: {
+        content: {
+          'application/json': null | components['schemas']['CreateEvaluationRequest']
+        }
+      }
+      responses: {
+        /** @description Accepted */
+        202: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['CreatedEvaluationView']
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/evaluations/estimate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: {
+        content: {
+          'application/json': null | components['schemas']['CreateEvaluationRequest']
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['EvaluationEstimateView']
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/evaluations/{runId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          runId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['RunDetailView']
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/evaluations/{runId}/results': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: {
+          status?: string
+          limit?: string
+          cursor?: string
+        }
+        header?: never
+        path: {
+          runId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PagedResultOfCaseResultView']
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/evaluations/{runId}/cancel': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          runId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['CancelledRunView']
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/evaluations/{runId}/rerun': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          runId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description Accepted */
+        202: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['CreatedEvaluationView']
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/evaluations/{runId}/aggregates/recompute': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          runId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['JsonNode']
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/evaluations/{runId}/export': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: {
+          format?: string
+        }
+        header?: never
+        path: {
+          runId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content?: never
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/comparisons/{comparisonId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          comparisonId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['ComparisonDetailView']
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/admin/overview': {
     parameters: {
       query?: never
@@ -2120,6 +2486,47 @@ export interface components {
       period: string
       currency: string
     }
+    CancelledRunView: {
+      /** Format: uuid */
+      id: string
+      status: string
+    }
+    CaseResultView: {
+      /** Format: uuid */
+      id: string
+      /** Format: uuid */
+      caseId: string
+      externalId: string
+      /** Format: int32 */
+      ordinal: number
+      status: string
+      /** Format: double */
+      score: null | number
+      predicted: null | components['schemas']['JsonNode']
+      outputText: null | string
+      scoreDetails: null | components['schemas']['JsonNode']
+      /** Format: int32 */
+      inputTokens: null | number
+      /** Format: int32 */
+      outputTokens: null | number
+      /** Format: double */
+      estimatedCost: null | number
+      /** Format: int32 */
+      judgeInputTokens: null | number
+      /** Format: int32 */
+      judgeOutputTokens: null | number
+      /** Format: double */
+      judgeEstimatedCost: null | number
+      /** Format: int32 */
+      latencyMs: null | number
+      errorCode: null | string
+      /** Format: uuid */
+      inferenceRequestId: null | string
+      /** Format: uuid */
+      judgeInferenceRequestId: null | string
+      /** Format: date-time */
+      createdAt: string
+    }
     CaseView: {
       /** Format: uuid */
       id: string
@@ -2129,6 +2536,91 @@ export interface components {
       input: null | components['schemas']['JsonNode']
       expected: null | components['schemas']['JsonNode']
       metadata: null | components['schemas']['JsonNode']
+    }
+    ComparisonDetailView: {
+      /** Format: uuid */
+      id: string
+      /** Format: uuid */
+      tenantId: string
+      /** Format: uuid */
+      datasetId: string
+      /** Format: int32 */
+      datasetVersion: number
+      name: string
+      /** Format: date-time */
+      createdAt: string
+      currency: string
+      runs: components['schemas']['ComparisonRunView'][]
+    }
+    ComparisonRunView: {
+      /** Format: uuid */
+      runId: string
+      status: string
+      target: components['schemas']['TargetView']
+      prompt: components['schemas']['PromptRefView']
+      evaluator: components['schemas']['EvaluatorRefView']
+      params: components['schemas']['GenerationParams']
+      configSha256: string
+      /** Format: int32 */
+      casesTotal: number
+      /** Format: int32 */
+      casesDone: number
+      quality: null | components['schemas']['QualityView']
+      /** Format: double */
+      erroredRate: null | number
+      /** Format: int32 */
+      latencyP50Ms: null | number
+      /** Format: int32 */
+      latencyP95Ms: null | number
+      /** Format: double */
+      candidateCostPerCase: null | number
+      /** Format: double */
+      candidateCost: number
+      /** Format: double */
+      judgeCost: number
+      /** Format: double */
+      totalCost: number
+      modelJudged: boolean
+      aggregatesLive: boolean
+      error: null | string
+      variance: null | components['schemas']['RunVariance']
+    }
+    ComparisonView: {
+      /** Format: uuid */
+      id: string
+      /** Format: uuid */
+      tenantId: string
+      /** Format: uuid */
+      datasetId: string
+      /** Format: int32 */
+      datasetVersion: number
+      name: string
+      /** Format: date-time */
+      createdAt: string
+      /** Format: uuid */
+      createdByAdminId: null | string
+      runs: components['schemas']['RunSummaryView'][]
+    }
+    ConfigurationEstimateView: {
+      /** Format: int32 */
+      index: number
+      target: string
+      /** Format: int32 */
+      cases: number
+      /** Format: int32 */
+      estimatedCases: number
+      /** Format: double */
+      candidateWorstCase: number
+      /** Format: double */
+      judgeWorstCase: number
+      /** Format: double */
+      worstCase: number
+      /** Format: double */
+      maxPerCaseWorstCase: null | number
+      exceedsMaxEstimatedCost: null | boolean
+      failures: {
+        [key: string]: number
+      }
     }
     ConnectivityFailureView: {
       class: string
@@ -2160,6 +2652,20 @@ export interface components {
       tenantId: null | string
       name: null | string
       taskKind: null | string
+    }
+    CreateEvaluationRequest: {
+      /** Format: uuid */
+      tenantId: null | string
+      /** Format: uuid */
+      datasetId: null | string
+      /** Format: int32 */
+      datasetVersion: null | number
+      name: null | string
+      configurations: null | components['schemas']['RunConfigurationInput'][]
+      /** Format: int32 */
+      concurrency: null | number
+      /** Format: double */
+      maxEstimatedCost: null | number
     }
     CreateModelPriceRequest: {
       /** Format: double */
@@ -2217,6 +2723,11 @@ export interface components {
       createdAt: string
       key: string
     }
+    CreatedEvaluationView: {
+      /** Format: uuid */
+      comparisonId: string
+      runIds: string[]
+    }
     CredentialRequest: {
       secret: null | string
       envVar: null | string
@@ -2253,10 +2764,74 @@ export interface components {
       /** Format: date-time */
       createdAt: string
     }
+    EvaluationCaseView: {
+      /** Format: uuid */
+      runId: string
+      /** Format: uuid */
+      caseId: string
+      externalId: string
+      role: string
+    }
+    EvaluationEstimateView: {
+      currency: string
+      /** Format: double */
+      total: number
+      configurations: components['schemas']['ConfigurationEstimateView'][]
+    }
+    EvaluatorInput: {
+      kind: null | string
+      version: null | string
+      config: null | components['schemas']['JsonElement']
+    }
+    EvaluatorRefView: {
+      kind: string
+      version: string
+    }
     ExcludedCandidateView: {
       /** Format: uuid */
       model: string
       reason: string
+    }
+    FailureSummaryView: {
+      byStatus: {
+        [key: string]: number
+      }
+      byErrorCode: {
+        [key: string]: number
+      }
+    }
+    FrozenEvaluator: {
+      kind: string
+      version: string
+      config: components['schemas']['JsonElement']
+      judge?: null | components['schemas']['FrozenJudge']
+    }
+    FrozenJudge: {
+      alias: string
+      /** Format: uuid */
+      policyId: string
+      /** Format: int32 */
+      policyVersion: number
+    }
+    GenerationParams: {
+      /** Format: double */
+      temperature: null | number
+      /** Format: double */
+      topP: null | number
+      /** Format: int64 */
+      seed: null | number
+      /** Format: int32 */
+      maxOutputTokens: null | number
+    }
+    GenerationParamsInput: {
+      /** Format: double */
+      temperature: null | number
+      /** Format: double */
+      topP: null | number
+      /** Format: int64 */
+      seed: null | number
+      /** Format: int32 */
+      maxOutputTokens: null | number
     }
     InstanceHealthView: {
       instanceId: string
@@ -2364,8 +2939,18 @@ export interface components {
       nextCursor: null | string
     }
     /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
+    PagedResultOfCaseResultView: {
+      items: components['schemas']['CaseResultView'][]
+      nextCursor: null | string
+    }
+    /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
     PagedResultOfCaseView: {
       items: components['schemas']['CaseView'][]
+      nextCursor: null | string
+    }
+    /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
+    PagedResultOfComparisonView: {
+      items: components['schemas']['ComparisonView'][]
       nextCursor: null | string
     }
     /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
@@ -2449,6 +3034,14 @@ export interface components {
       /** Format: date-time */
       versionCreatedAt: string
     }
+    ProgressView: {
+      /** Format: int32 */
+      total: number
+      /** Format: int32 */
+      done: number
+      /** Format: int32 */
+      failed: number
+    }
     PromptMessageRequest: {
       role: null | string
       content: null | string
@@ -2456,6 +3049,18 @@ export interface components {
     PromptMessageView: {
       role: string
       content: string
+    }
+    PromptRefInput: {
+      /** Format: uuid */
+      id: null | string
+      /** Format: int32 */
+      version: null | number
+    }
+    PromptRefView: {
+      /** Format: uuid */
+      id: string
+      /** Format: int32 */
+      version: number
     }
     PromptTemplateView: {
       messages: components['schemas']['PromptMessageView'][]
@@ -2524,6 +3129,11 @@ export interface components {
       /** Format: date-time */
       updatedAt: string
     }
+    QualityView: {
+      metric: string
+      /** Format: double */
+      value: null | number
+    }
     RecentAttemptsView: {
       /** Format: int64 */
       attempts: number
@@ -2535,6 +3145,23 @@ export interface components {
       latencyP50Ms: null | number
       /** Format: int32 */
       latencyP95Ms: null | number
+    }
+    ReproducibilityView: {
+      /** Format: uuid */
+      datasetId: string
+      /** Format: int32 */
+      datasetVersion: number
+      contentSha256: string
+      prompt: components['schemas']['PromptRefView']
+      target: components['schemas']['TargetView']
+      params: components['schemas']['GenerationParams']
+      evaluator: components['schemas']['FrozenEvaluator']
+      configSha256: string
+      gatewayVersion: string
+      /** Format: date-time */
+      startedAt: null | string
+      /** Format: date-time */
+      completedAt: null | string
     }
     RequestDetailView: {
       request: components['schemas']['RequestSummaryView']
@@ -2554,6 +3181,7 @@ export interface components {
       routingDecision: null | components['schemas']['RoutingDecisionView']
       attempts: components['schemas']['AttemptTimelineView'][]
       usageRecords: components['schemas']['UsageRecordDetailView'][]
+      evaluationCase?: null | components['schemas']['EvaluationCaseView']
     }
     RequestPage: {
       items: components['schemas']['RequestSummaryView'][]
@@ -2618,6 +3246,77 @@ export interface components {
       candidates: components['schemas']['SimulatedCandidateView'][]
       currency: string
     }
+    RunConfigurationInput: {
+      target: null | components['schemas']['TargetInput']
+      prompt: null | components['schemas']['PromptRefInput']
+      params: null | components['schemas']['GenerationParamsInput']
+      evaluator: null | components['schemas']['EvaluatorInput']
+    }
+    RunDetailView: {
+      /** Format: uuid */
+      id: string
+      /** Format: uuid */
+      comparisonId: string
+      comparisonName: string
+      /** Format: uuid */
+      tenantId: string
+      status: string
+      progress: components['schemas']['ProgressView']
+      configuration: null | components['schemas']['JsonNode']
+      configSha256: string
+      /** Format: double */
+      maxEstimatedCost: null | number
+      reproducibility: components['schemas']['ReproducibilityView']
+      aggregates: null | components['schemas']['JsonNode']
+      aggregatesLive: boolean
+      failures: components['schemas']['FailureSummaryView']
+      error: null | string
+      /** Format: date-time */
+      createdAt: string
+      /** Format: date-time */
+      startedAt: null | string
+      /** Format: date-time */
+      completedAt: null | string
+    }
+    RunSummaryView: {
+      /** Format: uuid */
+      id: string
+      /** Format: uuid */
+      comparisonId: string
+      status: string
+      target: components['schemas']['TargetView']
+      prompt: components['schemas']['PromptRefView']
+      evaluator: components['schemas']['EvaluatorRefView']
+      configSha256: string
+      /** Format: int32 */
+      casesTotal: number
+      /** Format: int32 */
+      casesDone: number
+      /** Format: int32 */
+      casesFailed: number
+      quality: null | components['schemas']['QualityView']
+      /** Format: double */
+      maxEstimatedCost: null | number
+      error: null | string
+      /** Format: date-time */
+      createdAt: string
+      /** Format: date-time */
+      startedAt: null | string
+      /** Format: date-time */
+      completedAt: null | string
+    }
+    RunVariance: {
+      /** Format: int32 */
+      runs: number
+      /** Format: double */
+      min: number
+      /** Format: double */
+      max: number
+      /** Format: double */
+      mean: number
+      /** Format: double */
+      stdDev: number
+    }
     SessionResponse: {
       administrator: components['schemas']['AdministratorSummary']
       antiforgeryToken: string
@@ -2652,6 +3351,22 @@ export interface components {
       circuitState: string
       /** Format: double */
       worstCaseEstimatedCost: null | number
+    }
+    TargetInput: {
+      alias: null | string
+      /** Format: uuid */
+      providerModelId: null | string
+    }
+    TargetView: {
+      label: string
+      alias: null | string
+      /** Format: uuid */
+      policyId: null | string
+      /** Format: int32 */
+      policyVersion: null | number
+      /** Format: uuid */
+      providerModelId: null | string
+      providerModel: null | string
     }
     TenantDetailView: {
       /** Format: uuid */

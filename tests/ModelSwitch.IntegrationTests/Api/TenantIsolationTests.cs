@@ -127,7 +127,14 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
         var promptId = (await AdminBrowser.JsonAsync(prompt)).GetProperty("id").GetGuid();
         (await owner.SendJsonAsync(HttpMethod.Post, $"/admin/prompts/{promptId}/versions", new { messages = new[] { new { role = "user", content = "{{text}}" } } }))
             .StatusCode.ShouldBe(HttpStatusCode.Created);
-        return new ForeignIds(admin.TenantB, keyId, requestId, datasetId, promptId, policyId);
+        // A queued Evaluation Run of Tenant B in its own Comparison, as the run and comparison routes read them.
+        var comparisonId = Guid.CreateVersion7();
+        var runId = Guid.CreateVersion7();
+        await admin.ScalarAsync(
+            $"insert into evaluation.comparison (id, tenant_id, dataset_id, dataset_version, name, created_at) values ('{comparisonId}', '{admin.TenantB}', '{datasetId}', 1, 'b-comparison', now()); " +
+            "insert into evaluation.evaluation_run (id, comparison_id, tenant_id, dataset_id, dataset_version, run_configuration, config_sha256, status, cases_total, cases_done, cases_failed, created_at) " +
+            $"values ('{runId}', '{comparisonId}', '{admin.TenantB}', '{datasetId}', 1, '{{}}', '{new string('a', 64)}', 'queued', 1, 0, 0, now())");
+        return new ForeignIds(admin.TenantB, keyId, requestId, datasetId, promptId, policyId, runId, comparisonId);
     }
 
     private async Task AssertTenantBUntouchedAsync(ForeignIds foreign)
@@ -143,6 +150,10 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
         (await admin.ScalarAsync($"select count(*) from evaluation.prompt where tenant_id = '{foreign.TenantId}' and name = 'intruder'")).ShouldBe("0");
         (await admin.ScalarAsync($"select latest_version from evaluation.dataset where id = '{foreign.DatasetId}'")).ShouldBe("1");
         (await admin.ScalarAsync($"select latest_version from evaluation.prompt where id = '{foreign.PromptId}'")).ShouldBe("1");
+
+        // No Comparison was created for Tenant B and its run was neither cancelled nor re-run.
+        (await admin.ScalarAsync($"select count(*) from evaluation.comparison where tenant_id = '{foreign.TenantId}' and (name = 'intruder' or name like '%(run again)')")).ShouldBe("0");
+        (await admin.ScalarAsync($"select status from evaluation.evaluation_run where id = '{foreign.RunId}'")).ShouldBe("queued");
     }
 }
 

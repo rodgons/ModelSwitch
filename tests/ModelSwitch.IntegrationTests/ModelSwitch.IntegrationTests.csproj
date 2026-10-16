@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/ModelSwitch.Api/ModelSwitch.Api.csproj" />
     <ProjectReference Include="../../src/ModelSwitch.Migrator/ModelSwitch.Migrator.csproj" />
+    <ProjectReference Include="../../src/ModelSwitch.Worker/ModelSwitch.Worker.csproj" />
     <ProjectReference Include="../../tools/ModelSwitch.MockProvider/ModelSwitch.MockProvider.csproj" />
   </ItemGroup>
 

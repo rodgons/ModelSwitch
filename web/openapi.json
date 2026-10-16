@@ -1923,6 +1923,361 @@
         }
       }
     },
+    "/admin/evaluations": {
+      "post": {
+        "tags": [
+          "EvaluationEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CreateEvaluationRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedEvaluationView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "EvaluationEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "datasetId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfComparisonView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/evaluations/estimate": {
+      "post": {
+        "tags": [
+          "EvaluationEndpoints"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CreateEvaluationRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationEstimateView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/evaluations/{runId}": {
+      "get": {
+        "tags": [
+          "EvaluationEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetailView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/evaluations/{runId}/results": {
+      "get": {
+        "tags": [
+          "EvaluationEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfCaseResultView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/evaluations/{runId}/cancel": {
+      "post": {
+        "tags": [
+          "EvaluationEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelledRunView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/evaluations/{runId}/rerun": {
+      "post": {
+        "tags": [
+          "EvaluationEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedEvaluationView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/evaluations/{runId}/aggregates/recompute": {
+      "post": {
+        "tags": [
+          "EvaluationEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonNode"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/evaluations/{runId}/export": {
+      "get": {
+        "tags": [
+          "EvaluationEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/admin/comparisons/{comparisonId}": {
+      "get": {
+        "tags": [
+          "EvaluationEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "comparisonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonDetailView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/overview": {
       "get": {
         "tags": [
@@ -2551,6 +2906,173 @@
           }
         }
       },
+      "CancelledRunView": {
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "CaseResultView": {
+        "required": [
+          "id",
+          "caseId",
+          "externalId",
+          "ordinal",
+          "status",
+          "score",
+          "predicted",
+          "outputText",
+          "scoreDetails",
+          "inputTokens",
+          "outputTokens",
+          "estimatedCost",
+          "judgeInputTokens",
+          "judgeOutputTokens",
+          "judgeEstimatedCost",
+          "latencyMs",
+          "errorCode",
+          "inferenceRequestId",
+          "judgeInferenceRequestId",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "caseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "ordinal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "score": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "predicted": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          },
+          "outputText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scoreDetails": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          },
+          "inputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "outputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "estimatedCost": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "judgeInputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "judgeOutputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "judgeEstimatedCost": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "latencyMs": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "errorCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "inferenceRequestId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "judgeInferenceRequestId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "CaseView": {
         "required": [
           "id",
@@ -2602,6 +3124,298 @@
                 "$ref": "#/components/schemas/JsonNode"
               }
             ]
+          }
+        }
+      },
+      "ComparisonDetailView": {
+        "required": [
+          "id",
+          "tenantId",
+          "datasetId",
+          "datasetVersion",
+          "name",
+          "createdAt",
+          "currency",
+          "runs"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "datasetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "datasetVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonRunView"
+            }
+          }
+        }
+      },
+      "ComparisonRunView": {
+        "required": [
+          "runId",
+          "status",
+          "target",
+          "prompt",
+          "evaluator",
+          "params",
+          "configSha256",
+          "casesTotal",
+          "casesDone",
+          "quality",
+          "erroredRate",
+          "latencyP50Ms",
+          "latencyP95Ms",
+          "candidateCostPerCase",
+          "candidateCost",
+          "judgeCost",
+          "totalCost",
+          "modelJudged",
+          "aggregatesLive",
+          "error",
+          "variance"
+        ],
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TargetView"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/PromptRefView"
+          },
+          "evaluator": {
+            "$ref": "#/components/schemas/EvaluatorRefView"
+          },
+          "params": {
+            "$ref": "#/components/schemas/GenerationParams"
+          },
+          "configSha256": {
+            "type": "string"
+          },
+          "casesTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "casesDone": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "quality": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/QualityView"
+              }
+            ]
+          },
+          "erroredRate": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "latencyP50Ms": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "latencyP95Ms": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "candidateCostPerCase": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "candidateCost": {
+            "type": "number",
+            "format": "double"
+          },
+          "judgeCost": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalCost": {
+            "type": "number",
+            "format": "double"
+          },
+          "modelJudged": {
+            "type": "boolean"
+          },
+          "aggregatesLive": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "variance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunVariance"
+              }
+            ]
+          }
+        }
+      },
+      "ComparisonView": {
+        "required": [
+          "id",
+          "tenantId",
+          "datasetId",
+          "datasetVersion",
+          "name",
+          "createdAt",
+          "createdByAdminId",
+          "runs"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "datasetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "datasetVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdByAdminId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunSummaryView"
+            }
+          }
+        }
+      },
+      "ConfigurationEstimateView": {
+        "required": [
+          "index",
+          "target",
+          "cases",
+          "estimatedCases",
+          "candidateWorstCase",
+          "judgeWorstCase",
+          "worstCase",
+          "maxPerCaseWorstCase",
+          "exceedsMaxEstimatedCost",
+          "failures"
+        ],
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target": {
+            "type": "string"
+          },
+          "cases": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "estimatedCases": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "candidateWorstCase": {
+            "type": "number",
+            "format": "double"
+          },
+          "judgeWorstCase": {
+            "type": "number",
+            "format": "double"
+          },
+          "worstCase": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxPerCaseWorstCase": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "exceedsMaxEstimatedCost": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "failures": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         }
       },
@@ -2759,6 +3573,70 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "CreateEvaluationRequest": {
+        "required": [
+          "tenantId",
+          "datasetId",
+          "datasetVersion",
+          "name",
+          "configurations",
+          "concurrency",
+          "maxEstimatedCost"
+        ],
+        "type": "object",
+        "properties": {
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "datasetId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "datasetVersion": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "configurations": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/RunConfigurationInput"
+            }
+          },
+          "concurrency": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "maxEstimatedCost": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
           }
         }
       },
@@ -3039,6 +3917,26 @@
           }
         }
       },
+      "CreatedEvaluationView": {
+        "required": [
+          "comparisonId",
+          "runIds"
+        ],
+        "type": "object",
+        "properties": {
+          "comparisonId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "runIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
       "CredentialRequest": {
         "required": [
           "secret",
@@ -3168,6 +4066,101 @@
           }
         }
       },
+      "EvaluationCaseView": {
+        "required": [
+          "runId",
+          "caseId",
+          "externalId",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "caseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          }
+        }
+      },
+      "EvaluationEstimateView": {
+        "required": [
+          "currency",
+          "total",
+          "configurations"
+        ],
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "total": {
+            "type": "number",
+            "format": "double"
+          },
+          "configurations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationEstimateView"
+            }
+          }
+        }
+      },
+      "EvaluatorInput": {
+        "required": [
+          "kind",
+          "version",
+          "config"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          }
+        }
+      },
+      "EvaluatorRefView": {
+        "required": [
+          "kind",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
       "ExcludedCandidateView": {
         "required": [
           "model",
@@ -3181,6 +4174,157 @@
           },
           "reason": {
             "type": "string"
+          }
+        }
+      },
+      "FailureSummaryView": {
+        "required": [
+          "byStatus",
+          "byErrorCode"
+        ],
+        "type": "object",
+        "properties": {
+          "byStatus": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "byErrorCode": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "FrozenEvaluator": {
+        "required": [
+          "kind",
+          "version",
+          "config"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "config": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "judge": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FrozenJudge"
+              }
+            ]
+          }
+        }
+      },
+      "FrozenJudge": {
+        "required": [
+          "alias",
+          "policyId",
+          "policyVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "policyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policyVersion": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "GenerationParams": {
+        "required": [
+          "temperature",
+          "topP",
+          "seed",
+          "maxOutputTokens"
+        ],
+        "type": "object",
+        "properties": {
+          "temperature": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "topP": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "seed": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "maxOutputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "GenerationParamsInput": {
+        "required": [
+          "temperature",
+          "topP",
+          "seed",
+          "maxOutputTokens"
+        ],
+        "type": "object",
+        "properties": {
+          "temperature": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "topP": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "seed": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int64"
+          },
+          "maxOutputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -3562,6 +4706,28 @@
           }
         }
       },
+      "PagedResultOfCaseResultView": {
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CaseResultView"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "One page of an admin list: \u0060{ items, nextCursor }\u0060 (docs/api.md section 3). A null cursor is the last page."
+      },
       "PagedResultOfCaseView": {
         "required": [
           "items",
@@ -3573,6 +4739,28 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CaseView"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "One page of an admin list: \u0060{ items, nextCursor }\u0060 (docs/api.md section 3). A null cursor is the last page."
+      },
+      "PagedResultOfComparisonView": {
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonView"
             }
           },
           "nextCursor": {
@@ -3907,6 +5095,28 @@
           }
         }
       },
+      "ProgressView": {
+        "required": [
+          "total",
+          "done",
+          "failed"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "done": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "PromptMessageRequest": {
         "required": [
           "role",
@@ -3940,6 +5150,46 @@
           },
           "content": {
             "type": "string"
+          }
+        }
+      },
+      "PromptRefInput": {
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "version": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "PromptRefView": {
+        "required": [
+          "id",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -4179,6 +5429,25 @@
           }
         }
       },
+      "QualityView": {
+        "required": [
+          "metric",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        }
+      },
       "RecentAttemptsView": {
         "required": [
           "attempts",
@@ -4217,6 +5486,67 @@
               "integer"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "ReproducibilityView": {
+        "required": [
+          "datasetId",
+          "datasetVersion",
+          "contentSha256",
+          "prompt",
+          "target",
+          "params",
+          "evaluator",
+          "configSha256",
+          "gatewayVersion",
+          "startedAt",
+          "completedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "datasetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "datasetVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "contentSha256": {
+            "type": "string"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/PromptRefView"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TargetView"
+          },
+          "params": {
+            "$ref": "#/components/schemas/GenerationParams"
+          },
+          "evaluator": {
+            "$ref": "#/components/schemas/FrozenEvaluator"
+          },
+          "configSha256": {
+            "type": "string"
+          },
+          "gatewayVersion": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -4308,6 +5638,16 @@
             "items": {
               "$ref": "#/components/schemas/UsageRecordDetailView"
             }
+          },
+          "evaluationCase": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EvaluationCaseView"
+              }
+            ]
           }
         }
       },
@@ -4579,6 +5919,296 @@
           }
         }
       },
+      "RunConfigurationInput": {
+        "required": [
+          "target",
+          "prompt",
+          "params",
+          "evaluator"
+        ],
+        "type": "object",
+        "properties": {
+          "target": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TargetInput"
+              }
+            ]
+          },
+          "prompt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PromptRefInput"
+              }
+            ]
+          },
+          "params": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GenerationParamsInput"
+              }
+            ]
+          },
+          "evaluator": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EvaluatorInput"
+              }
+            ]
+          }
+        }
+      },
+      "RunDetailView": {
+        "required": [
+          "id",
+          "comparisonId",
+          "comparisonName",
+          "tenantId",
+          "status",
+          "progress",
+          "configuration",
+          "configSha256",
+          "maxEstimatedCost",
+          "reproducibility",
+          "aggregates",
+          "aggregatesLive",
+          "failures",
+          "error",
+          "createdAt",
+          "startedAt",
+          "completedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "comparisonId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "comparisonName": {
+            "type": "string"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ProgressView"
+          },
+          "configuration": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          },
+          "configSha256": {
+            "type": "string"
+          },
+          "maxEstimatedCost": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "reproducibility": {
+            "$ref": "#/components/schemas/ReproducibilityView"
+          },
+          "aggregates": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonNode"
+              }
+            ]
+          },
+          "aggregatesLive": {
+            "type": "boolean"
+          },
+          "failures": {
+            "$ref": "#/components/schemas/FailureSummaryView"
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "RunSummaryView": {
+        "required": [
+          "id",
+          "comparisonId",
+          "status",
+          "target",
+          "prompt",
+          "evaluator",
+          "configSha256",
+          "casesTotal",
+          "casesDone",
+          "casesFailed",
+          "quality",
+          "maxEstimatedCost",
+          "error",
+          "createdAt",
+          "startedAt",
+          "completedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "comparisonId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TargetView"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/PromptRefView"
+          },
+          "evaluator": {
+            "$ref": "#/components/schemas/EvaluatorRefView"
+          },
+          "configSha256": {
+            "type": "string"
+          },
+          "casesTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "casesDone": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "casesFailed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "quality": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/QualityView"
+              }
+            ]
+          },
+          "maxEstimatedCost": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "RunVariance": {
+        "required": [
+          "runs",
+          "min",
+          "max",
+          "mean",
+          "stdDev"
+        ],
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "min": {
+            "type": "number",
+            "format": "double"
+          },
+          "max": {
+            "type": "number",
+            "format": "double"
+          },
+          "mean": {
+            "type": "number",
+            "format": "double"
+          },
+          "stdDev": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
       "SessionResponse": {
         "required": [
           "administrator",
@@ -4733,6 +6363,77 @@
               "number"
             ],
             "format": "double"
+          }
+        }
+      },
+      "TargetInput": {
+        "required": [
+          "alias",
+          "providerModelId"
+        ],
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "providerModelId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "TargetView": {
+        "required": [
+          "label",
+          "alias",
+          "policyId",
+          "policyVersion",
+          "providerModelId",
+          "providerModel"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "alias": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "policyId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "policyVersion": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "providerModelId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "providerModel": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

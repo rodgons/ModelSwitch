@@ -187,6 +187,27 @@ public sealed class GatewayFixture(PostgresFixture postgres, ValkeyFixture valke
         return browser;
     }
 
+    /// <summary>A browser signed in as a new Administrator of <paramref name="role"/> granted <paramref name="tenantIds"/>. The caller disposes it.</summary>
+    public async Task<AdminBrowser> AdministratorBrowserAsync(string role, params Guid[] tenantIds)
+    {
+        var email = $"{role}-{Guid.CreateVersion7()}@example.com";
+        const string password = "an-ordinary-password-1";
+        using (var owner = await OwnerBrowserAsync())
+        {
+            var created = await owner.SendJsonAsync(HttpMethod.Post, "/admin/administrators", new { email, password, role, tenantIds });
+            created.EnsureSuccessStatusCode();
+        }
+
+        var browser = new AdminBrowser(_factory!.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"),
+            HandleCookies = true,
+            AllowAutoRedirect = false,
+        }));
+        await browser.SignInAsync(email, password);
+        return browser;
+    }
+
     /// <summary>A client for the same host, authenticated with <paramref name="plaintextKey"/>.</summary>
     public HttpClient Authenticated(string plaintextKey)
     {

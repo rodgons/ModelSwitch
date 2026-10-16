@@ -4,7 +4,7 @@ using Shouldly;
 namespace ModelSwitch.IntegrationTests.Infrastructure;
 
 /// <summary>The ids of the other Tenant's resources the matrix aims at; add a property when a new kind of tenant-scoped id appears.</summary>
-public sealed record ForeignIds(Guid TenantId, Guid ApiKeyId, Guid RequestId = default, Guid DatasetId = default, Guid PromptId = default, Guid PolicyId = default);
+public sealed record ForeignIds(Guid TenantId, Guid ApiKeyId, Guid RequestId = default, Guid DatasetId = default, Guid PromptId = default, Guid PolicyId = default, Guid RunId = default, Guid ComparisonId = default);
 
 /// <summary>
 /// One tenant-scoped admin endpoint: the verb, the path built from <see cref="ForeignIds"/> and a valid body for writes (an
@@ -58,10 +58,37 @@ public static class TenantIsolationMatrix
             ids => $"/admin/routing-policies/{ids.PolicyId}/simulate",
             ids => new { tenantId = ids.TenantId, estimatedInputTokens = 100 },
             ByQuery: true),
+        new("/admin/evaluations", HttpMethod.Get, ids => $"/admin/evaluations?tenantId={ids.TenantId}", ByQuery: true),
+        new("/admin/evaluations", HttpMethod.Post, _ => "/admin/evaluations", EvaluationBody, ByQuery: true),
+        new("/admin/evaluations/estimate", HttpMethod.Post, _ => "/admin/evaluations/estimate", EvaluationBody, ByQuery: true),
+        new("/admin/evaluations/{runId:guid}", HttpMethod.Get, ids => $"/admin/evaluations/{ids.RunId}"),
+        new("/admin/evaluations/{runId:guid}/results", HttpMethod.Get, ids => $"/admin/evaluations/{ids.RunId}/results"),
+        new("/admin/evaluations/{runId:guid}/cancel", HttpMethod.Post, ids => $"/admin/evaluations/{ids.RunId}/cancel"),
+        new("/admin/evaluations/{runId:guid}/rerun", HttpMethod.Post, ids => $"/admin/evaluations/{ids.RunId}/rerun"),
+        new("/admin/evaluations/{runId:guid}/aggregates/recompute", HttpMethod.Post, ids => $"/admin/evaluations/{ids.RunId}/aggregates/recompute"),
+        new("/admin/evaluations/{runId:guid}/export", HttpMethod.Get, ids => $"/admin/evaluations/{ids.RunId}/export?format=jsonl"),
+        new("/admin/comparisons/{comparisonId:guid}", HttpMethod.Get, ids => $"/admin/comparisons/{ids.ComparisonId}"),
     ];
 
     /// <summary>The route parameters that carry a tenant-scoped id; a route with one must be in <see cref="Routes"/> (the coverage gate).</summary>
-    public static IReadOnlyList<string> TenantScopedParameters { get; } = ["tenantId", "keyId", "apiKeyId", "requestId", "datasetId", "promptId"];
+    public static IReadOnlyList<string> TenantScopedParameters { get; } = ["tenantId", "keyId", "apiKeyId", "requestId", "datasetId", "promptId", "runId", "comparisonId"];
+
+    /// <summary>A valid Evaluation request body for the foreign Tenant's Dataset and Prompt.</summary>
+    public static object EvaluationBody(ForeignIds ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+        return new
+        {
+            tenantId = ids.TenantId,
+            datasetId = ids.DatasetId,
+            datasetVersion = 1,
+            name = "intruder",
+            configurations = new[]
+            {
+                new { target = new { alias = "balanced" }, prompt = new { id = ids.PromptId, version = 1 }, evaluator = new { kind = "exact_match", version = "1" } },
+            },
+        };
+    }
 
     /// <summary>A JSONL Dataset Version upload body.</summary>
     public static HttpContent Jsonl(string text) => new StringContent(text, System.Text.Encoding.UTF8, "application/x-ndjson");
