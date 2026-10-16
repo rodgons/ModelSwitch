@@ -222,7 +222,7 @@ public sealed class GatewayFixture(PostgresFixture postgres, ValkeyFixture valke
     }
 
     /// <summary>SQL for a static Routing Policy over the given <c>(provider, model, id)</c> Candidates and an alias that points to it.</summary>
-    public static string PolicyAndAliasSql(string alias, (string Provider, string Model, Guid Id)[] candidates, string execution = "")
+    public static string PolicyAndAliasSql(string alias, (string Provider, string Model, Guid Id)[] candidates, string execution = "", string rootExtra = "")
     {
         var policyId = Guid.CreateVersion7();
         var names = string.Join(',', candidates.Select(c => $"\"{c.Provider}/{c.Model}\""));
@@ -231,7 +231,7 @@ public sealed class GatewayFixture(PostgresFixture postgres, ValkeyFixture valke
         return $$"""
             insert into routing.routing_policy values ('{{policyId}}', '{{alias}}-policy', 1, now());
             insert into routing.routing_policy_version (policy_id, version, definition, resolved_candidates, created_at)
-              values ('{{policyId}}', 1, '{"strategy":"static","candidates":[{{names}}]{{executionJson}}}', '{{{resolved}}}', now());
+              values ('{{policyId}}', 1, '{"strategy":"static","candidates":[{{names}}]{{rootExtra}}{{executionJson}}}', '{{{resolved}}}', now());
             insert into routing.model_alias (alias, policy_id, description, updated_at) values ('{{alias}}', '{{policyId}}', null, now());
 
             """;

@@ -97,6 +97,22 @@ public sealed class RoutingEndpointTests(GatewayFixture gateway) : IClassFixture
     }
 
     [Fact]
+    public async Task A_request_over_the_policy_cost_limit_answers_402_request_cost_limit_exceeded()
+    {
+        var providerId = (await Row("select id::text from registry.provider where name = 'mock-openai'"))[0];
+        var modelId = (await Row($"select id::text from registry.provider_model where provider_id = '{providerId}' and provider_model_id = '{GatewayFixture.PrimaryModel}'"))[0];
+        await gateway.WriteConfigurationAsync(GatewayFixture.PolicyAndAliasSql("capped", [("mock-openai", GatewayFixture.PrimaryModel, Guid.Parse(modelId))], rootExtra: ",\"maxRequestCost\":\"0.0000000001\""));
+
+        var response = await gateway.Client.PostAsync("/v1/chat/completions", Body("capped"), TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.PaymentRequired);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        problem.GetProperty("error").GetProperty("code").GetString().ShouldBe("request_cost_limit_exceeded");
+        var requestId = response.Headers.GetValues("X-Request-Id").Single();
+        (await Row($"select error_code from usage.inference_request where id = '{requestId}'")).ShouldBe(["request_cost_limit_exceeded"]);
+    }
+
+    [Fact]
     public async Task A_timeout_header_shortens_the_deadline()
     {
         await gateway.SetFaultAsync(GatewayFixture.PrimaryModel, "latency=3000");

@@ -255,6 +255,28 @@ public sealed class RouterTests
     }
 
     [Fact]
+    public void All_candidates_excluded_only_by_the_request_cost_limit_is_request_cost_limit_exceeded()
+    {
+        var snapshot = Snapshot(Definition(candidates: [Cheap, Mid], maxRequestCost: 0.0000001m));
+
+        var outcome = _router.Decide(Input(snapshot));
+
+        outcome.Error!.Code.ShouldBe(ErrorCode.RequestCostLimitExceeded);
+        outcome.Decision!.Excluded.Select(e => e.Reason).ShouldBe([EligibilityReason.OverRequestCostLimit, EligibilityReason.OverRequestCostLimit]);
+        outcome.RetryAfter.ShouldBeNull();
+    }
+
+    [Fact]
+    public void The_request_cost_limit_mixed_with_another_reason_stays_no_eligible_model()
+    {
+        var snapshot = Snapshot(
+            Definition(candidates: [Cheap, Mid], maxRequestCost: 0.0000001m),
+            Model(Mid, input: null, output: null));
+
+        _router.Decide(Input(snapshot)).Error!.Code.ShouldBe(ErrorCode.NoEligibleModel);
+    }
+
+    [Fact]
     public void All_candidates_excluded_only_by_open_circuits_is_provider_unavailable_with_the_shortest_break()
     {
         var snapshot = Snapshot(Definition(candidates: [Cheap, Mid]));

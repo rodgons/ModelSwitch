@@ -67,6 +67,11 @@ internal sealed class Router : IRouter
             return new RoutingOutcome(decision, new Error(ErrorCode.ProviderUnavailable, "Every eligible provider is temporarily unavailable."), retryAfter);
         }
 
+        if (excluded.Count > 0 && excluded.All(e => e.Reason == EligibilityReason.OverRequestCostLimit))
+        {
+            return new RoutingOutcome(decision, new Error(ErrorCode.RequestCostLimitExceeded, "The worst-case cost of this request exceeds the request cost limit for every candidate."), null);
+        }
+
         var reasons = excluded.Select(e => e.Reason).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         var message = reasons.Count == 0
             ? "No eligible model can serve this request."

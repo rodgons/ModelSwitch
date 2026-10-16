@@ -47,6 +47,7 @@ The Budget is **not** checked during routing. It is enforced afterwards by the R
 
 **Outcomes when the eligible list is empty:**
 - Every Candidate excluded *only* by `circuit_open` → `503 provider_unavailable` with `Retry-After` = shortest remaining break.
+- Every Candidate excluded *only* by `over_request_cost_limit` → `402 request_cost_limit_exceeded`.
 - Otherwise → `422 no_eligible_model`. The response body names the distinct reasons, never model IDs.
 
 ### Worst-case cost
