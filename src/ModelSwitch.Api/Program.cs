@@ -25,6 +25,7 @@ return await StartupExit.RunAsync(
 
         builder.Services.AddSharedKernel();
         builder.Services.AddIdentityModule();
+        builder.Services.AddAdministratorWebSecurity();
         builder.Services.AddRegistryModule();
         builder.Services.AddProviderHealthSnapshots();
         builder.Services.AddProviderAdapter<OllamaAdapter>(OllamaAdapter.TypeName);
@@ -39,14 +40,16 @@ return await StartupExit.RunAsync(
 
         builder.Services
             .AddAuthentication(ApiKeyDefaults.Scheme)
-            .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyDefaults.Scheme, configureOptions: null);
+            .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyDefaults.Scheme, configureOptions: null)
+            .AddAdministratorCookie();
         builder.Services.AddAuthorizationBuilder()
             .AddPolicy(ApiKeyClaims.InferencePolicy, policy => policy
                 .AddAuthenticationSchemes(ApiKeyDefaults.Scheme)
                 .RequireClaim(ApiKeyClaims.Scope, ApiKeyScopes.Inference))
             .AddPolicy(ApiKeyClaims.ModelsReadPolicy, policy => policy
                 .AddAuthenticationSchemes(ApiKeyDefaults.Scheme)
-                .RequireClaim(ApiKeyClaims.Scope, ApiKeyScopes.ModelsRead, ApiKeyScopes.Inference));
+                .RequireClaim(ApiKeyClaims.Scope, ApiKeyScopes.ModelsRead, ApiKeyScopes.Inference))
+            .AddAdministratorPolicies();
 
         var app = builder.Build();
 
@@ -54,6 +57,7 @@ return await StartupExit.RunAsync(
         app.UseInferenceRequestGuard();
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseAdminAntiforgery();
 
         app.MapHealthEndpoints();
         app.MapIdentityEndpoints();

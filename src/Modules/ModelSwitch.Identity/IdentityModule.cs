@@ -1,12 +1,18 @@
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using ModelSwitch.Identity.Application;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Identity.Domain;
+using ModelSwitch.Identity.Endpoints;
 using ModelSwitch.Identity.Infrastructure;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Http;
@@ -36,6 +42,39 @@ public static class IdentityModule
         services.TryAddSingleton<IApiKeyAuthenticator, ApiKeyAuthenticator>();
         services.TryAddSingleton<ITenantLimitsSource, NoTenantLimitsSource>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IReadinessCheck, PostgresReadinessCheck>());
+        services.AddAdministratorServices();
+        services.AddHttpContextAccessor();
+        services.TryAddSingleton<IAuditCallContext, HttpAuditCallContext>();
+        services.TryAddSingleton<ICurrentAdministrator, HttpCurrentAdministrator>();
+        services.TryAddSingleton<ITenantGrantChecker, TenantGrantChecker>();
+        services.TryAddSingleton<IAdministratorSignIn, AdministratorSignInService>();
+        services.TryAddSingleton<IAdministratorSessions, AdministratorSessionService>();
+        services.TryAddSingleton<IAuditStore, EfAuditStore>();
+        services.TryAddSingleton<AdministratorService>();
+        services.TryAddSingleton<AuditQueryService>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers what Administrator cookie sessions need beyond <see cref="AddIdentityModule"/>: the Data Protection key ring in
+    /// PostgreSQL (shared by every api instance) and the antiforgery cookie and header names (ADR-0011).
+    /// </summary>
+    public static IServiceCollection AddAdministratorWebSecurity(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddDataProtection().SetApplicationName("ModelSwitch");
+        services.TryAddSingleton<EfXmlRepository>();
+        services.AddSingleton<IConfigureOptions<KeyManagementOptions>>(provider => new ConfigureOptions<KeyManagementOptions>(
+            options => options.XmlRepository = provider.GetRequiredService<EfXmlRepository>()));
+        services.AddAntiforgery(options =>
+        {
+            options.HeaderName = AdminAuthentication.AntiforgeryHeaderName;
+            options.Cookie.Name = AdminAuthentication.AntiforgeryCookieName;
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Strict;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            options.Cookie.Path = "/";
+        });
         return services;
     }
 
@@ -45,6 +84,9 @@ public static class IdentityModule
         ArgumentNullException.ThrowIfNull(services);
         services.AddIdentityContext(_migratorConnection);
         services.AddSingleton<IModuleMigrator, IdentityMigrator>();
+        services.AddAdministratorServices();
+        services.TryAddSingleton<IAuditCallContext, SystemAuditCallContext>();
+        services.TryAddSingleton<IOwnerBootstrapper, OwnerBootstrapper>();
         return services;
     }
 
@@ -57,7 +99,20 @@ public static class IdentityModule
         return services;
     }
 
-    public static IEndpointRouteBuilder MapIdentityEndpoints(this IEndpointRouteBuilder app) => app;
+    public static IEndpointRouteBuilder MapIdentityEndpoints(this IEndpointRouteBuilder app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        return AdministratorEndpoints.Map(app);
+    }
+
+    // Shared by the api host and the Migrator: the stores, the audit writer and the PBKDF2 password hasher.
+    private static void AddAdministratorServices(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IPasswordHasher<Administrator>, PasswordHasher<Administrator>>();
+        services.TryAddSingleton<IAdministratorStore, EfAdministratorStore>();
+        services.TryAddSingleton<ISessionStore, EfSessionStore>();
+        services.TryAddSingleton<IAuditWriter, AuditWriter>();
+    }
 
     private static void AddIdentityContext(this IServiceCollection services, string connectionKey)
     {

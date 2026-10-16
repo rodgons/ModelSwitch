@@ -85,11 +85,72 @@ public sealed partial class MigratorProcessTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Bootstrap_creates_the_owner_once_without_ever_logging_the_password()
+    {
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var env = Env(connectionString, pepper: null);
+        env["MODELSWITCH__Bootstrap__OwnerEmail"] = "Owner@Example.com";
+        env["MODELSWITCH__Bootstrap__OwnerPassword"] = "first-owner-password-123";
+
+        var first = await RunAsync(["migrate"], env);
+        env["MODELSWITCH__Bootstrap__OwnerEmail"] = "someone-else@example.com";
+        var second = await RunAsync(["migrate"], env);
+
+        first.ExitCode.ShouldBe(0);
+        first.Stderr.ShouldContain("Owner@Example.com was created");
+        first.Stderr.ShouldNotContain("first-owner-password-123");
+        first.Stdout.ShouldBeEmpty();
+        second.ExitCode.ShouldBe(0);
+        second.Stderr.ShouldContain("already exists");
+        second.Stderr.ShouldNotContain("first-owner-password-123");
+
+        (await ScalarAsync(connectionString, "select string_agg(email || ':' || role || ':' || all_tenants, ',') from identity.administrator")).ShouldBe("owner@example.com:owner:true");
+        (await ScalarAsync(connectionString, "select count(*) from identity.audit_record where action = 'administrator.bootstrapped' and administrator_id is null")).ShouldBe("1");
+        (await ScalarAsync(connectionString, "select count(*) from identity.audit_record where details::text like '%first-owner-password-123%'")).ShouldBe("0");
+        (await ScalarAsync(connectionString, "select password_hash like '%first-owner-password-123%' from identity.administrator")).ShouldBe("False");
+    }
+
+    [Fact]
+    public async Task Bootstrap_with_a_weak_password_exits_78_naming_the_variable_and_never_echoing_it()
+    {
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var env = Env(connectionString, pepper: null);
+        env["MODELSWITCH__Bootstrap__OwnerEmail"] = "owner@example.com";
+        env["MODELSWITCH__Bootstrap__OwnerPassword"] = "weak-pw";
+
+        var run = await RunAsync(["migrate"], env);
+
+        run.ExitCode.ShouldBe(78);
+        run.Stderr.ShouldContain("MODELSWITCH__Bootstrap__OwnerPassword");
+        run.Stderr.ShouldNotContain("weak-pw");
+        (await ScalarAsync(connectionString, "select count(*) from identity.administrator")).ShouldBe("0");
+    }
+
+    [Fact]
+    public async Task Migrate_without_bootstrap_variables_warns_that_nobody_can_sign_in_yet()
+    {
+        var connectionString = await postgres.CreateDatabaseAsync();
+
+        var run = await RunAsync(["migrate"], Env(connectionString, pepper: null));
+
+        run.ExitCode.ShouldBe(0);
+        run.Stderr.ShouldContain("nobody can sign in");
+    }
+
+    [Fact]
     public async Task Unknown_command_exits_64()
     {
         var run = await RunAsync(["explode"], []);
 
         run.ExitCode.ShouldBe(64);
+    }
+
+    private static async Task<string> ScalarAsync(string connectionString, string sql)
+    {
+        await using var connection = new Npgsql.NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = new Npgsql.NpgsqlCommand(sql, connection);
+        return Convert.ToString(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture)!;
     }
 
     private static Dictionary<string, string> Env(string connectionString, string? pepper)

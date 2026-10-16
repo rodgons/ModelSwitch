@@ -163,6 +163,7 @@ Every error has one code from this closed set. The `type` groups codes and maps 
 | `run_cost_cap_reached` | — (Evaluation Run `error`) | `budget_error` | Run cost cap reached | No. The run's `maxEstimatedCost` would be exceeded; remaining Cases are `skipped` |
 | `internal_error` | 500 | `api_error` | Internal error | Maybe |
 | `validation_failed` | 400 | `invalid_request_error` | Validation failed | No. Admin API only (policy, dataset, limits… bodies) |
+| `unauthenticated` | 401 | `authentication_error` | Unauthenticated | No. Admin API only (no session, or wrong email or password; the same answer for an unknown account, a deactivated one and a lockout) |
 | `forbidden` | 403 | `permission_error` | Forbidden | No. Admin API only |
 | `not_found` | 404 | `invalid_request_error` | Not found | No. Admin API only |
 | `conflict` | 409 | `invalid_request_error` | Conflict | No. Admin API only (stale `expectedVersion`) |
@@ -192,6 +193,7 @@ Lists use cursor pagination, `?limit=50&cursor=<opaque>`, and return `{ items, n
 | POST | `/admin/session` | `{email, password}` → sets cookie. Locked out after 5 failures in 15 min |
 | DELETE | `/admin/session` | Sign out |
 | GET | `/admin/session` | Current Administrator, Role, Tenant Grant, antiforgery token |
+| GET | `/admin/antiforgery-token` | Anonymous. The token the sign-in POST must carry (header `X-XSRF-TOKEN`) |
 
 ### Tenants and keys
 
@@ -255,10 +257,10 @@ Lists use cursor pagination, `?limit=50&cursor=<opaque>`, and return `{ items, n
 
 ### Administrators and audit (Owner)
 
-| Method | Path |
-|---|---|
-| GET/POST/PATCH | `/admin/administrators[/{id}]` |
-| GET | `/admin/audit-records` |
+| Method | Path | Notes |
+|---|---|---|
+| GET/POST/PATCH | `/admin/administrators[/{id}]` | POST `{email, password (≥ 12), role, allTenants?, tenantIds?}`; PATCH `{role?, allTenants?, tenantIds?, active?, password?}`. 409 when the last active Owner would be demoted or deactivated |
+| GET | `/admin/audit-records` | Filters `tenantId`, `action`, `from`, `to`; `limit` (1-200), `cursor`. Newest first |
 
 ## 4. Health
 

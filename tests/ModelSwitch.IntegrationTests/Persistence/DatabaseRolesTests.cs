@@ -45,13 +45,12 @@ public sealed class DatabaseRolesTests(PostgresFixture postgres)
     public async Task Audit_records_are_append_only_for_the_app_role_and_regrants_are_idempotent()
     {
         var admin = await MigratedAndGrantedAsync();
-        await ExecuteAsync(admin, "create table identity.audit_record (id int primary key, action text)");
 
-        await ApplyAsync(admin); // the second run picks up the new table and is a no-op for the rest
-        await ApplyAsync(admin);
+        await ApplyAsync(admin); // re-running the grants is a no-op
         var app = AsRole(admin, DatabaseRoles.AppRole, _appPassword);
 
-        await ExecuteAsync(app, "insert into identity.audit_record values (1, 'api_key.created')");
+        await ExecuteAsync(app, "insert into identity.audit_record (id, occurred_at, action, target_type, details) values (gen_random_uuid(), now(), 'api_key.created', 'api_key', '{}')");
+        (await ScalarAsync(app, "select count(*) from identity.audit_record")).ShouldBe("1");
         (await Should.ThrowAsync<PostgresException>(() => ExecuteAsync(app, "update identity.audit_record set action = 'x'")))
             .SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
         (await Should.ThrowAsync<PostgresException>(() => ExecuteAsync(app, "delete from identity.audit_record")))
@@ -62,8 +61,6 @@ public sealed class DatabaseRolesTests(PostgresFixture postgres)
     public async Task Retention_role_can_delete_retention_managed_tables_only()
     {
         var admin = await MigratedAndGrantedAsync();
-        await ExecuteAsync(admin, "create table identity.audit_record (id int primary key)");
-        await ApplyAsync(admin);
 
         (await ScalarAsync(admin, $"select has_table_privilege('{DatabaseRoles.RetentionRole}', 'identity.audit_record', 'DELETE')")).ShouldBe("True");
         (await ScalarAsync(admin, $"select has_table_privilege('{DatabaseRoles.RetentionRole}', 'identity.audit_record', 'UPDATE')")).ShouldBe("False");

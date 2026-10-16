@@ -25,10 +25,11 @@ This document covers FR-01, NFR-03 and the PRD §10.4 security tests.
 
 ## 3. Administrators
 
-- Local accounts through ASP.NET Core Identity: PBKDF2 hashing, lockout after 5 failures for 15 min, minimum password length 12.
+- Local accounts: ASP.NET Core Identity's `PasswordHasher<T>` (PBKDF2) over a minimal custom store (`identity.administrator`), not the full `AspNetUsers` table set, because Roles, Tenant Grants and sessions are our own. Lockout after 5 failures within 15 min locks the account for 15 min (a wrong, unknown, deactivated or locked sign-in all answer the same 401 `unauthenticated`), minimum password length 12. Administrators are managed by Owners (`/admin/administrators`); the last active Owner cannot be demoted or deactivated.
 - **First Owner bootstrap:** the migrator creates an Owner from `MODELSWITCH__Bootstrap__OwnerEmail` + `…__OwnerPassword` **only if no Administrator exists**, and logs that it did. The variables can be removed afterwards.
 - Session: cookie `__Host-ms_session`, `HttpOnly`, `Secure`, `SameSite=Strict`, sliding expiry of 8 h with an absolute limit of 24 h. Sessions are server-side (`ITicketStore` in PostgreSQL), so sign-out and deactivation revoke them immediately.
-- Antiforgery: double-submit token in the `X-XSRF-TOKEN` header, required on every non-GET admin request.
+- Antiforgery: ASP.NET Core antiforgery (cookie `__Host-ms_xsrf` + token in the `X-XSRF-TOKEN` header), required on every non-GET admin request including sign-in; a missing or invalid token is `400 validation_failed`. `GET /admin/antiforgery-token` (anonymous) issues the pre-sign-in token; sign-in and `GET /admin/session` return one bound to the session. The Data Protection key ring is stored in `identity.data_protection_key` (unencrypted at rest, like the sessions beside it) so every api instance accepts the others' cookies and tokens.
+- The principal (Role, Tenant Grant) is rebuilt from the database on every request, so Role changes and deactivation apply immediately. Session ids are stored only as SHA-256 hashes.
 - Authorization: endpoint policies by Role, plus a `TenantGrant` check in every query or command that takes a tenant id. Foreign resources return 404. Three Roles (Owner, Operator, Viewer) plus Tenant Grants are the whole MVP model; custom roles and per-permission grants are post-MVP.
 - Audited actions: sign-in success/failure, Administrator create/modify, Tenant create/suspend, API key create/revoke, Provider create/modify/secret replace, Provider Model and Price changes, Routing Policy versions, alias binding, limit/Budget changes, Dataset deletion, evaluation start/cancel.
 

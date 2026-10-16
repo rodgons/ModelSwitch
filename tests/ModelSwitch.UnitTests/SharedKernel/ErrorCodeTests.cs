@@ -31,6 +31,7 @@ public sealed class ErrorCodeTests
         ("run_cost_cap_reached", null, "budget_error"),
         ("internal_error", 500, "api_error"),
         ("validation_failed", 400, "invalid_request_error"),
+        ("unauthenticated", 401, "authentication_error"),
         ("forbidden", 403, "permission_error"),
         ("not_found", 404, "invalid_request_error"),
         ("conflict", 409, "invalid_request_error"),
