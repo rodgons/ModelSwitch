@@ -119,6 +119,8 @@ public sealed class AdministratorEndpointTests(AdminFixture admin) : IClassFixtu
     [HappyPath("GET /admin/audit-records")]
     public async Task Audit_records_list_newest_first_filter_by_action_and_page_by_cursor()
     {
+        // Two creations, so the one-item page has a next page even when this test runs before any other creates an Administrator.
+        await admin.CreateAdministratorAsync($"audited-first-{Guid.CreateVersion7():N}@example.com", "viewer");
         var email = $"audited-{Guid.CreateVersion7():N}@example.com";
         var id = await admin.CreateAdministratorAsync(email, "viewer");
         using var owner = await admin.SignedInOwnerAsync();
