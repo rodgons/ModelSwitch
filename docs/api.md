@@ -199,12 +199,14 @@ Lists use cursor pagination, `?limit=50&cursor=<opaque>`, and return `{ items, n
 
 | Method | Path | Role |
 |---|---|---|
-| GET/POST | `/admin/tenants` | V / O |
-| GET/PATCH | `/admin/tenants/{tenantId}` | V / O. Status: `active`, `suspended` |
-| PUT | `/admin/tenants/{tenantId}/limits` | O. `{requestsPerMinute, maxConcurrent, maxRequestCost, budget:{amount, period:"month"}}` |
-| PUT | `/admin/tenants/{tenantId}/model-access` | O. Allowed Model Aliases (`["*"]` = all) |
-| GET/POST | `/admin/tenants/{tenantId}/api-keys` | V / O. POST returns the raw key **once** |
-| DELETE | `/admin/tenants/{tenantId}/api-keys/{keyId}` | O. Revokes the key (soft, sets `revoked_at`) |
+| GET/POST | `/admin/tenants` | V / Operator. GET lists only Tenants in the caller's grant, newest first. POST `{name}` → 201 and needs an all-Tenants grant (an explicit grant cannot contain a Tenant that does not exist yet → 403 `forbidden`); duplicate name → 409 |
+| GET/PATCH | `/admin/tenants/{tenantId}` | V / Operator. PATCH `{name?, status?}`, status `active` or `suspended`. GET returns the Tenant plus `limits` and `modelAccess` |
+| PUT | `/admin/tenants/{tenantId}/limits` | Operator. `{requestsPerMinute, maxConcurrent, maxRequestCost, budget:{amount, period:"month"}}`. PUT replaces everything: an absent or null limit means unlimited, an absent or null `budget` removes the Budget. Limits are integers 1-10 000 000; amounts are non-negative USD with at most 10 decimals. The Budget is stored through `IBudgets` (`usage.budget`) in the same transaction |
+| PUT | `/admin/tenants/{tenantId}/model-access` | Operator. `{allowedAliases: [...]}`: Model Alias names (`[a-z0-9][a-z0-9._-]{0,63}`) or `["*"]` alone for all. Never empty (to block a Tenant, suspend it). Alias existence is not checked, so an alias can be granted before it is bound |
+| GET/POST | `/admin/tenants/{tenantId}/api-keys` | V / Operator. POST `{name, scopes?, expiresAt?}` (scopes default `["inference"]`) → 201 with the view plus `key`, the raw key **once**, with `Cache-Control: no-store` |
+| DELETE | `/admin/tenants/{tenantId}/api-keys/{keyId}` | Operator. Revokes the key (soft, sets `revoked_at`) → 204, idempotent. Takes effect at once on the instance that handled it and within 30 s on the others |
+
+Every write above is audited and bumps the configuration version in the same transaction. Operators (inside their grant) write; Owners hold every grant. Key views show `keyPrefix` as `msk_` + the 8-character prefix, never the hash.
 
 ### Providers, models, prices (Owner)
 

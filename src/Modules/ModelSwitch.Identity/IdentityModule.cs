@@ -52,6 +52,10 @@ public static class IdentityModule
         services.TryAddSingleton<IAuditStore, EfAuditStore>();
         services.TryAddSingleton<AdministratorService>();
         services.TryAddSingleton<AuditQueryService>();
+        services.TryAddSingleton<ITenantAdminStore, EfTenantAdminStore>();
+        services.TryAddSingleton<IApiKeyAdminStore, EfApiKeyAdminStore>();
+        services.TryAddSingleton<TenantService>();
+        services.TryAddSingleton<ApiKeyAdminService>();
         return services;
     }
 
@@ -102,7 +106,8 @@ public static class IdentityModule
     public static IEndpointRouteBuilder MapIdentityEndpoints(this IEndpointRouteBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);
-        return AdministratorEndpoints.Map(app);
+        AdministratorEndpoints.Map(app);
+        return TenantEndpoints.Map(app);
     }
 
     // Shared by the api host and the Migrator: the stores, the audit writer and the PBKDF2 password hasher.

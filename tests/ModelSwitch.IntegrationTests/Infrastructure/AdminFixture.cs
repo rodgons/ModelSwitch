@@ -88,6 +88,36 @@ public sealed class AdminFixture(PostgresFixture postgres) : IAsyncLifetime
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
+    /// <summary>Creates an Administrator of <paramref name="role"/> with a grant to <paramref name="tenantIds"/> and signs it in.</summary>
+    public async Task<AdminBrowser> SignedInAsync(string email, string role, params Guid[] tenantIds)
+        => await SignedInAsync(email, role, allTenants: false, tenantIds);
+
+    /// <summary>Like the overload above, with an all-Tenants grant when <paramref name="allTenants"/> is true.</summary>
+    public async Task<AdminBrowser> SignedInAsync(string email, string role, bool allTenants, params Guid[] tenantIds)
+    {
+        using (var owner = await SignedInOwnerAsync())
+        {
+            var created = await owner.SendJsonAsync(HttpMethod.Post, "/admin/administrators", new { email, password = "an-ordinary-password-1", role, allTenants, tenantIds });
+            created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        }
+
+        var browser = NewBrowser();
+        await browser.SignInAsync(email, "an-ordinary-password-1");
+        return browser;
+    }
+
+    /// <summary>A client for the inference API carrying <paramref name="apiKey"/> as its bearer token (none when null).</summary>
+    public HttpClient NewApiClient(string? apiKey)
+    {
+        var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false });
+        if (apiKey is not null)
+        {
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+        }
+
+        return client;
+    }
+
     public async Task<string> ScalarAsync(string sql)
     {
         await using var connection = new NpgsqlConnection(ConnectionString);

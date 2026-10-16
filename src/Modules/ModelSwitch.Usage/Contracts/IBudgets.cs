@@ -1,3 +1,4 @@
+using System.Data.Common;
 using ModelSwitch.SharedKernel;
 
 namespace ModelSwitch.Usage.Contracts;
@@ -17,6 +18,15 @@ public interface IBudgets
     /// changes immediately; requests already holding a Reservation complete under it.
     /// </summary>
     Task SetMonthlyLimitAsync(Guid tenantId, Money? limit, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Like <see cref="SetMonthlyLimitAsync(Guid, Money?, CancellationToken)"/>, but on the caller's own PostgreSQL transaction, so the
+    /// change commits or rolls back with the admin write and its Audit Record. The transaction's role must reach the <c>usage</c> schema.
+    /// </summary>
+    Task SetMonthlyLimitAsync(Guid tenantId, Money? limit, DbTransaction transaction, CancellationToken cancellationToken);
+
+    /// <summary>The Tenant's standing monthly limit, or null when it has no Budget.</summary>
+    Task<Money?> GetMonthlyLimitAsync(Guid tenantId, CancellationToken cancellationToken);
 
     /// <summary>The Tenant's current-month figures, or null when no request has touched the period.</summary>
     Task<BudgetStatus?> GetCurrentAsync(Guid tenantId, CancellationToken cancellationToken);

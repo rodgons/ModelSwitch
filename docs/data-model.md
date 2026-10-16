@@ -28,7 +28,7 @@ The PostgreSQL schema, module by module. Every module owns one schema and is the
 
 **tenant**: `id`, `name text unique`, `status text check (active|suspended)`, `created_at`, `updated_at`
 
-**tenant_limits** (1:1 with tenant): `tenant_id pk fk`, `requests_per_minute int null`, `max_concurrent int null`, `max_request_cost numeric null`, `allowed_aliases text[] not null default '{*}'`, `updated_at`. A NULL limit means unlimited.
+**tenant_limits** (1:1 with tenant): `tenant_id pk fk`, `requests_per_minute int null`, `max_concurrent int null`, `max_request_cost numeric null`, `allowed_aliases text[] not null default '{*}'`, `updated_at`. A NULL limit means unlimited. The `budget_amount` and `budget_period` columns from the first migration are unused: the Budget lives only in `usage.budget`.
 
 **api_key**: `id`, `tenant_id fk`, `name text`, `key_prefix char(8) unique`, `key_hash bytea(32)`, `scopes text[]`, `expires_at null`, `revoked_at null`, `last_used_at null` (updated at most once per minute), `created_at`, `created_by_admin_id`
 - Index: `unique(key_prefix)`, `(tenant_id, created_at desc)`

@@ -67,5 +67,11 @@ internal sealed class VerifiedKeyCache(TimeProvider time)
         _entries[Convert.ToBase64String(keyHash)] = new Entry(key, expiresAt);
     }
 
+    /// <summary>
+    /// Drops every entry on this instance, so the next request for each key goes back to the database. Called after a key is
+    /// revoked or a Tenant is suspended, so the instance that took the admin write applies it at once.
+    /// </summary>
+    public void Clear() => _entries.Clear();
+
     private sealed record Entry(AuthenticatedApiKey Key, DateTimeOffset ExpiresAt);
 }

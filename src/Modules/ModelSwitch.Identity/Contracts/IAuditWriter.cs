@@ -11,6 +11,14 @@ public static class AuditActions
     public const string AdministratorCreated = "administrator.created";
     public const string AdministratorModified = "administrator.modified";
     public const string AdministratorBootstrapped = "administrator.bootstrapped";
+    public const string TenantCreated = "tenant.created";
+    public const string TenantModified = "tenant.modified";
+    public const string TenantSuspended = "tenant.suspended";
+    public const string TenantReactivated = "tenant.reactivated";
+    public const string TenantLimitsChanged = "tenant.limits_changed";
+    public const string TenantModelAccessChanged = "tenant.model_access_changed";
+    public const string ApiKeyCreated = "api_key.created";
+    public const string ApiKeyRevoked = "api_key.revoked";
 }
 
 /// <summary>
