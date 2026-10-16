@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelSwitch.Configuration;
+using ModelSwitch.Evaluation;
 using ModelSwitch.Identity;
 using ModelSwitch.Registry;
 using ModelSwitch.Routing;
@@ -25,6 +26,7 @@ public static class ModuleServices
         services.AddRegistryMigrations();
         services.AddRoutingMigrations();
         services.AddUsageMigrations();
+        services.AddEvaluationMigrations();
         services.AddConfigurationMigrations();
         services.AddIdentitySeeding();
         return services.BuildServiceProvider();

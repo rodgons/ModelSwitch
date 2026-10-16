@@ -50,8 +50,8 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
 
         foreach (var route in TenantIsolationMatrix.Routes)
         {
-            using var unknown = await outsider.SendJsonAsync(route.Method, route.Path(foreign with { TenantId = Guid.CreateVersion7() }), route.Body?.Invoke());
-            using var other = await outsider.SendJsonAsync(route.Method, route.Path(foreign), route.Body?.Invoke());
+            using var unknown = await outsider.SendJsonAsync(route.Method, route.Path(foreign with { TenantId = Guid.CreateVersion7() }), route.Body?.Invoke(foreign with { TenantId = Guid.CreateVersion7() }));
+            using var other = await outsider.SendJsonAsync(route.Method, route.Path(foreign), route.Body?.Invoke(foreign));
             unknown.StatusCode.ShouldBe(HttpStatusCode.NotFound, route.Name);
             (await AdminBrowser.ErrorCodeAsync(unknown)).ShouldBe(await AdminBrowser.ErrorCodeAsync(other), route.Name);
         }
@@ -107,7 +107,18 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
         await admin.ScalarAsync(
             "insert into usage.inference_request (id, started_at, tenant_id, origin, api_key_id, requested_alias, streaming, status, attempt_count, had_fallback, input_bytes, usage_status, trace_id) " +
             $"values ('{requestId}', now(), '{admin.TenantB}', 'api', '{keyId}', 'balanced', false, 'succeeded', 0, false, 10, 'reported', '')");
-        return new ForeignIds(admin.TenantB, keyId, requestId);
+        // A Dataset with one version and a Prompt with one version of Tenant B, as the Evaluation routes read them.
+        var dataset = await owner.SendJsonAsync(HttpMethod.Post, "/admin/datasets", new { tenantId = admin.TenantB, name = $"b-dataset-{Guid.CreateVersion7()}", taskKind = "classification" });
+        dataset.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var datasetId = (await AdminBrowser.JsonAsync(dataset)).GetProperty("id").GetGuid();
+        (await owner.SendJsonAsync(HttpMethod.Post, $"/admin/datasets/{datasetId}/versions", TenantIsolationMatrix.Jsonl("{\"id\":\"c1\",\"input\":{\"text\":\"hi\"},\"expected\":\"ham\"}")))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        var prompt = await owner.SendJsonAsync(HttpMethod.Post, "/admin/prompts", new { tenantId = admin.TenantB, name = $"b-prompt-{Guid.CreateVersion7()}" });
+        prompt.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var promptId = (await AdminBrowser.JsonAsync(prompt)).GetProperty("id").GetGuid();
+        (await owner.SendJsonAsync(HttpMethod.Post, $"/admin/prompts/{promptId}/versions", new { messages = new[] { new { role = "user", content = "{{text}}" } } }))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        return new ForeignIds(admin.TenantB, keyId, requestId, datasetId, promptId);
     }
 
     private async Task AssertTenantBUntouchedAsync(ForeignIds foreign)
@@ -117,6 +128,12 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
         (await admin.ScalarAsync($"select count(*) from identity.tenant_limits where tenant_id = '{foreign.TenantId}'")).ShouldBe("0");
         (await admin.ScalarAsync($"select count(*) from identity.api_key where tenant_id = '{foreign.TenantId}' and revoked_at is not null")).ShouldBe("0");
         (await admin.ScalarAsync($"select count(*) from identity.api_key where tenant_id = '{foreign.TenantId}' and name = 'intruder'")).ShouldBe("0");
+
+        // No Dataset or Prompt was created for Tenant B and no version was added to its own.
+        (await admin.ScalarAsync($"select count(*) from evaluation.dataset where tenant_id = '{foreign.TenantId}' and name = 'intruder'")).ShouldBe("0");
+        (await admin.ScalarAsync($"select count(*) from evaluation.prompt where tenant_id = '{foreign.TenantId}' and name = 'intruder'")).ShouldBe("0");
+        (await admin.ScalarAsync($"select latest_version from evaluation.dataset where id = '{foreign.DatasetId}'")).ShouldBe("1");
+        (await admin.ScalarAsync($"select latest_version from evaluation.prompt where id = '{foreign.PromptId}'")).ShouldBe("1");
     }
 }
 

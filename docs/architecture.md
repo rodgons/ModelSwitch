@@ -147,12 +147,12 @@ Only `Contracts/` and the `*Module.cs` entry point are `public`. Everything else
 
 | Module | Owns (schema) | Exposes (Contracts) | Depends on |
 |---|---|---|---|
-| Identity | `identity` | `IApiKeyAuthenticator`, `ITenantDirectory`, `IAuditWriter`, `ConfigWrite` (audit + config bump on the caller's transaction), current-principal accessors, `ITenantBudgets` (seam implemented by Usage) | SharedKernel.Http (admin endpoints) |
+| Identity | `identity` | `IApiKeyAuthenticator`, `ITenantDirectory` (does a Tenant exist), `IAuditWriter`, `ConfigWrite` (audit + config bump on the caller's transaction), current-principal accessors, `ITenantBudgets` (seam implemented by Usage) | SharedKernel.Http (admin endpoints) |
 | Registry | `registry` | `IProviderCatalog` (snapshot of providers, models, capabilities, current prices), `IAdapterFactory`, `IProviderHealth`, `IProviderHealthSnapshots` (every instance's written health) | Adapters.Abstractions, Identity (audit, current administrator), SharedKernel.Http (admin endpoints) |
 | Routing | `routing` | `IRouter.Decide(RoutingInput) → RoutingDecision`, `IPolicyStore` | Registry, Identity (tenant model access, audit), SharedKernel.Http (admin endpoints) |
 | Inference | — (writes through Usage) | `IInferenceService` (used by the HTTP endpoint and by Evaluation), `ILimiter` (step 6, Rate and Concurrency Limits over Valkey; the HTTP use case calls it, so Evaluation traffic is not limited) | Routing, Registry, Usage, Identity, Configuration (snapshot), SharedKernel.Http, Adapters.Abstractions (runs Attempts through `IProviderAdapter`) |
 | Usage | `usage` | `IUsageLedger` (open/settle requests, Reservations), `IUsageQueries` | Registry (prices), Identity (implements `ITenantBudgets` for the admin limits endpoint) |
-| Evaluation | `evaluation` | — (endpoints and worker jobs only) | Inference, Usage |
+| Evaluation | `evaluation` | — (endpoints and worker jobs only) | Inference, Usage, Identity (current Administrator, Tenant Grant, `ITenantDirectory`, audit), SharedKernel.Http (admin endpoints) |
 | Admin | — | — (endpoints only: `/admin/overview`, `/admin/requests`, `/admin/usage`, `/admin/provider-health`) | Identity (current Administrator, Tenant Grant), Registry (`ICatalogSnapshotSource` for names, `IProviderHealthSnapshots`), Usage (`IUsageQueries`) |
 | Configuration (not a module; owns `config`) | `config` | `ConfigurationSnapshot`, snapshot and `config_version` access | Identity, Registry, Routing (their snapshot loaders), SharedKernel.Http (readiness) |
 

@@ -244,7 +244,7 @@ public sealed class AdminBrowser(HttpClient client) : IDisposable
         var request = new HttpRequestMessage(method, path);
         if (body is not null)
         {
-            request.Content = JsonContent.Create(body);
+            request.Content = body as HttpContent ?? JsonContent.Create(body);
         }
 
         if (withToken && _token is not null)

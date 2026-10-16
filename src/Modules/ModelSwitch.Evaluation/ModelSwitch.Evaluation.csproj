@@ -2,6 +2,11 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
@@ -12,6 +17,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+    <ProjectReference Include="../../ModelSwitch.SharedKernel.Http/ModelSwitch.SharedKernel.Http.csproj" />
+    <ProjectReference Include="../ModelSwitch.Identity/ModelSwitch.Identity.csproj" />
     <ProjectReference Include="../ModelSwitch.Inference/ModelSwitch.Inference.csproj" />
     <ProjectReference Include="../ModelSwitch.Usage/ModelSwitch.Usage.csproj" />
   </ItemGroup>
