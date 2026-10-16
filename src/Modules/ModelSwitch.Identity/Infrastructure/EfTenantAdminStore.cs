@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore.Storage;
 using ModelSwitch.Identity.Application;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Identity.Domain;
-using ModelSwitch.SharedKernel.Configuration;
 using Npgsql;
 
 namespace ModelSwitch.Identity.Infrastructure;
@@ -16,9 +15,7 @@ internal static class AdminWrite
 {
     public static async Task CommitAsync(IdentityDbContext db, IDbContextTransaction transaction, IAuditWriter audit, AuditEntry entry, CancellationToken cancellationToken)
     {
-        var dbTransaction = transaction.GetDbTransaction();
-        await audit.WriteAsync(entry, dbTransaction, cancellationToken);
-        await ConfigVersion.BumpAsync(db.Database.GetDbConnection(), dbTransaction, cancellationToken);
+        await ConfigWrite.StageAsync(transaction.GetDbTransaction(), audit, [entry], cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
 }

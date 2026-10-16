@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Registry.Domain;
 using ModelSwitch.Registry.Infrastructure;
@@ -114,7 +115,8 @@ internal sealed class ProviderModelAdminService(
         {
             After = Summarise(model, provider.Name),
         };
-        await ConfigWrite.CommitAsync(db, transaction, audit, [entry], cancellationToken);
+        await ConfigWrite.StageAsync(transaction.GetDbTransaction(), audit, [entry], cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToView(model);
     }
 
@@ -160,7 +162,8 @@ internal sealed class ProviderModelAdminService(
             Before = before,
             After = after,
         };
-        await ConfigWrite.CommitAsync(db, transaction, audit, [entry], cancellationToken);
+        await ConfigWrite.StageAsync(transaction.GetDbTransaction(), audit, [entry], cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToView(model);
     }
 

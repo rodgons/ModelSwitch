@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using ModelSwitch.Adapters.Abstractions;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Registry.Contracts;
@@ -156,7 +157,9 @@ internal sealed class ProviderAdminService(
             return new Error(ErrorCode.Conflict, "A provider with this name already exists.");
         }
 
-        await ConfigWrite.CommitAsync(db, transaction, audit, entries, cancellationToken);
+        await ConfigWrite.StageAsync(transaction.GetDbTransaction(), audit, entries, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
         return ToView(provider, hasSecret ? new Dictionary<Guid, DateTimeOffset> { [SecretId(provider)] = now } : []);
     }
 
@@ -232,7 +235,8 @@ internal sealed class ProviderAdminService(
         }
 
         await db.SaveChangesAsync(cancellationToken);
-        await ConfigWrite.CommitAsync(db, transaction, audit, entries, cancellationToken);
+        await ConfigWrite.StageAsync(transaction.GetDbTransaction(), audit, entries, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToView(provider, await SecretDatesAsync(db, [provider], cancellationToken));
     }
 

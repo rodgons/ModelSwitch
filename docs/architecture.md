@@ -143,7 +143,7 @@ Only `Contracts/` and the `*Module.cs` entry point are `public`. Everything else
 
 | Module | Owns (schema) | Exposes (Contracts) | Depends on |
 |---|---|---|---|
-| Identity | `identity` | `IApiKeyAuthenticator`, `ITenantDirectory`, `IAuditWriter`, current-principal accessors, `ITenantBudgets` (seam implemented by Usage) | SharedKernel.Http (admin endpoints) |
+| Identity | `identity` | `IApiKeyAuthenticator`, `ITenantDirectory`, `IAuditWriter`, `ConfigWrite` (audit + config bump on the caller's transaction), current-principal accessors, `ITenantBudgets` (seam implemented by Usage) | SharedKernel.Http (admin endpoints) |
 | Registry | `registry` | `IProviderCatalog` (snapshot of providers, models, capabilities, current prices), `IAdapterFactory`, `IProviderHealth` | Adapters.Abstractions, Identity (audit, current administrator), SharedKernel.Http (admin endpoints) |
 | Routing | `routing` | `IRouter.Decide(RoutingInput) → RoutingDecision`, `IPolicyStore` | Registry, Identity (tenant model access, audit), SharedKernel.Http (admin endpoints) |
 | Inference | — (writes through Usage) | `IInferenceService` (used by the HTTP endpoint and by Evaluation), `ILimiter` (step 6, Rate and Concurrency Limits over Valkey; the HTTP use case calls it, so Evaluation traffic is not limited) | Routing, Registry, Usage, Identity, Configuration (snapshot), SharedKernel.Http, Adapters.Abstractions (runs Attempts through `IProviderAdapter`) |

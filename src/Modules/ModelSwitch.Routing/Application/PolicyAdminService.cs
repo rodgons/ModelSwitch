@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Registry.Contracts;
 using ModelSwitch.Routing.Contracts;
@@ -190,7 +191,7 @@ internal sealed partial class PolicyAdminService(
         {
             await db.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+        catch (DbUpdateException exception) when (ConfigWrite.IsUniqueViolation(exception))
         {
             return new Error(ErrorCode.Conflict, "A routing policy with this name already exists.");
         }
@@ -199,7 +200,8 @@ internal sealed partial class PolicyAdminService(
         {
             After = Summarise(policy.Name, 1, definition.Value.Strategy),
         };
-        await ConfigWrite.CommitAsync(db, transaction, audit, [entry], cancellationToken);
+        await ConfigWrite.StageAsync(transaction.GetDbTransaction(), audit, [entry], cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToVersionView(version);
     }
 
@@ -258,7 +260,8 @@ internal sealed partial class PolicyAdminService(
             Before = Summarise(policy.Name, expected, null),
             After = Summarise(policy.Name, expected + 1, definition.Value.Strategy),
         };
-        await ConfigWrite.CommitAsync(db, transaction, audit, [entry], cancellationToken);
+        await ConfigWrite.StageAsync(transaction.GetDbTransaction(), audit, [entry], cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToVersionView(version);
     }
 
@@ -335,7 +338,7 @@ internal sealed partial class PolicyAdminService(
         return true;
     }
 
-    private static bool IsUniqueViolation(DbUpdateException exception) => ConfigWrite.IsUniqueViolation(exception);
+
 
     private static Error InvalidCursor()
         => Error.Validation("The pagination query is invalid.", new Dictionary<string, string[]> { ["cursor"] = ["The cursor is not valid."] });

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Registry.Domain;
 using ModelSwitch.Registry.Infrastructure;
@@ -144,7 +145,8 @@ internal sealed class ModelPriceAdminService(
                 ["effectiveFrom"] = price.EffectiveFrom.ToString("O", CultureInfo.InvariantCulture),
             },
         };
-        await ConfigWrite.CommitAsync(db, transaction, audit, [entry], cancellationToken);
+        await ConfigWrite.StageAsync(transaction.GetDbTransaction(), audit, [entry], cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return ToView(price, inForce: price.EffectiveFrom <= now);
     }
 

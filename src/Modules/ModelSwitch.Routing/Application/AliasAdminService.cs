@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Routing.Domain;
 using ModelSwitch.Routing.Infrastructure;
@@ -98,7 +99,8 @@ internal sealed partial class AliasAdminService(
             Before = previousPolicy is { } before ? new Dictionary<string, object?> { ["policyId"] = before.ToString("D", CultureInfo.InvariantCulture) } : null,
             After = new Dictionary<string, object?> { ["policyId"] = policy.Id.ToString("D", CultureInfo.InvariantCulture), ["policyName"] = policy.Name },
         };
-        await ConfigWrite.CommitAsync(db, transaction, audit, [entry], cancellationToken);
+        await ConfigWrite.StageAsync(transaction.GetDbTransaction(), audit, [entry], cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return new AliasBinding(new AliasView(alias, policy.Id, policy.Name, existing.Description, now), created);
     }
 
@@ -118,7 +120,8 @@ internal sealed partial class AliasAdminService(
         {
             Before = new Dictionary<string, object?> { ["policyId"] = existing.PolicyId.ToString("D", CultureInfo.InvariantCulture) },
         };
-        await ConfigWrite.CommitAsync(db, transaction, audit, [entry], cancellationToken);
+        await ConfigWrite.StageAsync(transaction.GetDbTransaction(), audit, [entry], cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return Result.Success();
     }
 
