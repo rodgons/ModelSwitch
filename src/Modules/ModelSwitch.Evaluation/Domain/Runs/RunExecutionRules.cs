@@ -1,4 +1,5 @@
 using ModelSwitch.SharedKernel.Errors;
+using ModelSwitch.SharedKernel.Jobs;
 
 namespace ModelSwitch.Evaluation.Domain.Runs;
 
@@ -52,6 +53,14 @@ internal static class RunStatusRules
         EvaluationRunStatuses.Running => RunStart.Resume,
         _ => RunStart.Skip,
     };
+
+    /// <summary>
+    /// An unfinished run whose <c>evaluation.run</c> job can never run again: the job is <c>dead</c> (a worker killed during the final
+    /// attempt, which the handler never sees), <c>succeeded</c> without finishing the run, or gone (<paramref name="jobStatus"/>
+    /// <see langword="null"/>: removed by retention). A <c>pending</c> or <c>running</c> job will still claim and finish the run.
+    /// </summary>
+    public static bool IsOrphaned(string runStatus, string? jobStatus)
+        => !IsTerminal(runStatus) && jobStatus is null or JobStatuses.Dead or JobStatuses.Succeeded;
 
     /// <summary>Cancellation: once the run is no longer <c>running</c>, in-flight Cases finish and nothing new starts.</summary>
     public static bool MayStartCase(string status) => status == EvaluationRunStatuses.Running;

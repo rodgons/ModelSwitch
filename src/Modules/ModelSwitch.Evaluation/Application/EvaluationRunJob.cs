@@ -8,7 +8,8 @@ namespace ModelSwitch.Evaluation.Application;
 /// The <c>evaluation.run</c> job (evaluation.md section 5): one per Evaluation Run, enqueued with the run in the creating transaction
 /// (dedupe key <c>evaluation.run:&lt;runId&gt;</c>). Payload <c>{"runId": "…"}</c>, metadata only. A claim after a worker crash resumes
 /// the run (<see cref="RunExecutor"/>). When the last attempt throws, the run is marked <c>failed</c> with <c>internal_error</c> so it
-/// does not stay <c>running</c> once its job is dead.
+/// does not stay <c>running</c> once its job is dead. A job dead-lettered without the handler seeing it (a worker killed during the
+/// last attempt) is caught by <see cref="OrphanedRunSweepJob"/>.
 /// </summary>
 internal sealed class EvaluationRunJob(RunExecutor executor) : IJobHandler
 {
@@ -17,7 +18,10 @@ internal sealed class EvaluationRunJob(RunExecutor executor) : IJobHandler
     public string Kind => JobKind;
 
     public static JobRequest Request(Guid runId)
-        => new(JobKind, JsonSerializer.Serialize(new Payload(runId), JsonSerializerOptions.Web), DedupeKey: $"{JobKind}:{runId:D}");
+        => new(JobKind, JsonSerializer.Serialize(new Payload(runId), JsonSerializerOptions.Web), DedupeKey: DedupeKey(runId));
+
+    /// <summary>The run's one job, found again by this key (<see cref="OrphanedRunSweepJob"/>).</summary>
+    public static string DedupeKey(Guid runId) => $"{JobKind}:{runId:D}";
 
     public async Task HandleAsync(JobContext context, CancellationToken cancellationToken)
     {

@@ -244,6 +244,32 @@ public sealed class EvaluationRunTests(GatewayFixture gateway) : IClassFixture<G
     }
 
     [Fact]
+    public async Task The_orphan_sweep_fails_unfinished_runs_whose_job_is_dead_or_gone_and_leaves_live_ones_alone()
+    {
+        using var owner = await gateway.OwnerBrowserAsync();
+        var (datasetId, promptId) = await SetupAsync(owner, "classification", _classification);
+        var dead = (await CreateAsync(owner, Body(datasetId, promptId))).RunIds.Single();
+        var gone = (await CreateAsync(owner, Body(datasetId, promptId))).RunIds.Single();
+        var live = (await CreateAsync(owner, Body(datasetId, promptId))).RunIds.Single();
+
+        // A worker died during the last attempt after recording c-1: the claim loop dead-lettered the job, the run stayed running.
+        var first = await gateway.ScalarAsync($"select id from evaluation.eval_case where dataset_id = '{datasetId}' and external_id = 'c-1'");
+        await gateway.ExecuteAsync(
+            $"update evaluation.evaluation_run set status = 'running', started_at = now(), cases_done = 1 where id = '{dead}'; " +
+            "insert into evaluation.case_result (id, run_id, case_id, status, score, score_details, created_at) " +
+            $"values ('{Guid.CreateVersion7()}', '{dead}', '{first}', 'passed', 1, '{{}}', now()); " +
+            $"update jobs.job set status = 'dead', attempts = max_attempts where dedupe_key = 'evaluation.run:{dead}'; " +
+            $"delete from jobs.job where dedupe_key = 'evaluation.run:{gone}'");
+        var sweep = gateway.Services.GetServices<IJobHandler>().Single(h => h.Kind == "evaluation.sweep_orphaned_runs");
+
+        await sweep.HandleAsync(new JobContext(Guid.CreateVersion7(), sweep.Kind, "{}", 1, 5), Token);
+
+        (await RunColumnAsync(dead, "concat_ws('|', status, error, completed_at is not null, aggregates->>'casesTotal')")).ShouldBe("failed|internal_error|t|1");
+        (await RunColumnAsync(gone, "concat_ws('|', status, error, completed_at is not null, aggregates->>'casesTotal')")).ShouldBe("failed|internal_error|t|0");
+        (await RunColumnAsync(live, "concat_ws('|', status, error is null, completed_at is null)")).ShouldBe("queued|t|t");
+    }
+
+    [Fact]
     [HappyPath("POST /admin/evaluations/{runId:guid}/cancel")]
     public async Task Cancelling_a_queued_run_means_it_never_starts_and_a_finished_run_cannot_be_cancelled()
     {

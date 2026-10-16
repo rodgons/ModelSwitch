@@ -85,3 +85,25 @@ public interface IOutboxConsumer
 
     Task HandleAsync(OutboxEvent outboxEvent, DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken);
 }
+
+/// <summary>The <c>jobs.job.status</c> values (data-model.md "Background processing").</summary>
+public static class JobStatuses
+{
+    public const string Pending = "pending";
+    public const string Running = "running";
+    public const string Succeeded = "succeeded";
+    public const string Dead = "dead";
+}
+
+/// <summary>
+/// Reads job state, for a module that must notice a job it enqueued ending without its handler finishing the work (a worker killed
+/// during the final attempt is dead-lettered by the claim loop, which never calls the handler again).
+/// </summary>
+public interface IJobStatusReader
+{
+    /// <summary>
+    /// The <see cref="JobStatuses"/> value of each job whose dedupe key is in <paramref name="dedupeKeys"/>. A key with no job (never
+    /// enqueued, or removed by retention) is absent from the result.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, string>> StatusesByDedupeKeyAsync(IReadOnlyCollection<string> dedupeKeys, CancellationToken cancellationToken);
+}

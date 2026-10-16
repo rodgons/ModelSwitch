@@ -51,6 +51,23 @@ public sealed class RunExecutionRulesTests
     }
 
     [Theory]
+    [InlineData("queued", "dead", true)]
+    [InlineData("running", "dead", true)]
+    [InlineData("running", null, true)]
+    [InlineData("queued", null, true)]
+    [InlineData("running", "succeeded", true)]
+    [InlineData("queued", "pending", false)]
+    [InlineData("running", "pending", false)]
+    [InlineData("running", "running", false)]
+    [InlineData("succeeded", "dead", false)]
+    [InlineData("failed", null, false)]
+    [InlineData("cancelled", "succeeded", false)]
+    public void An_unfinished_run_is_orphaned_once_its_job_is_dead_finished_or_gone(string runStatus, string? jobStatus, bool orphaned)
+    {
+        RunStatusRules.IsOrphaned(runStatus, jobStatus).ShouldBe(orphaned);
+    }
+
+    [Theory]
     [InlineData("running", true)]
     [InlineData("cancelled", false)]
     [InlineData("succeeded", false)]

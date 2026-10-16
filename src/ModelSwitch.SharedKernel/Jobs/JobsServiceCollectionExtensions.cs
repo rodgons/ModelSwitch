@@ -9,7 +9,7 @@ namespace ModelSwitch.SharedKernel.Jobs;
 public static class JobsServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers <see cref="IJobEnqueuer"/> so a host or module can enqueue jobs. <paramref name="dataSource"/> opens connections as the
+    /// Registers <see cref="IJobEnqueuer"/> and <see cref="IJobStatusReader"/> so a host or module can enqueue jobs and read their state. <paramref name="dataSource"/> opens connections as the
     /// app role. Needs <see cref="SharedKernelServiceCollectionExtensions.AddSharedKernel"/>.
     /// </summary>
     public static IServiceCollection AddJobEnqueuer(this IServiceCollection services, Func<IServiceProvider, DbDataSource> dataSource, Action<JobsOptions>? configure = null)
@@ -24,6 +24,7 @@ public static class JobsServiceCollectionExtensions
 
         services.TryAddSingleton<DbDataSource>(dataSource);
         services.TryAddSingleton<IJobEnqueuer, JobEnqueuer>();
+        services.TryAddSingleton<IJobStatusReader, JobStatusReader>();
         return services;
     }
 

@@ -19,9 +19,10 @@ public static class EvaluationModule
     private const string _migratorConnection = "ConnectionStrings:PostgresMigrator";
 
     /// <summary>
-    /// Registers the Dataset, Prompt and Evaluation Run services and the <c>evaluation.run</c> job handler (app-role connection). They need the
-    /// Identity module's current Administrator, Tenant Grant, Tenant directory and audit writer, IPolicyStore, IProviderCatalog,
-    /// IInferenceService, IEvaluationSpend and the host's IJobEnqueuer.
+    /// Registers the Dataset, Prompt and Evaluation Run services, the <c>evaluation.run</c> job handler and the recurring
+    /// <c>evaluation.sweep_orphaned_runs</c> job (app-role connection). They need the Identity module's current Administrator, Tenant
+    /// Grant, Tenant directory and audit writer, IPolicyStore, IProviderCatalog, IInferenceService, IEvaluationSpend and the host's
+    /// IJobEnqueuer and IJobStatusReader.
     /// </summary>
     public static IServiceCollection AddEvaluationModule(this IServiceCollection services)
     {
@@ -38,6 +39,8 @@ public static class EvaluationModule
         services.TryAddSingleton<RunExecutor>();
         services.TryAddSingleton<IEvaluationCaseLinks, EvaluationCaseLinks>();
         services.AddJobHandler<EvaluationRunJob>();
+        services.AddJobHandler<OrphanedRunSweepJob>();
+        services.AddRecurringJob(OrphanedRunSweepJob.JobKind, OrphanedRunSweepJob.Interval);
         return services;
     }
 
