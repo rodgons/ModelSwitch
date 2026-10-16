@@ -71,7 +71,9 @@ public sealed class Provider429Scenario(GatewayFixture gateway) : ScenarioTests(
         var outcome = await SendAsync(alias);
 
         outcome.StatusCode.ShouldBe(200);
-        outcome.Elapsed.ShouldBeLessThan(TimeSpan.FromMilliseconds(900), "no wait");
+        // Regression (flaky under full-suite CPU load at 900 ms): the bound only has to prove the 120 s
+        // Retry-After was not honoured; the Attempt rows below prove there was no same-model retry.
+        outcome.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5), "no wait");
         (await AttemptsAsync(outcome.RequestId)).ShouldBe(
         [
             ["primary", "failed", "transient", "provider_unavailable", "429", "mock-echo"],
