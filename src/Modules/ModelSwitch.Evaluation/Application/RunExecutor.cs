@@ -173,6 +173,28 @@ internal sealed partial class RunExecutor(
         LogRunFinished(logger, runId, EvaluationRunStatuses.Failed, errorCode);
     }
 
+    /// <summary>
+    /// Stores the aggregates and <c>completed_at</c> of a run cancelled while running whose worker died before doing so
+    /// (<see cref="RunStatusRules.NeedsCancelledFinalization"/>). It stays <c>cancelled</c>; the update is guarded on
+    /// <c>completed_at is null</c>, so a worker that finishes it meanwhile keeps its own write.
+    /// </summary>
+    public async Task FinalizeCancelledAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var run = await db.Runs.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, cancellationToken);
+        if (run is null || run.Status != EvaluationRunStatuses.Cancelled || run.CompletedAt is not null)
+        {
+            return;
+        }
+
+        var aggregates = RunAggregation.ToJson(await RunAggregation.ComputeAsync(db, runId, RunConfiguration.Parse(run.RunConfigurationJson).Evaluator.Kind, cancellationToken));
+        var now = time.GetUtcNow();
+        await db.Database.ExecuteSqlAsync(
+            $"UPDATE evaluation.evaluation_run SET aggregates = {aggregates}::jsonb, completed_at = {now} WHERE id = {runId} AND status = 'cancelled' AND completed_at IS NULL",
+            cancellationToken);
+        LogRunFinished(logger, runId, EvaluationRunStatuses.Cancelled, null);
+    }
+
     private readonly record struct StopReason(bool CostCapReached, bool Cancelled, int StartedCount);
 
     private async Task<StopReason> ProcessAsync(

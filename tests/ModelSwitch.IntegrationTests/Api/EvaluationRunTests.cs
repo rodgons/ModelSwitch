@@ -371,6 +371,32 @@ public sealed class EvaluationRunTests(GatewayFixture gateway) : IClassFixture<G
     }
 
     [Fact]
+    public async Task The_orphan_sweep_finalizes_a_cancelled_run_whose_worker_died_before_storing_its_aggregates()
+    {
+        using var owner = await gateway.OwnerBrowserAsync();
+        var (datasetId, promptId) = await SetupAsync(owner, "classification", _classification);
+        var dead = (await CreateAsync(owner, Body(datasetId, promptId))).RunIds.Single();
+        var live = (await CreateAsync(owner, Body(datasetId, promptId))).RunIds.Single();
+
+        // Both were cancelled while running after recording c-1. The worker of `dead` then died (its job was re-claimed, saw the
+        // cancelled run and succeeded doing nothing); the worker of `live` is still finishing its in-flight Cases.
+        var first = await gateway.ScalarAsync($"select id from evaluation.eval_case where dataset_id = '{datasetId}' and external_id = 'c-1'");
+        await gateway.ExecuteAsync(
+            $"update evaluation.evaluation_run set status = 'cancelled', started_at = now(), cases_done = 1 where id in ('{dead}', '{live}'); " +
+            "insert into evaluation.case_result (id, run_id, case_id, status, score, score_details, created_at) values " +
+            $"('{Guid.CreateVersion7()}', '{dead}', '{first}', 'passed', 1, '{{}}', now()), " +
+            $"('{Guid.CreateVersion7()}', '{live}', '{first}', 'passed', 1, '{{}}', now()); " +
+            $"update jobs.job set status = 'succeeded' where dedupe_key = 'evaluation.run:{dead}'; " +
+            $"update jobs.job set status = 'running' where dedupe_key = 'evaluation.run:{live}'");
+        var sweep = gateway.Services.GetServices<IJobHandler>().Single(h => h.Kind == "evaluation.sweep_orphaned_runs");
+
+        await sweep.HandleAsync(new JobContext(Guid.CreateVersion7(), sweep.Kind, "{}", 1, 5), Token);
+
+        (await RunColumnAsync(dead, "concat_ws('|', status, error is null, completed_at is not null, aggregates->>'casesTotal')")).ShouldBe("cancelled|t|t|1");
+        (await RunColumnAsync(live, "concat_ws('|', status, completed_at is null, aggregates is null)")).ShouldBe("cancelled|t|t");
+    }
+
+    [Fact]
     public async Task An_llm_judge_run_makes_a_second_evaluation_request_and_stores_judge_usage_apart()
     {
         await AddJudgeAliasAsync();

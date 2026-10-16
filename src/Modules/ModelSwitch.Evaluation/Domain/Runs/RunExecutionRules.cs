@@ -73,6 +73,14 @@ internal static class RunStatusRules
     public static bool IsOrphaned(string runStatus, string? jobStatus)
         => !IsTerminal(runStatus) && jobStatus is null or JobStatuses.Dead or JobStatuses.Succeeded;
 
+    /// <summary>
+    /// A run cancelled while <c>running</c> gets its aggregates and <c>completed_at</c> from the worker once its in-flight Cases are done.
+    /// When that worker died first, the re-claimed job skips the (terminal) run, so nothing would ever finish it: once the job is
+    /// <c>dead</c>, <c>succeeded</c> or gone, the run is finalized from its stored Case Results and stays <c>cancelled</c>.
+    /// </summary>
+    public static bool NeedsCancelledFinalization(string runStatus, bool hasCompletedAt, string? jobStatus)
+        => runStatus == EvaluationRunStatuses.Cancelled && !hasCompletedAt && jobStatus is null or JobStatuses.Dead or JobStatuses.Succeeded;
+
     /// <summary>Cancellation: once the run is no longer <c>running</c>, in-flight Cases finish and nothing new starts.</summary>
     public static bool MayStartCase(string status) => status == EvaluationRunStatuses.Running;
 

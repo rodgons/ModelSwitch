@@ -103,6 +103,21 @@ public sealed class RunExecutionRulesTests
     }
 
     [Theory]
+    [InlineData("cancelled", false, "dead", true)]
+    [InlineData("cancelled", false, "succeeded", true)]
+    [InlineData("cancelled", false, null, true)]
+    [InlineData("cancelled", false, "pending", false)]
+    [InlineData("cancelled", false, "running", false)]
+    [InlineData("cancelled", true, "dead", false)]
+    [InlineData("cancelled", true, null, false)]
+    [InlineData("running", false, "dead", false)]
+    [InlineData("failed", false, null, false)]
+    public void A_cancelled_run_without_completed_at_is_finalized_once_its_job_is_dead_finished_or_gone(string runStatus, bool completed, string? jobStatus, bool finalize)
+    {
+        RunStatusRules.NeedsCancelledFinalization(runStatus, completed, jobStatus).ShouldBe(finalize);
+    }
+
+    [Theory]
     [InlineData("passed", false)]
     [InlineData("failed", true)]
     [InlineData("errored", true)]
