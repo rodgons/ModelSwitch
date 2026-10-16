@@ -166,6 +166,7 @@ internal sealed class UsageDbContext(DbContextOptions<UsageDbContext> options) :
             request.HasIndex(x => new { x.Status, x.StartedAt }).IsDescending(false, true).HasFilter("status <> 'succeeded'").HasDatabaseName("ix_inference_request_status_started_at");
             request.HasIndex(x => new { x.SelectedProviderModelId, x.StartedAt }).IsDescending(false, true).HasDatabaseName("ix_inference_request_selected_provider_model_id_started_at");
             request.HasIndex(x => new { x.RequestedAlias, x.StartedAt }).IsDescending(false, true).HasDatabaseName("ix_inference_request_requested_alias_started_at");
+            request.HasIndex(x => x.EvaluationRunId).HasFilter("evaluation_run_id is not null").HasDatabaseName("ix_inference_request_evaluation_run_id");
         });
 
         modelBuilder.Entity<ProviderAttemptRow>(attempt =>

@@ -206,6 +206,10 @@ namespace ModelSwitch.Usage.Infrastructure.Migrations
 
                     b.HasKey("Id", "StartedAt");
 
+                    b.HasIndex("EvaluationRunId")
+                        .HasDatabaseName("ix_inference_request_evaluation_run_id")
+                        .HasFilter("evaluation_run_id is not null");
+
                     b.HasIndex("StartedAt")
                         .IsDescending()
                         .HasDatabaseName("ix_inference_request_started_at");

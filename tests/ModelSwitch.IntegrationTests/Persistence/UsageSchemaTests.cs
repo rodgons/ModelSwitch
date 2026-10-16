@@ -98,6 +98,29 @@ public sealed class UsageSchemaTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Requests_are_indexed_by_evaluation_run_on_the_parent_and_every_partition_including_later_ones()
+    {
+        var connectionString = await postgres.CreateMigratedDatabaseAsync();
+        await ExecuteAsync(connectionString, "select usage.ensure_request_partitions(1, 15)");
+
+        var definition = await QueryAsync(
+            connectionString,
+            "select indexdef from pg_indexes where schemaname = 'usage' and indexname = 'ix_inference_request_evaluation_run_id'");
+        definition.Single().ShouldContain("ON ONLY usage.inference_request USING btree (evaluation_run_id) WHERE (evaluation_run_id IS NOT NULL)");
+
+        // A parent's index is attached to every partition, including the three the call above just created.
+        var attached = await QueryAsync(
+            connectionString,
+            """
+            select count(*)::text from pg_inherits i
+            join pg_class parent on parent.oid = i.inhparent
+            join pg_namespace n on n.oid = parent.relnamespace
+            where n.nspname = 'usage' and parent.relname = 'ix_inference_request_evaluation_run_id'
+            """);
+        attached.ShouldBe(["17"]);
+    }
+
+    [Fact]
     public async Task App_role_can_write_the_partitioned_tables_and_retention_role_can_delete_from_them()
     {
         var admin = await postgres.CreateMigratedDatabaseAsync();
