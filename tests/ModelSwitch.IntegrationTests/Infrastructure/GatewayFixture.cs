@@ -306,6 +306,13 @@ public sealed class GatewayFixture(PostgresFixture postgres, ValkeyFixture valke
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            // Settings Program reads while building the host (the telemetry exporter decision) must be host settings: values added with
+            // ConfigureAppConfiguration only arrive when the host is built.
+            foreach (var (key, value) in settings)
+            {
+                builder.UseSetting(key, value);
+            }
+
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Postgres"] = connectionString,

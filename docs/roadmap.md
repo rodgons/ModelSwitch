@@ -71,7 +71,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [ ] Dashboard design tokens (StyleX) + layout primitives per [design-system.md](design-system.md)
 - [ ] Dashboard: app shell, sign-in, Overview, Request Explorer, Request detail, Providers, Routing, Tenants
 - [ ] Grafana provisioning in `deploy/grafana`
-- [ ] Telemetry degradation test
+- [x] Telemetry degradation test
 - [x] Retention job + partition management
 
 **Exit:** an operationally observable product. FR-08 is covered and DoD #6, #8 and #11 are met.

@@ -75,7 +75,7 @@ Built-in ASP.NET Core, HttpClient, Npgsql and runtime metrics are also enabled. 
 - The OTLP exporter uses a bounded batch queue (2 048 items, the SDK default) and drops when full. Export failures are never surfaced to requests.
 - If the telemetry backend is down at startup, startup still succeeds.
 - `TelemetryCanaryTests` (integration) runs a streaming and a non-streaming request with a canary prompt through a Provider whose credential is a canary secret, exports every span, metric and log line in memory, and asserts neither canary nor the API Key appears (DoD #11).
-- A failure test kills the `otel-lgtm` container during load and asserts no change in inference success rate (PRD Phase 4, "test telemetry degradation").
+- Failure tests (PRD Phase 4, "test telemetry degradation", `TelemetryDegradationScenarios`) point the api at an in-process OTLP/HTTP backend: one stops it during load (as a killed `otel-lgtm` container would) and asserts no change in inference success rate; the other accepts exports and never answers, and asserts that startup succeeds and request latency stays far below the exporter's 10 s timeout. A fake backend is used instead of the `otel-lgtm` image to keep CI from pulling a ~1 GB image, and because a hanging backend is a harsher case than a dead one.
 
 ## 6. Local stack
 
