@@ -127,10 +127,11 @@ internal sealed partial class RunExecutor(
             throw new PermanentJobFailureException("The run's frozen Evaluator or Prompt Version template is not valid.");
         }
 
-        var (cases, pending) = await LoadCasesAsync(run, cancellationToken);
+        var (cases, pending, capAlreadyReached) = await LoadCasesAsync(run, cancellationToken);
         LogRunStarted(logger, runId, cases.Count, cases.Count - pending.Count);
-        var spent = new Spend(await spend.RunEstimatedCostAsync(runId, cancellationToken));
-        var stop = await ProcessAsync(run, configuration, evaluator.Value, template.Value, pending, spent, cancellationToken);
+        var stop = capAlreadyReached
+            ? new StopReason(CostCapReached: true, Cancelled: false, StartedCount: 0)
+            : await ProcessAsync(run, configuration, evaluator.Value, template.Value, pending, new Spend(await spend.RunEstimatedCostAsync(runId, cancellationToken)), cancellationToken);
 
         if (stop.CostCapReached)
         {
@@ -401,8 +402,9 @@ internal sealed partial class RunExecutor(
     private async Task FinishAsync(Guid runId, string evaluatorKind, bool costCapReached, bool cancelled, CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        var aggregates = RunAggregation.ToJson(await RunAggregation.ComputeAsync(db, runId, evaluatorKind, cancellationToken));
-        var (status, error) = RunStatusRules.Outcome(costCapReached, cancelled);
+        var computed = await RunAggregation.ComputeAsync(db, runId, evaluatorKind, cancellationToken);
+        var aggregates = RunAggregation.ToJson(computed);
+        var (status, error) = RunStatusRules.Outcome(costCapReached, cancelled, computed.Skipped);
         var now = time.GetUtcNow();
         var updated = cancelled
             ? 0
@@ -437,7 +439,7 @@ internal sealed partial class RunExecutor(
         return await db.Runs.AsNoTracking().Where(r => r.Id == runId).Select(r => r.Status).FirstAsync(cancellationToken);
     }
 
-    private async Task<(IReadOnlyList<CaseInput> All, IReadOnlyList<CaseInput> Pending)> LoadCasesAsync(EvaluationRun run, CancellationToken cancellationToken)
+    private async Task<(IReadOnlyList<CaseInput> All, IReadOnlyList<CaseInput> Pending, bool CapAlreadyReached)> LoadCasesAsync(EvaluationRun run, CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         var rows = await db.Cases.AsNoTracking()
@@ -445,10 +447,11 @@ internal sealed partial class RunExecutor(
             .OrderBy(c => c.Ordinal)
             .Select(c => new { c.Id, c.InputJson, c.ExpectedJson })
             .ToListAsync(cancellationToken);
-        var done = (await db.CaseResults.AsNoTracking().Where(r => r.RunId == run.Id).Select(r => r.CaseId).ToListAsync(cancellationToken)).ToHashSet();
+        var stored = await db.CaseResults.AsNoTracking().Where(r => r.RunId == run.Id).Select(r => new { r.CaseId, r.Status }).ToListAsync(cancellationToken);
+        var done = stored.Select(r => r.CaseId).ToHashSet();
         var all = rows.Select(r => new CaseInput(r.Id, Element(r.InputJson), Element(r.ExpectedJson))).ToList();
         var byId = all.ToDictionary(c => c.Id);
-        return (all, [.. RunResume.Pending([.. all.Select(c => c.Id)], done).Select(id => byId[id])]);
+        return (all, [.. RunResume.Pending([.. all.Select(c => c.Id)], done).Select(id => byId[id])], RunResume.CostCapAlreadyReached(stored.Select(r => r.Status)));
     }
 
     private static JsonElement Element(string json)

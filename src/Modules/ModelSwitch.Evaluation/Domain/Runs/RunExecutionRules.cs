@@ -24,6 +24,17 @@ internal static class RunResume
         ArgumentNullException.ThrowIfNull(withResult);
         return [.. casesInOrder.Where(id => !withResult.Contains(id))];
     }
+
+    /// <summary>
+    /// A stored <c>skipped</c> Case Result means an earlier pass hit the cost cap (skipped means nothing else), so a resumed run starts
+    /// no new Case: the Cases still without a result are skipped too. The earlier worker died between writing the skipped results and
+    /// finishing the run.
+    /// </summary>
+    public static bool CostCapAlreadyReached(IEnumerable<string> storedStatuses)
+    {
+        ArgumentNullException.ThrowIfNull(storedStatuses);
+        return storedStatuses.Any(s => s == CaseResultStatuses.Skipped);
+    }
 }
 
 /// <summary>What a claimed <c>evaluation.run</c> job does with its run.</summary>
@@ -65,10 +76,14 @@ internal static class RunStatusRules
     /// <summary>Cancellation: once the run is no longer <c>running</c>, in-flight Cases finish and nothing new starts.</summary>
     public static bool MayStartCase(string status) => status == EvaluationRunStatuses.Running;
 
-    /// <summary>The run's final status and <c>error</c>: the cost cap fails it, cancellation keeps it cancelled.</summary>
-    public static (string Status, string? Error) Outcome(bool costCapReached, bool cancelled)
+    /// <summary>
+    /// The run's final status and <c>error</c>: the cost cap fails it, cancellation keeps it cancelled. The cap counts as reached when
+    /// this pass hit it or when any stored Case Result is <c>skipped</c> (<paramref name="storedSkipped"/>): an earlier pass hit it and
+    /// died before finishing the run, so the outcome follows the stored results, not only this pass.
+    /// </summary>
+    public static (string Status, string? Error) Outcome(bool costCapReached, bool cancelled, int storedSkipped)
     {
-        if (costCapReached)
+        if (costCapReached || storedSkipped > 0)
         {
             return (EvaluationRunStatuses.Failed, ErrorCode.RunCostCapReached.Value);
         }

@@ -343,6 +343,34 @@ public sealed class EvaluationRunTests(GatewayFixture gateway) : IClassFixture<G
     }
 
     [Fact]
+    public async Task A_run_resumed_after_the_cost_cap_skipped_cases_still_ends_failed_with_run_cost_cap_reached()
+    {
+        using var owner = await gateway.OwnerBrowserAsync();
+        var (datasetId, promptId) = await SetupAsync(owner, "classification", """
+            {"id":"s-1","input":{"text":"spam"},"expected":"spam"}
+            {"id":"s-2","input":{"text":"spam"},"expected":"spam"}
+            {"id":"s-3","input":{"text":"spam"},"expected":"spam"}
+            """);
+        var runId = (await CreateAsync(owner, Body(datasetId, promptId, maxEstimatedCost: 1000m))).RunIds.Single();
+
+        // The previous worker hit the cap after s-1, wrote s-2 skipped and died before skipping s-3 and finishing the run.
+        var first = await gateway.ScalarAsync($"select id from evaluation.eval_case where dataset_id = '{datasetId}' and external_id = 's-1'");
+        var second = await gateway.ScalarAsync($"select id from evaluation.eval_case where dataset_id = '{datasetId}' and external_id = 's-2'");
+        await gateway.ExecuteAsync(
+            $"update evaluation.evaluation_run set status = 'running', started_at = now(), cases_done = 2 where id = '{runId}'; " +
+            "insert into evaluation.case_result (id, run_id, case_id, status, score, score_details, created_at) values " +
+            $"('{Guid.CreateVersion7()}', '{runId}', '{first}', 'passed', 1, '{{}}', now()), " +
+            $"('{Guid.CreateVersion7()}', '{runId}', '{second}', 'skipped', null, '{{}}', now())");
+        var calls = await CallsAsync(GatewayFixture.PrimaryModel);
+
+        await RunJobAsync(runId, Token);
+
+        (await CallsAsync(GatewayFixture.PrimaryModel)).ShouldBe(calls, "no new Case starts once the cap was reached");
+        (await gateway.ScalarAsync($"select string_agg(status, ',' order by status) from evaluation.case_result where run_id = '{runId}'")).ShouldBe("passed,skipped,skipped");
+        (await RunColumnAsync(runId, "concat_ws('|', status, error, cases_done, completed_at is not null, aggregates->>'skipped')")).ShouldBe("failed|run_cost_cap_reached|3|t|2");
+    }
+
+    [Fact]
     public async Task An_llm_judge_run_makes_a_second_evaluation_request_and_stores_judge_usage_apart()
     {
         await AddJudgeAliasAsync();

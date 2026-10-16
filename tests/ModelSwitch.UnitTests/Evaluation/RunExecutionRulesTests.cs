@@ -79,9 +79,27 @@ public sealed class RunExecutionRulesTests
     [Fact]
     public void The_run_outcome_is_failed_on_the_cost_cap_cancelled_on_cancellation_and_succeeded_otherwise()
     {
-        RunStatusRules.Outcome(costCapReached: true, cancelled: false).ShouldBe(("failed", "run_cost_cap_reached"));
-        RunStatusRules.Outcome(costCapReached: false, cancelled: true).ShouldBe(("cancelled", (string?)null));
-        RunStatusRules.Outcome(costCapReached: false, cancelled: false).ShouldBe(("succeeded", (string?)null));
+        RunStatusRules.Outcome(costCapReached: true, cancelled: false, storedSkipped: 0).ShouldBe(("failed", "run_cost_cap_reached"));
+        RunStatusRules.Outcome(costCapReached: false, cancelled: true, storedSkipped: 0).ShouldBe(("cancelled", (string?)null));
+        RunStatusRules.Outcome(costCapReached: false, cancelled: false, storedSkipped: 0).ShouldBe(("succeeded", (string?)null));
+    }
+
+    [Fact]
+    public void A_run_with_a_stored_skipped_case_result_ends_failed_with_run_cost_cap_reached_even_when_this_pass_never_hit_the_cap()
+    {
+        // The worker that hit the cap wrote the skipped Case Results and died before finishing the run; the resumed pass finds no
+        // pending Case, so it never reaches the cap itself.
+        RunStatusRules.Outcome(costCapReached: false, cancelled: false, storedSkipped: 2).ShouldBe(("failed", "run_cost_cap_reached"));
+    }
+
+    [Theory]
+    [InlineData(new[] { "passed", "skipped" }, true)]
+    [InlineData(new[] { "skipped" }, true)]
+    [InlineData(new[] { "passed", "failed", "errored" }, false)]
+    [InlineData(new string[0], false)]
+    public void A_resumed_run_that_already_has_a_skipped_case_result_starts_no_new_case(string[] storedStatuses, bool reached)
+    {
+        RunResume.CostCapAlreadyReached(storedStatuses).ShouldBe(reached);
     }
 
     [Theory]
