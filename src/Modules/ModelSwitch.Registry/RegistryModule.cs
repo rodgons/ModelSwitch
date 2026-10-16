@@ -49,6 +49,7 @@ public static class RegistryModule
         services.TryAddSingleton<IAdapterFactory, AdapterFactory>();
         services.TryAddSingleton(provider => CircuitOptions.From(provider.GetRequiredService<IConfiguration>()));
         services.TryAddSingleton<IProviderHealth, ProviderHealth>();
+        services.TryAddSingleton<IProviderHealthSnapshots, EfProviderHealthSnapshots>();
         services.TryAddSingleton<ProviderAdminService>();
         services.TryAddSingleton<ProviderModelAdminService>();
         services.TryAddSingleton<ModelPriceAdminService>();

@@ -32,6 +32,7 @@ public static class UsageModule
         services.TryAddSingleton<UsageMetrics>();
         services.TryAddSingleton<IUsageLedger, EfUsageLedger>();
         services.TryAddSingleton<IBudgets, EfBudgets>();
+        services.TryAddSingleton<IUsageQueries, UsageQueries>();
         services.TryAddSingleton<ITenantBudgets, TenantBudgetsAdapter>();
         services.TryAddSingleton<IReservationSweeper, EfReservationSweeper>();
         services.AddJobHandler<ReservationSweepJob>();

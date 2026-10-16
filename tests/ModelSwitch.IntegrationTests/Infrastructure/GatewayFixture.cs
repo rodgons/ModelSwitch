@@ -164,6 +164,29 @@ public sealed class GatewayFixture(PostgresFixture postgres, ValkeyFixture valke
         return Convert.ToString(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture)!;
     }
 
+    /// <summary>
+    /// A browser signed in to this host as an Owner, created on first use (the fixture seeds no Administrator otherwise). The caller
+    /// disposes it.
+    /// </summary>
+    public async Task<AdminBrowser> OwnerBrowserAsync()
+    {
+        const string email = "gateway-owner@example.com";
+        const string password = "the-gateway-owner-password";
+        await using (var services = ModuleServices.ForMigrator(ConnectionString))
+        {
+            await services.GetRequiredService<IOwnerBootstrapper>().BootstrapAsync(email, password, CancellationToken.None);
+        }
+
+        var browser = new AdminBrowser(_factory!.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"),
+            HandleCookies = true,
+            AllowAutoRedirect = false,
+        }));
+        await browser.SignInAsync(email, password);
+        return browser;
+    }
+
     /// <summary>A client for the same host, authenticated with <paramref name="plaintextKey"/>.</summary>
     public HttpClient Authenticated(string plaintextKey)
     {

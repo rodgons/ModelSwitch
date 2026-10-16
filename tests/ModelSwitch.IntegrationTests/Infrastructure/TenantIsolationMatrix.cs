@@ -4,10 +4,14 @@ using Shouldly;
 namespace ModelSwitch.IntegrationTests.Infrastructure;
 
 /// <summary>The ids of the other Tenant's resources the matrix aims at; add a property when a new kind of tenant-scoped id appears.</summary>
-public sealed record ForeignIds(Guid TenantId, Guid ApiKeyId);
+public sealed record ForeignIds(Guid TenantId, Guid ApiKeyId, Guid RequestId = default);
 
-/// <summary>One tenant-scoped admin endpoint: the verb, the path built from <see cref="ForeignIds"/> and a valid body for writes.</summary>
-public sealed record TenantScopedRoute(string Pattern, HttpMethod Method, Func<ForeignIds, string> Path, Func<object?>? Body = null)
+/// <summary>
+/// One tenant-scoped admin endpoint: the verb, the path built from <see cref="ForeignIds"/> and a valid body for writes.
+/// <see cref="ByQuery"/> marks a route that takes the Tenant as a <c>tenantId</c> query filter rather than a route parameter, which
+/// the route-parameter coverage gate cannot see.
+/// </summary>
+public sealed record TenantScopedRoute(string Pattern, HttpMethod Method, Func<ForeignIds, string> Path, Func<object?>? Body = null, bool ByQuery = false)
 {
     public string Name => $"{Method.Method} {Pattern}";
 
@@ -31,10 +35,14 @@ public static class TenantIsolationMatrix
         new("/admin/tenants/{tenantId:guid}/api-keys", HttpMethod.Get, ids => $"/admin/tenants/{ids.TenantId}/api-keys"),
         new("/admin/tenants/{tenantId:guid}/api-keys", HttpMethod.Post, ids => $"/admin/tenants/{ids.TenantId}/api-keys", () => new { name = "intruder" }),
         new("/admin/tenants/{tenantId:guid}/api-keys/{keyId:guid}", HttpMethod.Delete, ids => $"/admin/tenants/{ids.TenantId}/api-keys/{ids.ApiKeyId}"),
+        new("/admin/requests/{requestId:guid}", HttpMethod.Get, ids => $"/admin/requests/{ids.RequestId}"),
+        new("/admin/requests", HttpMethod.Get, ids => $"/admin/requests?tenantId={ids.TenantId}", ByQuery: true),
+        new("/admin/usage", HttpMethod.Get, ids => $"/admin/usage?tenantId={ids.TenantId}", ByQuery: true),
+        new("/admin/overview", HttpMethod.Get, ids => $"/admin/overview?tenantId={ids.TenantId}", ByQuery: true),
     ];
 
     /// <summary>The route parameters that carry a tenant-scoped id; a route with one must be in <see cref="Routes"/> (the coverage gate).</summary>
-    public static IReadOnlyList<string> TenantScopedParameters { get; } = ["tenantId", "keyId", "apiKeyId"];
+    public static IReadOnlyList<string> TenantScopedParameters { get; } = ["tenantId", "keyId", "apiKeyId", "requestId"];
 
     /// <summary>
     /// Calls every route that has a child id with the caller's <em>own</em> Tenant in the path and a foreign child id; the child

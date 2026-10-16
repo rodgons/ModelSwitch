@@ -238,13 +238,15 @@ Not in the MVP: model discovery through the Adapter's `ListModelsAsync` (the Pro
 
 ### Requests and usage
 
+Every Administrator may read these (Viewer). Results are narrowed to the caller's Tenant Grant; a `tenantId` filter or a request outside it is **404** `not_found`. Time is `from`/`to` (ISO-8601 UTC, `from` < `to`, at most 400 days). Every bad parameter is reported at once as `400 validation_failed`, one `errors` entry per parameter. Estimated Cost figures are USD (`currency`) and are never a Provider's charge.
+
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/admin/requests` | Filters: `from`, `to`, `tenantId`, `origin` (`api`, `evaluation`), `alias`, `providerId`, `modelId`, `status`, `errorCode`, `hadFallback`. Sort by `startedAt` (default desc) or `durationMs` |
-| GET | `/admin/requests/{requestId}` | Request + RoutingDecision + Attempts timeline + Usage Records |
-| GET | `/admin/usage` | `groupBy=tenant\|provider\|model\|alias` (multi), `interval=hour\|day\|month`, filters as above. Returns tokens, Estimated Cost, request and error counts |
-| GET | `/admin/overview` | Dashboard tiles + time series: volume, error rate, p50/p95 latency, p50/p95 TTFT, tokens, cost, fallback rate |
-| GET | `/admin/provider-health` | Per Provider Model: aggregate + per-instance circuit state, recent error rate, latency |
+| GET | `/admin/requests` | Filters: `from`, `to` (no default: pages back through everything retained), `tenantId`, `origin` (`api`, `evaluation`), `alias`, `providerId`, `modelId` (a request matches when any of its Attempts used that Provider / Provider Model), `status` (`running`, `succeeded`, `failed` = failed or abandoned, `cancelled`, `abandoned`), `errorCode` (closed set), `hadFallback` (`true`/`false`). `sort=startedAt` (default) or `durationMs`, `order=desc` (default) or `asc`, `limit` (1-200, default 50), `cursor`. Items carry `selectedModel: {id, providerId, providerName, name}` |
+| GET | `/admin/requests/{requestId}` | `{request, clientRequestId, apiKeyId, evaluationRunId, policyId, policyVersion, inputBytes, traceId, traceUrl, routingDecision, attempts[], usageRecords[]}`. `traceUrl` is `Telemetry:TraceUrlTemplate` with `{traceId}` replaced, or null. Attempts and Usage Records name their Provider Model |
+| GET | `/admin/usage` | `groupBy=tenant\|provider\|model\|alias` (comma-separated or repeated), `interval=hour\|day\|month` (default `day`; `hour` covers at most 31 days), `from`/`to` (default the last 24 h), filters as above. Rows: `{period, tenantId, providerId, providerName, model, alias, requests, failedRequests, inputTokens, cachedInputTokens, outputTokens, estimatedCost, currency}`; columns not grouped by are null. `origin`, `status`, `errorCode`, `hadFallback` and `providerId` filters are answered from the raw request rows only (within their 30-day retention), because the rollup does not keep them |
+| GET | `/admin/overview` | `from`/`to` (default the last 24 h), `tenantId`. `{from, to, stepSeconds, currency, totals, series[{start, figures}], recentFailures[]}`. Figures: `requests, failedRequests, fallbackRequests, successRate, fallbackRate, inputTokens, outputTokens, estimatedCost, latencyP50Ms, latencyP95Ms, ttftP50Ms, ttftP95Ms, exact`. The step is 5 min up to 1 h, 15 min up to 6 h, 1 h up to 7 d, else 1 day. `recentFailures` are the 10 newest failed or abandoned requests in the range |
+| GET | `/admin/provider-health` | Per Provider Model in the catalog: `{model, enabled, state, instances[{instanceId, state, windowFailureRate, windowCalls, capturedAt, stale}], recent{attempts, failedAttempts, errorRate, latencyP50Ms, latencyP95Ms}}`. `state` is the worst circuit state among instances that wrote in the last 60 s (`open` > `half_open` > `closed`), or `unknown`. `recent` covers the last 15 minutes of Attempts on every instance. Not Tenant-scoped: Provider Health is global |
 
 ### Evaluation
 

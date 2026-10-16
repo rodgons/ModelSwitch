@@ -24,7 +24,7 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
             .Where(e => e.RoutePattern.Parameters.Any(p => TenantIsolationMatrix.TenantScopedParameters.Contains(p.Name, StringComparer.OrdinalIgnoreCase)))
             .SelectMany(e => (e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? ["*"]).Select(method => $"{method} {e.RoutePattern.RawText}"))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var covered = TenantIsolationMatrix.Routes.Select(r => r.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var covered = TenantIsolationMatrix.Routes.Where(r => !r.ByQuery).Select(r => r.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         scoped.ShouldNotBeEmpty();
         scoped.Except(covered, StringComparer.OrdinalIgnoreCase).ShouldBeEmpty("tenant-scoped routes missing from TenantIsolationMatrix.Routes");
@@ -100,7 +100,14 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
         using var owner = await admin.SignedInOwnerAsync();
         var keyResponse = await owner.SendJsonAsync(HttpMethod.Post, $"/admin/tenants/{admin.TenantB}/api-keys", new { name = "b-key" });
         keyResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
-        return new ForeignIds(admin.TenantB, (await AdminBrowser.JsonAsync(keyResponse)).GetProperty("id").GetGuid());
+        var keyId = (await AdminBrowser.JsonAsync(keyResponse)).GetProperty("id").GetGuid();
+
+        // A recorded Inference Request of Tenant B, as the request detail route reads it.
+        var requestId = Guid.CreateVersion7();
+        await admin.ScalarAsync(
+            "insert into usage.inference_request (id, started_at, tenant_id, origin, api_key_id, requested_alias, streaming, status, attempt_count, had_fallback, input_bytes, usage_status, trace_id) " +
+            $"values ('{requestId}', now(), '{admin.TenantB}', 'api', '{keyId}', 'balanced', false, 'succeeded', 0, false, 10, 'reported', '')");
+        return new ForeignIds(admin.TenantB, keyId, requestId);
     }
 
     private async Task AssertTenantBUntouchedAsync(ForeignIds foreign)

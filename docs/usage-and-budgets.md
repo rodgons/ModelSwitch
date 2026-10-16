@@ -101,7 +101,7 @@ total_cost  = input_cost + output_cost
 
 The worker relays `outbox_event` rows to in-process consumers. The `UsageRollupConsumer` upserts `usage_hourly` and records the event in `processed_event` **in the same transaction**, so redelivery is a no-op (NFR-06).
 
-Dashboard totals for tokens and cost read `usage_hourly` for whole hours and the raw tables for the current partial hour. Latency percentiles use the histogram buckets for ranges longer than 24 h, and exact `percentile_cont` over `inference_request` for shorter ranges.
+Dashboard reads (`IUsageQueries`, `Usage.Domain.UsageRange`): a range of 24 h or less is read entirely from `inference_request`, so its percentiles are exact (`percentile_cont`). A longer range reads `usage_hourly` for its whole hours and `inference_request` for the partial hours at either edge, which also covers the current hour the rollup may not have caught up with; its percentiles are estimated from the merged histogram buckets (`exact: false`). Both paths attribute a request the same way, so they agree on totals. `running` requests are not counted.
 
 ## 7. What is *not* guaranteed (documented limitations)
 
