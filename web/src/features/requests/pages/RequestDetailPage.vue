@@ -20,6 +20,7 @@ import Split from '@/shared/layout/Split.vue'
 import Stack from '@/shared/layout/Stack.vue'
 import TableScroll from '@/shared/layout/TableScroll.vue'
 import RouteStrip from '@/shared/route/RouteStrip.vue'
+import EvaluationCaseLink from '@/features/evaluations/components/EvaluationCaseLink.vue'
 import { useModelNames } from '@/features/providers/queries'
 import RoutingDecisionView from '../components/RoutingDecisionView.vue'
 import { useRequest } from '../queries'
@@ -111,6 +112,12 @@ const facts = computed(() => {
           </template>
         </PageHeader>
         <Stack :gap="40">
+          <EvaluationCaseLink
+            v-if="detail.evaluationCase"
+            :run-id="detail.evaluationCase.runId"
+            :external-id="detail.evaluationCase.externalId"
+            :role="detail.evaluationCase.role"
+          />
           <Facts :items="facts">
             <template #cost
               ><Money :amount="detail.request.totalEstimatedCost" estimated

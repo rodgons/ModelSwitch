@@ -2,6 +2,7 @@
 import * as stylex from '@stylexjs/stylex'
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useSession } from '@/app/session'
 import Button from '@/shared/components/Button.vue'
 import { link, table, typo } from '@/shared/components/components.styles'
 import Identifier from '@/shared/components/Identifier.vue'
@@ -22,6 +23,7 @@ import { useCases, useDataset, useDatasetVersion } from '../queries'
 
 /** One immutable Dataset Version: its hash, scoring schema and Cases in upload order. */
 const props = defineProps<{ id: string; version: string }>()
+const session = useSession()
 const number = computed(() => Number(props.version))
 const dataset = useDataset(() => props.id)
 const detail = useDatasetVersion(() => props.id, number)
@@ -69,7 +71,15 @@ const s = {
       lede="Dataset Version. Its Cases never change; a new upload makes a new version."
     >
       <template #actions>
-        <RouterLink :to="`/evaluations/datasets/${id}`" v-bind="s.back">All versions</RouterLink>
+        <Inline :gap="12">
+          <RouterLink :to="`/evaluations/datasets/${id}`" v-bind="s.back">All versions</RouterLink>
+          <Button
+            v-if="session.can('operator')"
+            variant="primary"
+            :to="{ path: '/evaluations/new', query: { datasetId: id, version } }"
+            >Start a run</Button
+          >
+        </Inline>
       </template>
     </PageHeader>
     <Stack :gap="48">

@@ -4,16 +4,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSession } from '@/app/session'
 import { useTenants } from '@/features/tenants/queries'
 import Button from '@/shared/components/Button.vue'
-import EmptyState from '@/shared/components/EmptyState.vue'
 import Field from '@/shared/components/Field.vue'
 import SegmentedControl from '@/shared/components/SegmentedControl.vue'
 import SelectInput from '@/shared/components/SelectInput.vue'
 import Container from '@/shared/layout/Container.vue'
 import Inline from '@/shared/layout/Inline.vue'
 import PageHeader from '@/shared/layout/PageHeader.vue'
-import Section from '@/shared/layout/Section.vue'
 import Stack from '@/shared/layout/Stack.vue'
 import Toolbar from '@/shared/layout/Toolbar.vue'
+import ComparisonsSection from '../components/ComparisonsSection.vue'
 import CreateDialog from '../components/CreateDialog.vue'
 import DatasetsSection from '../components/DatasetsSection.vue'
 import PromptsSection from '../components/PromptsSection.vue'
@@ -61,11 +60,14 @@ const canWrite = computed(() => session.can('operator'))
     >
       <template #actions>
         <Button
-          v-if="canWrite && tab !== 'comparisons'"
+          v-if="canWrite && tab === 'comparisons'"
           variant="primary"
-          @click="createOpen = true"
-          >{{ tab === 'datasets' ? 'Create Dataset' : 'Create Prompt' }}</Button
+          :to="{ path: '/evaluations/new', query: tenantId ? { tenantId } : {} }"
+          >Start a run</Button
         >
+        <Button v-else-if="canWrite" variant="primary" @click="createOpen = true">{{
+          tab === 'datasets' ? 'Create Dataset' : 'Create Prompt'
+        }}</Button>
       </template>
     </PageHeader>
     <Stack :gap="24">
@@ -83,11 +85,7 @@ const canWrite = computed(() => session.can('operator'))
         :tenant-id="tenantId"
         :tenant-name="tenantName"
       />
-      <Section v-else title="Comparisons" surface>
-        <EmptyState
-          text="Comparisons will be listed here once Evaluation Runs can be started. The runs API is not available yet."
-        />
-      </Section>
+      <ComparisonsSection v-else :tenant-id="tenantId" :tenant-name="tenantName" />
     </Stack>
     <CreateDialog
       v-if="tab !== 'comparisons'"

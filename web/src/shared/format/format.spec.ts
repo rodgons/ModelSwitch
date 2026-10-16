@@ -4,6 +4,7 @@ import {
   formatMoney,
   formatPercent,
   formatRelative,
+  formatScore,
   formatTokens,
   truncateMiddle,
 } from './index'
@@ -75,5 +76,13 @@ describe('formatRelative', () => {
     expect(formatRelative('2026-10-15T11:58:00Z', now)).toBe('2 min ago')
     expect(formatRelative('2026-10-15T09:00:00Z', now)).toBe('3 h ago')
     expect(formatRelative('2026-10-12T12:00:00Z', now)).toBe('3 d ago')
+  })
+})
+
+describe('formatScore', () => {
+  it('shows a 0–1 Evaluator score with three decimals', () => {
+    expect(formatScore(0.8567)).toBe('0.857')
+    expect(formatScore(1)).toBe('1.000')
+    expect(formatScore(null)).toBe('—')
   })
 })

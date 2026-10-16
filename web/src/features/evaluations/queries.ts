@@ -46,6 +46,7 @@ export function useDatasets(
 export function useDataset(id: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => evaluationKeys.dataset(toValue(id))),
+    enabled: computed(() => toValue(id) !== ''),
     queryFn: async () =>
       data(
         await api.GET('/admin/datasets/{datasetId}', {
@@ -58,6 +59,7 @@ export function useDataset(id: MaybeRefOrGetter<string>) {
 export function useDatasetVersions(id: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => evaluationKeys.datasetVersions(toValue(id))),
+    enabled: computed(() => toValue(id) !== ''),
     queryFn: async () =>
       data(
         await api.GET('/admin/datasets/{datasetId}/versions', {
@@ -70,6 +72,7 @@ export function useDatasetVersions(id: MaybeRefOrGetter<string>) {
 export function useDatasetVersion(id: MaybeRefOrGetter<string>, version: MaybeRefOrGetter<number>) {
   return useQuery({
     queryKey: computed(() => evaluationKeys.datasetVersion(toValue(id), toValue(version))),
+    enabled: computed(() => toValue(id) !== '' && toValue(version) > 0),
     queryFn: async () =>
       data(
         await api.GET('/admin/datasets/{datasetId}/versions/{version}', {
@@ -146,6 +149,7 @@ export function usePrompt(id: MaybeRefOrGetter<string>) {
 export function usePromptVersions(id: MaybeRefOrGetter<string>) {
   return useQuery({
     queryKey: computed(() => evaluationKeys.promptVersions(toValue(id))),
+    enabled: computed(() => toValue(id) !== ''),
     queryFn: async () =>
       data(
         await api.GET('/admin/prompts/{promptId}/versions', {

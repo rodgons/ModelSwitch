@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import Badge from './Badge.vue'
 
-/** Request, Attempt and circuit states, each with its status hue and a text label. */
+/** Request, Attempt, circuit, Evaluation Run and Case Result states, each with its status hue and a text label. */
 const props = defineProps<{ status: string }>()
 const tones: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'neutral'> = {
   succeeded: 'success',
@@ -18,6 +18,10 @@ const tones: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'neutral
   running: 'info',
   suspended: 'warning',
   unknown: 'neutral',
+  queued: 'neutral',
+  passed: 'success',
+  errored: 'danger',
+  skipped: 'neutral',
 }
 const labels: Record<string, string> = {
   half_open: 'Half-open',

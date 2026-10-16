@@ -25,6 +25,14 @@ export const code = stylex.create({
     whiteSpace: 'nowrap',
   },
   cell: { verticalAlign: 'top' },
+  // Two runs' outputs diffed (Case drill-down): removed in the danger hue, added in the success hue, as the Policy Version diff.
+  line: { display: 'block', whiteSpace: 'pre-wrap' },
+  added: { backgroundColor: color.successSubtle, color: color.successFg },
+  removed: {
+    backgroundColor: color.dangerSubtle,
+    color: color.dangerFg,
+    textDecorationLine: 'line-through',
+  },
 })
 
 export const upload = stylex.create({
