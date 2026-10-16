@@ -7,6 +7,7 @@ using ModelSwitch.Identity.Contracts;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Jobs;
 using ModelSwitch.SharedKernel.Persistence;
+using ModelSwitch.SharedKernel.Retention;
 using ModelSwitch.Usage.Contracts;
 using ModelSwitch.Usage.Domain;
 using ModelSwitch.Usage.Infrastructure;
@@ -38,6 +39,7 @@ public static class UsageModule
         services.AddJobHandler<ReservationSweepJob>();
         services.AddRecurringJob(ReservationSweepJob.JobKind, ReservationSweepJob.Interval);
         services.AddOutboxConsumer<UsageRollupConsumer>();
+        services.AddRetentionTask<UsageRetentionTask>();
         return services;
     }
 

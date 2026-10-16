@@ -17,6 +17,7 @@ using ModelSwitch.Identity.Infrastructure;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Http;
 using ModelSwitch.SharedKernel.Persistence;
+using ModelSwitch.SharedKernel.Retention;
 
 namespace ModelSwitch.Identity;
 
@@ -56,6 +57,7 @@ public static class IdentityModule
         services.TryAddSingleton<IApiKeyAdminStore, EfApiKeyAdminStore>();
         services.TryAddSingleton<TenantService>();
         services.TryAddSingleton<ApiKeyAdminService>();
+        services.AddRetentionTask<AuditRetentionTask>();
         return services;
     }
 

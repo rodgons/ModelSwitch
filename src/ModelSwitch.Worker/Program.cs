@@ -6,6 +6,7 @@ using ModelSwitch.Routing;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Jobs;
+using ModelSwitch.SharedKernel.Retention;
 using ModelSwitch.Telemetry;
 using ModelSwitch.Usage;
 using Npgsql;
@@ -30,6 +31,16 @@ return await StartupExit.RunAsync(
         // outbox consumers from their own registration (Usage adds the Reservation sweeper and the usage rollup).
         builder.Services.AddJobEnqueuer(provider => NpgsqlDataSource.Create(provider.GetRequiredService<IConfiguration>()["ConnectionStrings:Postgres"]!));
         builder.Services.AddJobsWorker();
+
+        // Retention runs as modelswitch_retention when its connection string is set, otherwise as the app role (audit records kept).
+        builder.Services.AddRetention(provider =>
+        {
+            var configuration = provider.GetRequiredService<IConfiguration>();
+            var retention = configuration["ConnectionStrings:PostgresRetention"];
+            return new RetentionDataSource(
+                NpgsqlDataSource.Create(string.IsNullOrWhiteSpace(retention) ? configuration["ConnectionStrings:Postgres"]! : retention),
+                IsRetentionRole: !string.IsNullOrWhiteSpace(retention));
+        });
 
         await builder.Build().RunAsync();
         return 0;

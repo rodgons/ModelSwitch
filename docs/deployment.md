@@ -55,6 +55,7 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 | `MODELSWITCH__ConnectionStrings__Postgres` | ✔ | api, worker | `modelswitch_app` role |
 | `MODELSWITCH__ConnectionStrings__PostgresMigrator` | ✔ | migrator | `modelswitch_migrator` role |
 | `MODELSWITCH__ConnectionStrings__Valkey` | ✔ | api | |
+| `MODELSWITCH__ConnectionStrings__PostgresRetention` | | worker | `modelswitch_retention` role (needs `POSTGRES_RETENTION_PASSWORD`). Unset: retention runs as the app role and keeps Audit Records |
 | `MODELSWITCH__Security__MasterKey` | ✔ if any `db:` credential | api, worker | 32 bytes base64 |
 | `MODELSWITCH__Security__MasterKeyVersion` | | api, worker | `1`. Version id of the master key, stored with each secret. Raise it when rotating |
 | `MODELSWITCH__Security__PreviousMasterKey` / `PreviousMasterKeyVersion` | during rotation | api, worker | The old key and its version, so secrets written under it still decrypt until re-encrypted |
@@ -70,7 +71,7 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 | `MODELSWITCH__Limits__MaxMessages` | | api | `256` |
 | `MODELSWITCH__Streaming__KeepAliveSeconds` | | api | `15`. Silence on an SSE stream after which a `: keep-alive` comment is sent |
 | `MODELSWITCH__Outbound__AllowedPrivateHosts` | | api, worker | `""`. Compose sets `ollama,mock-provider` |
-| `MODELSWITCH__Retention__RequestDays` | | worker | `30` |
+| `MODELSWITCH__Retention__RequestDays` | | worker | `30` (1 to 400). Request and Attempt rows, and their monthly partitions, are removed after this many days |
 | `MODELSWITCH__Circuit__*` | | api, worker | see routing-and-resilience §5 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | | all | unset → no export |
 | `OTEL_SERVICE_NAME` | | all | `modelswitch-api` / `-worker` |

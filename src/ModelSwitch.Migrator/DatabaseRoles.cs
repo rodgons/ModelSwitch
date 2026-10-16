@@ -15,6 +15,9 @@ internal sealed partial class DatabaseRoles(ILogger<DatabaseRoles> logger)
     // Append-only by design: the app role may INSERT and SELECT but never UPDATE or DELETE these.
     private static readonly string[] _appendOnlyTables = ["audit_record", "model_price", "routing_policy_version"];
 
+    // Functions the worker's roles may run: SECURITY DEFINER maintenance owned by the migrator role (data-model.md "Partitioning").
+    private static readonly string[] _maintenanceFunctions = ["maintain_request_partitions"];
+
     // Tables the worker's retention job deletes from (data-model.md "Retention").
     private static readonly string[] _retentionTables =
     [
@@ -131,6 +134,23 @@ internal sealed partial class DatabaseRoles(ILogger<DatabaseRoles> logger)
             $do$
             """;
         await ExecuteForSchemaAsync(connection, transaction, sql, schema, cancellationToken);
+        await GrantFunctionsAsync(connection, transaction, schema, AppRole, cancellationToken);
+    }
+
+    private static async Task GrantFunctionsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string schema, string role, CancellationToken cancellationToken)
+    {
+        var sql = $"""
+            DO $do$
+            DECLARE f record;
+            BEGIN
+                FOR f IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                         WHERE n.nspname = @schema AND p.proname = ANY (ARRAY[{Literals(_maintenanceFunctions)}]) LOOP
+                    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO {role}', f.signature);
+                END LOOP;
+            END
+            $do$
+            """;
+        await ExecuteForSchemaAsync(connection, transaction, sql, schema, cancellationToken);
     }
 
     private static async Task GrantRetentionAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string schema, CancellationToken cancellationToken)
@@ -147,6 +167,7 @@ internal sealed partial class DatabaseRoles(ILogger<DatabaseRoles> logger)
             $do$
             """;
         await ExecuteForSchemaAsync(connection, transaction, sql, schema, cancellationToken);
+        await GrantFunctionsAsync(connection, transaction, schema, RetentionRole, cancellationToken);
     }
 
     private static string Literals(string[] names) => string.Join(", ", names.Select(n => $"'{n}'"));
