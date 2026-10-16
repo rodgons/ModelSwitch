@@ -2,6 +2,8 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
+using ModelSwitch.Identity.Contracts;
+using ModelSwitch.Registry.Application;
 using ModelSwitch.Registry.Contracts;
 using ModelSwitch.Registry.Domain;
 using ModelSwitch.SharedKernel;
@@ -20,6 +22,7 @@ internal sealed partial class ProviderSecretStore(
     SecretCipher cipher,
     TimeProvider time,
     IGuidGenerator guids,
+    IAuditWriter audit,
     ILogger<ProviderSecretStore> logger) : IProviderSecretStore
 {
     public const string DbScheme = "db:";
@@ -27,14 +30,10 @@ internal sealed partial class ProviderSecretStore(
 
     public async Task<Result<ProviderSecretStatus>> SetAsync(Guid providerId, string secret, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(secret) || secret.Length > MaxSecretLength)
+        var invalid = Validate(secret);
+        if (invalid is not null)
         {
-            return new Error(ErrorCode.ValidationFailed, $"The secret must be 1 to {MaxSecretLength} characters.");
-        }
-
-        if (!cipher.IsConfigured)
-        {
-            return new Error(ErrorCode.InternalError, "The master key is not configured.");
+            return invalid;
         }
 
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
@@ -45,12 +44,40 @@ internal sealed partial class ProviderSecretStore(
             return ProviderNotFound();
         }
 
+        var status = await ApplyAsync(db, provider, secret, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        await audit.WriteAsync(SecretAuditEntry(provider), transaction.GetDbTransaction(), cancellationToken);
+        await BumpAsync(db, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        LogSecretSet(logger, providerId, cipher.CurrentKeyVersion);
+        return status;
+    }
+
+    /// <summary>The reasons a secret cannot be stored, or null. Checked before any transaction starts.</summary>
+    internal Error? Validate(string? secret)
+    {
+        if (string.IsNullOrWhiteSpace(secret) || secret.Length > MaxSecretLength)
+        {
+            return new Error(ErrorCode.ValidationFailed, $"The secret must be 1 to {MaxSecretLength} characters.");
+        }
+
+        return cipher.IsConfigured ? null : new Error(ErrorCode.InternalError, "The master key is not configured.");
+    }
+
+    /// <summary>
+    /// Encrypts <paramref name="secret"/> into a new tracked row, removes the row the Provider referenced and repoints the
+    /// Provider (tracked in <paramref name="db"/>). The caller saves, audits and bumps the config version in its own
+    /// transaction; <see cref="Validate"/> must have passed.
+    /// </summary>
+    internal async Task<ProviderSecretStatus> ApplyAsync(RegistryDbContext db, Provider provider, string secret, CancellationToken cancellationToken)
+    {
         var now = time.GetUtcNow();
-        var sealedSecret = cipher.Encrypt(secret, providerId);
+        var sealedSecret = cipher.Encrypt(secret, provider.Id);
         var row = new ProviderSecret
         {
             Id = guids.NewGuid(),
-            ProviderId = providerId,
+            ProviderId = provider.Id,
             Ciphertext = sealedSecret.Ciphertext,
             Nonce = sealedSecret.Nonce,
             Tag = sealedSecret.Tag,
@@ -59,16 +86,19 @@ internal sealed partial class ProviderSecretStore(
         };
 
         await RemoveReferencedRowAsync(db, provider.CredentialReference, cancellationToken);
+
         db.ProviderSecrets.Add(row);
         provider.CredentialReference = DbScheme + row.Id.ToString("D", CultureInfo.InvariantCulture);
         provider.UpdatedAt = now;
-        await db.SaveChangesAsync(cancellationToken);
-        await BumpAsync(db, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        LogSecretSet(logger, providerId, row.KeyVersion);
         return new ProviderSecretStatus("db", true, now);
     }
+
+    /// <summary>The <c>provider.secret_replaced</c> Audit Record. It carries no secret material.</summary>
+    internal AuditEntry SecretAuditEntry(Provider provider)
+        => new(RegistryAuditActions.ProviderSecretReplaced, "provider", provider.Id.ToString("D", CultureInfo.InvariantCulture))
+        {
+            Details = new Dictionary<string, object?> { ["name"] = provider.Name, ["credentialKind"] = "db", ["keyVersion"] = (int)cipher.CurrentKeyVersion },
+        };
 
     public async Task<Result<ProviderSecretStatus>> ClearAsync(Guid providerId, CancellationToken cancellationToken)
     {
@@ -160,7 +190,7 @@ internal sealed partial class ProviderSecretStore(
         return new ProviderSecretStatus("db", true, created);
     }
 
-    private static async Task RemoveReferencedRowAsync(RegistryDbContext db, string? reference, CancellationToken cancellationToken)
+    internal static async Task RemoveReferencedRowAsync(RegistryDbContext db, string? reference, CancellationToken cancellationToken)
     {
         if (reference is not null && TryParseSecretId(reference, out var id))
         {

@@ -5,7 +5,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using ModelSwitch.Adapters.Abstractions;
+using ModelSwitch.Registry.Application;
 using ModelSwitch.Registry.Contracts;
+using ModelSwitch.Registry.Endpoints;
 using ModelSwitch.Registry.Infrastructure;
 using ModelSwitch.Registry.Infrastructure.Credentials;
 using ModelSwitch.Registry.Infrastructure.Health;
@@ -31,7 +33,8 @@ public static class RegistryModule
         services.TryAddSingleton(provider => MasterKeyRing.From(provider.GetRequiredService<IConfiguration>()).Ring);
         services.TryAddSingleton<SecretCipher>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ICredentialSource, DbCredentialSource>());
-        services.TryAddSingleton<IProviderSecretStore, ProviderSecretStore>();
+        services.TryAddSingleton<ProviderSecretStore>();
+        services.TryAddSingleton<IProviderSecretStore>(provider => provider.GetRequiredService<ProviderSecretStore>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, MasterKeyStartupCheck>());
         services.TryAddSingleton<ICredentialResolver, CredentialResolver>();
         services.TryAddSingleton<IOutboundDestinationPolicy, OutboundDestinationPolicy>();
@@ -46,6 +49,9 @@ public static class RegistryModule
         services.TryAddSingleton<IAdapterFactory, AdapterFactory>();
         services.TryAddSingleton(provider => CircuitOptions.From(provider.GetRequiredService<IConfiguration>()));
         services.TryAddSingleton<IProviderHealth, ProviderHealth>();
+        services.TryAddSingleton<ProviderAdminService>();
+        services.TryAddSingleton<ProviderModelAdminService>();
+        services.TryAddSingleton<ModelPriceAdminService>();
         return services;
     }
 
@@ -89,5 +95,9 @@ public static class RegistryModule
         return services;
     }
 
-    public static IEndpointRouteBuilder MapRegistryEndpoints(this IEndpointRouteBuilder app) => app;
+    public static IEndpointRouteBuilder MapRegistryEndpoints(this IEndpointRouteBuilder app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        return CatalogEndpoints.Map(app);
+    }
 }
