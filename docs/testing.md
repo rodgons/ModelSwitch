@@ -37,7 +37,7 @@ Other rules: no test calls a real external Provider. Testcontainers are shared p
 - Request records: one `inference_request`, N `provider_attempt`, N `usage_record`, all correlated by `X-Request-Id`.
 - Pricing preservation: record a request → add a new Price → the old Usage Record's cost and `model_price_id` are unchanged.
 - Budgets: concurrent requests at the boundary never push `spent + reserved` past the limit by more than one request's estimation error.
-- **Multi-instance limits:** two `WebApplicationFactory` hosts share one Valkey. They fire `2 × limit` requests concurrently and assert that exactly `limit` succeed (FR-07).
+- **Multi-instance limits:** two `WebApplicationFactory` hosts share one Valkey. They fire `2 × limit` requests concurrently and assert that exactly `limit` succeed (FR-07), once for the Concurrency Limit and once for the Rate Limit burst (`LimitsTests`).
 - Config propagation: update a Routing Policy through the admin API → the next request on the *other* host uses the new version within 1 s (via NOTIFY).
 - Background recovery: kill the worker mid-evaluation (dispose the host) → a new worker resumes → no duplicate Case Results. An abandoned Reservation is swept.
 - Streaming cancellation: the client aborts mid-stream → the upstream connection is closed (assert on the mock), the Attempt is recorded `cancelled` or `ambiguous`, and the Concurrency lease is released.

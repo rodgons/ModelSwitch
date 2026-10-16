@@ -5,6 +5,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="ModelSwitch.UnitTests" />
     <InternalsVisibleTo Include="ModelSwitch.IntegrationTests" />
     <InternalsVisibleTo Include="ModelSwitch.ArchitectureTests" />

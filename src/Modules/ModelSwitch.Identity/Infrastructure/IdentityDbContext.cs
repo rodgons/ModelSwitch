@@ -12,6 +12,8 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
 
+    public DbSet<TenantLimitsRow> TenantLimits => Set<TenantLimitsRow>();
+
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
 
     public DbSet<Administrator> Administrators => Set<Administrator>();
@@ -45,6 +47,26 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
             tenant.Property(x => x.CreatedAt).HasColumnName("created_at");
             tenant.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             tenant.HasIndex(x => x.Name).IsUnique().HasDatabaseName("ux_tenant_name");
+        });
+
+        modelBuilder.Entity<TenantLimitsRow>(limits =>
+        {
+            limits.ToTable("tenant_limits", t =>
+            {
+                t.HasCheckConstraint("ck_tenant_limits_requests_per_minute", "requests_per_minute is null or requests_per_minute > 0");
+                t.HasCheckConstraint("ck_tenant_limits_max_concurrent", "max_concurrent is null or max_concurrent > 0");
+                t.HasCheckConstraint("ck_tenant_limits_budget_period", "budget_period is null or budget_period = 'month'");
+            });
+            limits.HasKey(x => x.TenantId);
+            limits.Property(x => x.TenantId).HasColumnName("tenant_id").ValueGeneratedNever();
+            limits.Property(x => x.RequestsPerMinute).HasColumnName("requests_per_minute");
+            limits.Property(x => x.MaxConcurrent).HasColumnName("max_concurrent");
+            limits.Property(x => x.MaxRequestCost).HasColumnName("max_request_cost").HasColumnType("numeric(20,10)");
+            limits.Property(x => x.BudgetAmount).HasColumnName("budget_amount").HasColumnType("numeric(20,10)");
+            limits.Property(x => x.BudgetPeriod).HasColumnName("budget_period");
+            limits.Property(x => x.AllowedAliases).HasColumnName("allowed_aliases").HasColumnType("text[]").HasDefaultValueSql("'{*}'").IsRequired();
+            limits.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            limits.HasOne<Tenant>().WithOne().HasForeignKey<TenantLimitsRow>(x => x.TenantId).HasConstraintName("fk_tenant_limits_tenant_id").OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ApiKey>(key =>

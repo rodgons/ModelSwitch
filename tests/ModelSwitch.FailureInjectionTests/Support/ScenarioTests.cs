@@ -7,6 +7,7 @@ using Npgsql;
 using Shouldly;
 
 [assembly: AssemblyFixture(typeof(PostgresFixture))]
+[assembly: AssemblyFixture(typeof(ValkeyFixture))]
 
 namespace ModelSwitch.FailureInjectionTests.Support;
 

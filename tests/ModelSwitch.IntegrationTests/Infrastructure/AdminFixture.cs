@@ -116,6 +116,8 @@ public sealed class AdminFixture(PostgresFixture postgres) : IAsyncLifetime
             {
                 ["ConnectionStrings:Postgres"] = connectionString,
                 ["Security:ApiKeyPepper"] = ModuleServices.Pepper,
+                // The admin tests never reach the limits step; the setting only has to be present.
+                ["ConnectionStrings:Valkey"] = "localhost:1",
             }));
             builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestRoutes>());
         }

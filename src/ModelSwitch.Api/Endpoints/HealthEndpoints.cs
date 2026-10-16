@@ -5,8 +5,8 @@ namespace ModelSwitch.Api.Endpoints;
 
 /// <summary>
 /// <c>GET /health</c> (liveness) and <c>GET /ready</c> (docs/api.md section 4). Both are unauthenticated and their bodies
-/// never contain secrets. Readiness is PostgreSQL only for now: the Valkey check lands with the limits work (Phase 3), and
-/// Provider status is deliberately not part of readiness.
+/// never contain secrets. Readiness is every applicable <see cref="IReadinessCheck"/> (Valkey only when
+/// the limits fail closed); Provider status is deliberately not part of readiness.
 /// </summary>
 internal static class HealthEndpoints
 {
@@ -19,7 +19,7 @@ internal static class HealthEndpoints
 
     private static async Task<IResult> ReadyAsync(IEnumerable<IReadinessCheck> checks, CancellationToken cancellationToken)
     {
-        var results = await Task.WhenAll(checks.Select(async check => (check.Name, Ok: await check.CheckAsync(cancellationToken))));
+        var results = await Task.WhenAll(checks.Where(check => check.Applies).Select(async check => (check.Name, Ok: await check.CheckAsync(cancellationToken))));
         var ready = results.All(r => r.Ok);
         var body = new JsonObject
         {
