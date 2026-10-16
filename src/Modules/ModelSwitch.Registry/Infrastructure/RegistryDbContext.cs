@@ -17,6 +17,8 @@ internal sealed class RegistryDbContext(DbContextOptions<RegistryDbContext> opti
 
     public DbSet<ProviderHealthSnapshot> ProviderHealthSnapshots => Set<ProviderHealthSnapshot>();
 
+    public DbSet<ProviderSecret> ProviderSecrets => Set<ProviderSecret>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -32,6 +34,25 @@ internal sealed class RegistryDbContext(DbContextOptions<RegistryDbContext> opti
             snapshot.Property(x => x.WindowFailureRate).HasColumnName("window_failure_rate");
             snapshot.Property(x => x.WindowCalls).HasColumnName("window_calls");
             snapshot.Property(x => x.CapturedAt).HasColumnName("captured_at");
+        });
+
+        modelBuilder.Entity<ProviderSecret>(secret =>
+        {
+            secret.ToTable("provider_secret", t =>
+            {
+                t.HasCheckConstraint("ck_provider_secret_nonce_length", "octet_length(nonce) = 12");
+                t.HasCheckConstraint("ck_provider_secret_tag_length", "octet_length(tag) = 16");
+            });
+            secret.HasKey(x => x.Id);
+            secret.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            secret.Property(x => x.ProviderId).HasColumnName("provider_id");
+            secret.Property(x => x.Ciphertext).HasColumnName("ciphertext").HasColumnType("bytea").IsRequired();
+            secret.Property(x => x.Nonce).HasColumnName("nonce").HasColumnType("bytea").IsRequired();
+            secret.Property(x => x.Tag).HasColumnName("tag").HasColumnType("bytea").IsRequired();
+            secret.Property(x => x.KeyVersion).HasColumnName("key_version");
+            secret.Property(x => x.CreatedAt).HasColumnName("created_at");
+            secret.HasIndex(x => x.ProviderId).HasDatabaseName("ix_provider_secret_provider_id");
+            secret.HasOne<Provider>().WithMany().HasForeignKey(x => x.ProviderId).HasConstraintName("fk_provider_secret_provider_id").OnDelete(DeleteBehavior.Cascade);
         });
 
         var adapterType = new ValueConverter<AdapterType, string>(

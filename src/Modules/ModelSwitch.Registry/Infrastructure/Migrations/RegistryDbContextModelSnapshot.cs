@@ -210,6 +210,52 @@ namespace ModelSwitch.Registry.Infrastructure.Migrations
                     b.ToTable("provider_model", "registry");
                 });
 
+            modelBuilder.Entity("ModelSwitch.Registry.Domain.ProviderSecret", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("Ciphertext")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("ciphertext");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<short>("KeyVersion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("key_version");
+
+                    b.Property<byte[]>("Nonce")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("nonce");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_id");
+
+                    b.Property<byte[]>("Tag")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("tag");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderId")
+                        .HasDatabaseName("ix_provider_secret_provider_id");
+
+                    b.ToTable("provider_secret", "registry", t =>
+                        {
+                            t.HasCheckConstraint("ck_provider_secret_nonce_length", "octet_length(nonce) = 12");
+
+                            t.HasCheckConstraint("ck_provider_secret_tag_length", "octet_length(tag) = 16");
+                        });
+                });
+
             modelBuilder.Entity("ModelSwitch.Registry.Domain.ModelPrice", b =>
                 {
                     b.HasOne("ModelSwitch.Registry.Domain.ProviderModel", null)
@@ -228,6 +274,16 @@ namespace ModelSwitch.Registry.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_provider_model_provider_id");
+                });
+
+            modelBuilder.Entity("ModelSwitch.Registry.Domain.ProviderSecret", b =>
+                {
+                    b.HasOne("ModelSwitch.Registry.Domain.Provider", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_provider_secret_provider_id");
                 });
 #pragma warning restore 612, 618
         }

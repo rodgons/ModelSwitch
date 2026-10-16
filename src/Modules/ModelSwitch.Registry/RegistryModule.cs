@@ -3,12 +3,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using ModelSwitch.Adapters.Abstractions;
 using ModelSwitch.Registry.Contracts;
 using ModelSwitch.Registry.Infrastructure;
 using ModelSwitch.Registry.Infrastructure.Credentials;
 using ModelSwitch.Registry.Infrastructure.Health;
 using ModelSwitch.Registry.Infrastructure.Outbound;
+using ModelSwitch.Registry.Infrastructure.Secrets;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Persistence;
 
@@ -26,7 +28,11 @@ public static class RegistryModule
         services.TryAddSingleton<IDnsResolver, SystemDnsResolver>();
         services.TryAddSingleton(provider => OutboundOptions.From(provider.GetRequiredService<IConfiguration>()));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ICredentialSource, EnvCredentialSource>());
-        // Phase 3: register a db: ICredentialSource (AES-GCM secret store) alongside the env one.
+        services.TryAddSingleton(provider => MasterKeyRing.From(provider.GetRequiredService<IConfiguration>()).Ring);
+        services.TryAddSingleton<SecretCipher>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ICredentialSource, DbCredentialSource>());
+        services.TryAddSingleton<IProviderSecretStore, ProviderSecretStore>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, MasterKeyStartupCheck>());
         services.TryAddSingleton<ICredentialResolver, CredentialResolver>();
         services.TryAddSingleton<IOutboundDestinationPolicy, OutboundDestinationPolicy>();
         services.TryAddSingleton<IOutboundHandlerFactory, OutboundHandlerFactory>();

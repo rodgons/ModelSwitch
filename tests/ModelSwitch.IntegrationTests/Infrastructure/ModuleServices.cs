@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelSwitch.Configuration;
 using ModelSwitch.Identity;
 using ModelSwitch.Registry;
@@ -43,7 +44,26 @@ public static class ModuleServices
         return services.BuildServiceProvider();
     }
 
-    private static ServiceCollection Base(string connectionString, TimeProvider? time)
+    /// <summary>Services the api host registers for the Registry: credential resolution and the Provider secret store.</summary>
+    public static ServiceProvider ForRegistry(string connectionString, string? masterKey, Action<ILoggingBuilder>? logging = null, Dictionary<string, string?>? extra = null)
+    {
+        var settings = extra is null ? [] : new Dictionary<string, string?>(extra);
+        if (masterKey is not null)
+        {
+            settings["Security:MasterKey"] = masterKey;
+        }
+
+        var services = Base(connectionString, null, settings);
+        if (logging is not null)
+        {
+            services.AddLogging(logging);
+        }
+
+        services.AddRegistryModule();
+        return services.BuildServiceProvider();
+    }
+
+    private static ServiceCollection Base(string connectionString, TimeProvider? time, Dictionary<string, string?>? extra = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -52,6 +72,7 @@ public static class ModuleServices
                 ["ConnectionStrings:PostgresMigrator"] = connectionString,
                 ["Security:ApiKeyPepper"] = Pepper,
             })
+            .AddInMemoryCollection(extra ?? [])
             .Build();
 
         var services = new ServiceCollection();
