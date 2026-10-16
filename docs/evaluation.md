@@ -14,7 +14,7 @@ Datasets are uploaded as JSONL, one Case per line. Each upload creates a new imm
 - `id`: required, unique within the version. It lets Case Results be matched across versions.
 - `input`: an object whose keys are template variables for the Prompt Version.
 - `expected`: an object (extraction), a string label (classification) or a reference answer (free text).
-- The upload is validated as a whole: either every line is valid, or the version is rejected with `400 validation_failed` and line-numbered errors in the Problem Details `errors` extension. Limits are ≤ 5 000 Cases and ≤ 10 MiB.
+- The upload is validated as a whole: either every line is valid, or the version is rejected with `400 validation_failed` and line-numbered errors in the Problem Details `errors` extension. Limits are ≤ 5 000 Cases (more is `400 validation_failed`, key `body`) and ≤ 10 MiB (a larger body is `413 payload_too_large`, not a validation error).
 - `content_sha256` of the canonicalized cases is stored, so two runs on "the same dataset" can be proven identical.
 
 ## 2. Prompt Versions
