@@ -4,14 +4,14 @@ using Shouldly;
 namespace ModelSwitch.IntegrationTests.Infrastructure;
 
 /// <summary>The ids of the other Tenant's resources the matrix aims at; add a property when a new kind of tenant-scoped id appears.</summary>
-public sealed record ForeignIds(Guid TenantId, Guid ApiKeyId, Guid RequestId = default);
+public sealed record ForeignIds(Guid TenantId, Guid ApiKeyId, Guid RequestId = default, Guid PolicyId = default);
 
 /// <summary>
 /// One tenant-scoped admin endpoint: the verb, the path built from <see cref="ForeignIds"/> and a valid body for writes.
-/// <see cref="ByQuery"/> marks a route that takes the Tenant as a <c>tenantId</c> query filter rather than a route parameter, which
-/// the route-parameter coverage gate cannot see.
+/// <see cref="ByQuery"/> marks a route that takes the Tenant as a <c>tenantId</c> query filter or body member rather than a route
+/// parameter, which the route-parameter coverage gate cannot see.
 /// </summary>
-public sealed record TenantScopedRoute(string Pattern, HttpMethod Method, Func<ForeignIds, string> Path, Func<object?>? Body = null, bool ByQuery = false)
+public sealed record TenantScopedRoute(string Pattern, HttpMethod Method, Func<ForeignIds, string> Path, Func<ForeignIds, object?>? Body = null, bool ByQuery = false)
 {
     public string Name => $"{Method.Method} {Pattern}";
 
@@ -29,16 +29,22 @@ public static class TenantIsolationMatrix
     public static IReadOnlyList<TenantScopedRoute> Routes { get; } =
     [
         new("/admin/tenants/{tenantId:guid}", HttpMethod.Get, ids => $"/admin/tenants/{ids.TenantId}"),
-        new("/admin/tenants/{tenantId:guid}", HttpMethod.Patch, ids => $"/admin/tenants/{ids.TenantId}", () => new { status = "suspended" }),
-        new("/admin/tenants/{tenantId:guid}/limits", HttpMethod.Put, ids => $"/admin/tenants/{ids.TenantId}/limits", () => new { requestsPerMinute = 1 }),
-        new("/admin/tenants/{tenantId:guid}/model-access", HttpMethod.Put, ids => $"/admin/tenants/{ids.TenantId}/model-access", () => new { allowedAliases = new[] { "*" } }),
+        new("/admin/tenants/{tenantId:guid}", HttpMethod.Patch, ids => $"/admin/tenants/{ids.TenantId}", _ => new { status = "suspended" }),
+        new("/admin/tenants/{tenantId:guid}/limits", HttpMethod.Put, ids => $"/admin/tenants/{ids.TenantId}/limits", _ => new { requestsPerMinute = 1 }),
+        new("/admin/tenants/{tenantId:guid}/model-access", HttpMethod.Put, ids => $"/admin/tenants/{ids.TenantId}/model-access", _ => new { allowedAliases = new[] { "*" } }),
         new("/admin/tenants/{tenantId:guid}/api-keys", HttpMethod.Get, ids => $"/admin/tenants/{ids.TenantId}/api-keys"),
-        new("/admin/tenants/{tenantId:guid}/api-keys", HttpMethod.Post, ids => $"/admin/tenants/{ids.TenantId}/api-keys", () => new { name = "intruder" }),
+        new("/admin/tenants/{tenantId:guid}/api-keys", HttpMethod.Post, ids => $"/admin/tenants/{ids.TenantId}/api-keys", _ => new { name = "intruder" }),
         new("/admin/tenants/{tenantId:guid}/api-keys/{keyId:guid}", HttpMethod.Delete, ids => $"/admin/tenants/{ids.TenantId}/api-keys/{ids.ApiKeyId}"),
         new("/admin/requests/{requestId:guid}", HttpMethod.Get, ids => $"/admin/requests/{ids.RequestId}"),
         new("/admin/requests", HttpMethod.Get, ids => $"/admin/requests?tenantId={ids.TenantId}", ByQuery: true),
         new("/admin/usage", HttpMethod.Get, ids => $"/admin/usage?tenantId={ids.TenantId}", ByQuery: true),
         new("/admin/overview", HttpMethod.Get, ids => $"/admin/overview?tenantId={ids.TenantId}", ByQuery: true),
+        new(
+            "/admin/routing-policies/{policyId:guid}/simulate",
+            HttpMethod.Post,
+            ids => $"/admin/routing-policies/{ids.PolicyId}/simulate",
+            ids => new { tenantId = ids.TenantId, estimatedInputTokens = 100 },
+            ByQuery: true),
     ];
 
     /// <summary>The route parameters that carry a tenant-scoped id; a route with one must be in <see cref="Routes"/> (the coverage gate).</summary>
@@ -53,7 +59,8 @@ public static class TenantIsolationMatrix
         ArgumentNullException.ThrowIfNull(caller);
         foreach (var route in Routes.Where(r => r.HasChildId))
         {
-            using var response = await caller.SendJsonAsync(route.Method, route.Path(new ForeignIds(ownTenantId, foreignApiKeyId)), route.Body?.Invoke());
+            var ids = new ForeignIds(ownTenantId, foreignApiKeyId);
+            using var response = await caller.SendJsonAsync(route.Method, route.Path(ids), route.Body?.Invoke(ids));
             response.StatusCode.ShouldBe(HttpStatusCode.NotFound, $"{route.Name} must not reach another Tenant's child id");
             (await AdminBrowser.ErrorCodeAsync(response)).ShouldBe("not_found", route.Name);
         }
@@ -69,7 +76,7 @@ public static class TenantIsolationMatrix
         ArgumentNullException.ThrowIfNull(foreign);
         foreach (var route in Routes)
         {
-            using var response = await outsider.SendJsonAsync(route.Method, route.Path(foreign), route.Body?.Invoke());
+            using var response = await outsider.SendJsonAsync(route.Method, route.Path(foreign), route.Body?.Invoke(foreign));
             response.StatusCode.ShouldBe(HttpStatusCode.NotFound, $"{route.Name} must hide a Tenant outside the grant");
             (await AdminBrowser.ErrorCodeAsync(response)).ShouldBe("not_found", route.Name);
         }

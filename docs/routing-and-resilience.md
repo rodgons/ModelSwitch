@@ -27,7 +27,9 @@ RoutingInput { tenant, alias, taskType?, requiredCapabilities, estimatedInputTok
  RoutingDecision { policyId, policyVersion, ruleMatched?, ordered[], excluded[{model, reason}] }
 ```
 
-`IRouter.Decide` is a **pure function** of `(RoutingInput, snapshot, circuitStates)`. It does no I/O, so it can be unit-tested exhaustively with a table of cases (PRD §13: "routing correctness on a known test matrix").
+`IRouter.Decide` is a **pure function** of `(RoutingInput, snapshot, circuitStates)`. It does no I/O, so it can be unit-tested exhaustively with a table of cases (PRD §13: "routing correctness on a known test matrix"). Eligible Candidates cut by `maxCandidates` are kept on the decision as `Truncated` (never tried, not recorded on the request).
+
+**Simulation.** `POST /admin/routing-policies/{policyId}/simulate` ([api.md](api.md#routing-owner-to-write-viewer-to-read)) runs the same `IRouter.Decide` for a hypothetical request: the chosen Policy Version is bound to an internal alias, the catalog and Tenant limits come from this instance's configuration snapshot (through `IRoutingSnapshotSource`, implemented by the Configuration module) and the open circuits from `IProviderHealth`. It adds only presentation: names, circuit state per Candidate, and the worst case (`WorstCase.Cost`, the router's own formula) for excluded Candidates that have a Price.
 
 ### Eligibility filters, in order
 

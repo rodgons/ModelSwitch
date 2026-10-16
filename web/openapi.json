@@ -1173,6 +1173,52 @@
         }
       }
     },
+    "/admin/routing-policies/{policyId}/simulate": {
+      "post": {
+        "tags": [
+          "RoutingAdminEndpoints"
+        ],
+        "parameters": [
+          {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SimulateRoutingRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutingSimulationView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/routing-policies/{policyId}/versions": {
       "get": {
         "tags": [
@@ -3504,6 +3550,77 @@
           }
         }
       },
+      "RoutingSimulationView": {
+        "required": [
+          "policyId",
+          "policyName",
+          "version",
+          "strategy",
+          "ruleMatched",
+          "effectiveMaxOutputTokens",
+          "errorCode",
+          "message",
+          "retryAfterMs",
+          "candidates",
+          "currency"
+        ],
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policyName": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "strategy": {
+            "type": "string"
+          },
+          "ruleMatched": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "effectiveMaxOutputTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "errorCode": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "retryAfterMs": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimulatedCandidateView"
+            }
+          },
+          "currency": {
+            "type": "string"
+          }
+        }
+      },
       "SessionResponse": {
         "required": [
           "administrator",
@@ -3537,6 +3654,127 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "SimulateRoutingRequest": {
+        "required": [
+          "version",
+          "tenantId",
+          "taskType",
+          "requires",
+          "estimatedInputTokens",
+          "maxOutputTokens"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "taskType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "requires": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "estimatedInputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "maxOutputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "SimulatedCandidateView": {
+        "required": [
+          "providerModelId",
+          "providerId",
+          "providerName",
+          "model",
+          "status",
+          "rank",
+          "exclusionReason",
+          "circuitState",
+          "worstCaseEstimatedCost"
+        ],
+        "type": "object",
+        "properties": {
+          "providerModelId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "providerId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "providerName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "rank": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "exclusionReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "circuitState": {
+            "type": "string"
+          },
+          "worstCaseEstimatedCost": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
           }
         }
       },

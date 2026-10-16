@@ -34,6 +34,7 @@ public static class ConfigurationModule
         services.TryAddSingleton<SnapshotStore>();
         services.TryAddSingleton<IConfigurationSnapshotProvider>(provider => provider.GetRequiredService<SnapshotStore>());
         services.TryAddSingleton<ISnapshotBuilder, SnapshotBuilder>();
+        services.TryAddSingleton<Routing.Contracts.IRoutingSnapshotSource, RoutingSnapshotSource>();
         services.TryAddSingleton<IConfigurationVersionReader>(provider =>
             new NpgsqlVersionReader(provider.GetRequiredService<IConfiguration>()[_appConnection]!));
         services.TryAddSingleton<ConfigurationRefresher>();

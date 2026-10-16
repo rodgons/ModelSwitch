@@ -21,6 +21,20 @@ internal sealed class EfPolicyStore(IDbContextFactory<RoutingDbContext> contexts
         return row is null ? null : ToSnapshot(row.Id, row.Name, row.Version, row.DefinitionJson, row.ResolvedCandidatesJson);
     }
 
+    /// <summary>One Policy Version of a policy (the latest when <paramref name="version"/> is null), or null when either is unknown.</summary>
+    public async Task<PolicySnapshot?> GetVersionAsync(Guid policyId, int? version, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var row = await (
+            from p in db.Policies.AsNoTracking()
+            join v in db.PolicyVersions.AsNoTracking() on p.Id equals v.PolicyId
+            where p.Id == policyId && v.Version == (version ?? p.LatestVersion)
+            select new { p.Id, p.Name, v.Version, v.DefinitionJson, v.ResolvedCandidatesJson })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return row is null ? null : ToSnapshot(row.Id, row.Name, row.Version, row.DefinitionJson, row.ResolvedCandidatesJson);
+    }
+
     public async Task<PolicyCatalog> LoadAsync(CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);

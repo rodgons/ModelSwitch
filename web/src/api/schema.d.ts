@@ -1099,6 +1099,47 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/admin/routing-policies/{policyId}/simulate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          policyId: string
+        }
+        cookie?: never
+      }
+      requestBody?: {
+        content: {
+          'application/json': null | components['schemas']['SimulateRoutingRequest']
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['RoutingSimulationView']
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/admin/routing-policies/{policyId}/versions': {
     parameters: {
       query?: never
@@ -2008,6 +2049,24 @@ export interface components {
       ordered: string[]
       excluded: components['schemas']['ExcludedCandidateView'][]
     }
+    RoutingSimulationView: {
+      /** Format: uuid */
+      policyId: string
+      policyName: string
+      /** Format: int32 */
+      version: number
+      strategy: string
+      /** Format: int32 */
+      ruleMatched: null | number
+      /** Format: int32 */
+      effectiveMaxOutputTokens: number
+      errorCode: null | string
+      message: null | string
+      /** Format: int32 */
+      retryAfterMs: null | number
+      candidates: components['schemas']['SimulatedCandidateView'][]
+      currency: string
+    }
     SessionResponse: {
       administrator: components['schemas']['AdministratorSummary']
       antiforgeryToken: string
@@ -2015,6 +2074,33 @@ export interface components {
     SignInRequest: {
       email: null | string
       password: null | string
+    }
+    SimulateRoutingRequest: {
+      /** Format: int32 */
+      version: null | number
+      /** Format: uuid */
+      tenantId: null | string
+      taskType: null | string
+      requires: null | string[]
+      /** Format: int32 */
+      estimatedInputTokens: null | number
+      /** Format: int32 */
+      maxOutputTokens: null | number
+    }
+    SimulatedCandidateView: {
+      /** Format: uuid */
+      providerModelId: string
+      /** Format: uuid */
+      providerId: null | string
+      providerName: null | string
+      model: null | string
+      status: string
+      /** Format: int32 */
+      rank: null | number
+      exclusionReason: null | string
+      circuitState: string
+      /** Format: double */
+      worstCaseEstimatedCost: null | number
     }
     TenantDetailView: {
       /** Format: uuid */

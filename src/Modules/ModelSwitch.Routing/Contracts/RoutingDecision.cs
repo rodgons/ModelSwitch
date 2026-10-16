@@ -35,6 +35,7 @@ public sealed record ExcludedCandidate(Guid ProviderModelId, string Reason);
 /// <summary>The recorded outcome of routing (CONTEXT.md, Routing Decision).</summary>
 /// <param name="RuleMatched">Index into the policy's <c>rules</c>; null when no rule matched or the strategy is not <c>rules</c>.</param>
 /// <param name="EffectiveMaxOutputTokens">The request's limit, or the policy default.</param>
+/// <param name="Truncated">Eligible Candidates ranked after <c>maxCandidates</c>, in rank order: never tried, kept so a simulation can show them.</param>
 public sealed record RoutingDecision(
     Guid PolicyId,
     int PolicyVersion,
@@ -43,7 +44,8 @@ public sealed record RoutingDecision(
     int EffectiveMaxOutputTokens,
     IReadOnlyList<RankedCandidate> Ordered,
     IReadOnlyList<ExcludedCandidate> Excluded,
-    ExecutionSettings Execution);
+    ExecutionSettings Execution,
+    IReadOnlyList<RankedCandidate>? Truncated = null);
 
 /// <summary>
 /// Either a decision with at least one Candidate, or an error (<c>model_not_found</c>, <c>model_not_allowed</c>,

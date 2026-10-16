@@ -50,8 +50,9 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
 
         foreach (var route in TenantIsolationMatrix.Routes)
         {
-            using var unknown = await outsider.SendJsonAsync(route.Method, route.Path(foreign with { TenantId = Guid.CreateVersion7() }), route.Body?.Invoke());
-            using var other = await outsider.SendJsonAsync(route.Method, route.Path(foreign), route.Body?.Invoke());
+            var unknownIds = foreign with { TenantId = Guid.CreateVersion7() };
+            using var unknown = await outsider.SendJsonAsync(route.Method, route.Path(unknownIds), route.Body?.Invoke(unknownIds));
+            using var other = await outsider.SendJsonAsync(route.Method, route.Path(foreign), route.Body?.Invoke(foreign));
             unknown.StatusCode.ShouldBe(HttpStatusCode.NotFound, route.Name);
             (await AdminBrowser.ErrorCodeAsync(unknown)).ShouldBe(await AdminBrowser.ErrorCodeAsync(other), route.Name);
         }
@@ -107,7 +108,14 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
         await admin.ScalarAsync(
             "insert into usage.inference_request (id, started_at, tenant_id, origin, api_key_id, requested_alias, streaming, status, attempt_count, had_fallback, input_bytes, usage_status, trace_id) " +
             $"values ('{requestId}', now(), '{admin.TenantB}', 'api', '{keyId}', 'balanced', false, 'succeeded', 0, false, 10, 'reported', '')");
-        return new ForeignIds(admin.TenantB, keyId, requestId);
+
+        // A real Routing Policy, so the simulate route can only answer 404 because of the Tenant in its body.
+        var policyId = Guid.CreateVersion7();
+        await admin.ScalarAsync(
+            $"insert into routing.routing_policy values ('{policyId}', 'iso-{policyId:N}', 1, now()); " +
+            "insert into routing.routing_policy_version (policy_id, version, definition, resolved_candidates, created_at) " +
+            $"values ('{policyId}', 1, '{{\"strategy\":\"static\",\"candidates\":[\"p/m\"]}}', '{{\"p/m\":\"{Guid.CreateVersion7()}\"}}', now())");
+        return new ForeignIds(admin.TenantB, keyId, requestId, policyId);
     }
 
     private async Task AssertTenantBUntouchedAsync(ForeignIds foreign)

@@ -25,6 +25,7 @@ public static class RoutingModule
         services.AddRoutingContext(_appConnection);
         services.TryAddSingleton<PolicyAdminService>();
         services.TryAddSingleton<AliasAdminService>();
+        services.TryAddSingleton<RoutingSimulationService>();
         services.TryAddSingleton<EfPolicyStore>();
         services.TryAddSingleton<IPolicyStore>(provider => provider.GetRequiredService<EfPolicyStore>());
         services.TryAddSingleton<IPolicyCatalogSource>(provider => provider.GetRequiredService<EfPolicyStore>());

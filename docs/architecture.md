@@ -149,12 +149,12 @@ Only `Contracts/` and the `*Module.cs` entry point are `public`. Everything else
 |---|---|---|---|
 | Identity | `identity` | `IApiKeyAuthenticator`, `ITenantDirectory`, `IAuditWriter`, `ConfigWrite` (audit + config bump on the caller's transaction), current-principal accessors, `ITenantBudgets` (seam implemented by Usage) | SharedKernel.Http (admin endpoints) |
 | Registry | `registry` | `IProviderCatalog` (snapshot of providers, models, capabilities, current prices), `IAdapterFactory`, `IProviderHealth`, `IProviderHealthSnapshots` (every instance's written health) | Adapters.Abstractions, Identity (audit, current administrator), SharedKernel.Http (admin endpoints) |
-| Routing | `routing` | `IRouter.Decide(RoutingInput) → RoutingDecision`, `IPolicyStore` | Registry, Identity (tenant model access, audit), SharedKernel.Http (admin endpoints) |
+| Routing | `routing` | `IRouter.Decide(RoutingInput) → RoutingDecision`, `IPolicyStore`, `IRoutingSnapshotSource` (seam implemented by Configuration, for the routing simulation) | Registry (`IProviderHealth` circuits for the simulation), Identity (tenant model access, Tenant Grant, audit), SharedKernel.Http (admin endpoints) |
 | Inference | — (writes through Usage) | `IInferenceService` (used by the HTTP endpoint and by Evaluation), `ILimiter` (step 6, Rate and Concurrency Limits over Valkey; the HTTP use case calls it, so Evaluation traffic is not limited) | Routing, Registry, Usage, Identity, Configuration (snapshot), SharedKernel.Http, Adapters.Abstractions (runs Attempts through `IProviderAdapter`) |
 | Usage | `usage` | `IUsageLedger` (open/settle requests, Reservations), `IUsageQueries` | Registry (prices), Identity (implements `ITenantBudgets` for the admin limits endpoint) |
 | Evaluation | `evaluation` | — (endpoints and worker jobs only) | Inference, Usage |
 | Admin | — | — (endpoints only: `/admin/overview`, `/admin/requests`, `/admin/usage`, `/admin/provider-health`) | Identity (current Administrator, Tenant Grant), Registry (`ICatalogSnapshotSource` for names, `IProviderHealthSnapshots`), Usage (`IUsageQueries`) |
-| Configuration (not a module; owns `config`) | `config` | `ConfigurationSnapshot`, snapshot and `config_version` access | Identity, Registry, Routing (their snapshot loaders), SharedKernel.Http (readiness) |
+| Configuration (not a module; owns `config`) | `config` | `ConfigurationSnapshot`, snapshot and `config_version` access; implements Routing's `IRoutingSnapshotSource` | Identity, Registry, Routing (their snapshot loaders), SharedKernel.Http (readiness) |
 
 `IInferenceService` is the deep seam of the system. Evaluation calls it in-process with the same Tenant, routing, limits and accounting as an external client, so evaluation results reflect what production traffic would get.
 

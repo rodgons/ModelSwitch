@@ -232,9 +232,22 @@ Not in the MVP: model discovery through the Adapter's `ListModelsAsync` (the Pro
 | PUT | `/admin/routing-policies/{policyId}` | `{definition, expectedVersion}`. Validates (→ 400 `validation_failed`, errors keyed `definition.<path>`) and creates version n+1 (FR-11), which is immediately the version aliases resolve to; to roll back, save the old definition again. A stale `expectedVersion` → 409 |
 | GET | `/admin/routing-policies/{policyId}/versions[/{version}]` | History, newest first. Versions are immutable, with `resolvedCandidates` fixed when saved |
 | POST | `/admin/routing-policies/validate` | Dry-run validation, writes nothing. 200 `{valid, resolvedCandidates}` or 400 |
+| POST | `/admin/routing-policies/{policyId}/simulate` | **Viewer** (it calls no Provider and writes nothing). The Routing Decision a hypothetical request would get, described below |
 | GET/PUT/DELETE | `/admin/aliases/{alias}` | PUT `{policyId, description?}` binds (201 new, 200 rebind) |
 
-`POST /admin/routing-policies/{policyId}/simulate` is not served yet; the dashboard's Routing screen leaves the simulate panel out until it is.
+**Simulate.** Body `{estimatedInputTokens, maxOutputTokens?, taskType?, requires?, tenantId?, version?}`: `estimatedInputTokens` (0-10 000 000) is required and is used for every Candidate's context-window check and worst-case cost; `maxOutputTokens` (1-10 000 000) defaults to the policy's `defaultMaxOutputTokens`; `taskType` follows `X-ModelSwitch-Task` (`[a-z0-9_-]{1,64}`); `requires` lists at most 32 Capabilities (`streaming`, `jsonObject`, `jsonSchema` or a parameter name); `tenantId` applies that Tenant's `maxRequestCost` (not its alias allow-list, because a policy is simulated, not an alias) and must be inside the caller's Tenant Grant, else 404; `version` defaults to the latest. Bad fields → `400 validation_failed`, one `errors` entry each; an unknown policy or version → 404. The decision comes from the same router a request runs through (`IRouter.Decide`), on this instance's configuration snapshot (catalog, Prices, Tenant limits) and its circuits. 200:
+
+```json
+{ "policyId": "…", "policyName": "balanced", "version": 3, "strategy": "cost", "ruleMatched": null,
+  "effectiveMaxOutputTokens": 1024, "errorCode": null, "message": null, "retryAfterMs": null, "currency": "USD",
+  "candidates": [
+    { "providerModelId": "…", "providerId": "…", "providerName": "openai-main", "model": "gpt-4.1-mini",
+      "status": "eligible", "rank": 1, "exclusionReason": null, "circuitState": "closed", "worstCaseEstimatedCost": 0.0021 },
+    { "providerModelId": "…", "providerName": "ollama-local", "model": "llama3.1:8b",
+      "status": "excluded", "rank": null, "exclusionReason": "capability_missing:jsonSchema", "circuitState": "closed", "worstCaseEstimatedCost": 0 } ] }
+```
+
+Candidates come in rank order (`status: eligible`, `rank` 1 is tried first), then `truncated` ones (eligible but ranked after `maxCandidates`, never tried), then `excluded` ones with their Eligibility reason, in listed order. `circuitState` is this instance's breaker (`closed`, `half_open`, `open`). `worstCaseEstimatedCost` is null only for a model with no Price. When no Candidate is eligible, `errorCode` is the error a real request would get (`no_eligible_model`, `request_cost_limit_exceeded`, or `provider_unavailable` with `retryAfterMs`), still with a 200.
 
 ### Requests and usage
 
