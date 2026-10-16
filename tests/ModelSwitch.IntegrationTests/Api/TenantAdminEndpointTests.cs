@@ -389,38 +389,3 @@ public sealed class TenantAdminEndpointTests(AdminFixture admin) : IClassFixture
         (await ConfigVersionAsync()).ShouldBe(before);
     }
 }
-
-/// <summary>The first rows of the tenant-isolation matrix (testing.md section 2). Later tasks append their routes to <see cref="TenantIsolationMatrix"/>.</summary>
-public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<AdminFixture>
-{
-    [Fact]
-    public async Task An_operator_granted_only_tenant_a_gets_404_for_every_tenant_scoped_route_of_tenant_b()
-    {
-        using var owner = await admin.SignedInOwnerAsync();
-        var keyResponse = await owner.SendJsonAsync(HttpMethod.Post, $"/admin/tenants/{admin.TenantB}/api-keys", new { name = "b-key" });
-        var foreign = new ForeignIds(admin.TenantB, (await AdminBrowser.JsonAsync(keyResponse)).GetProperty("id").GetGuid());
-        using var outsider = await admin.SignedInAsync($"outsider-{Guid.CreateVersion7()}@example.com", "operator", admin.TenantA);
-
-        await TenantIsolationMatrix.AssertAllForeignRoutesAreNotFoundAsync(outsider, foreign);
-
-        // Nothing changed: Tenant B is active, unlimited, and its key is not revoked.
-        (await admin.ScalarAsync($"select status from identity.tenant where id = '{foreign.TenantId}'")).ShouldBe("active");
-        (await admin.ScalarAsync($"select count(*) from identity.tenant_limits where tenant_id = '{foreign.TenantId}'")).ShouldBe("0");
-        (await admin.ScalarAsync($"select count(*) from identity.api_key where tenant_id = '{foreign.TenantId}' and revoked_at is null")).ShouldBe("1");
-    }
-
-    [Fact]
-    public async Task A_viewer_granted_only_tenant_a_gets_404_for_the_read_routes_of_tenant_b()
-    {
-        using var owner = await admin.SignedInOwnerAsync();
-        using var viewer = await admin.SignedInAsync($"viewer-out-{Guid.CreateVersion7()}@example.com", "viewer", admin.TenantA);
-
-        foreach (var route in TenantIsolationMatrix.Routes.Where(r => r.Method == HttpMethod.Get))
-        {
-            var response = await viewer.GetAsync(route.Path(new ForeignIds(admin.TenantB, Guid.CreateVersion7())));
-            response.StatusCode.ShouldBe(HttpStatusCode.NotFound, route.Name);
-        }
-
-        (await viewer.GetAsync($"/admin/tenants/{admin.TenantA}")).StatusCode.ShouldBe(HttpStatusCode.OK);
-    }
-}

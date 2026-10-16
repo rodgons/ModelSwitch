@@ -59,7 +59,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [x] Usage Records, CostCalculator, Price versioning, Usage Source
 - [x] Budget Reservations: reserve/top-up/settle, sweeper job, outbox *(the sweeper is the recurring `usage.sweep_reservations` job, every 30 s; the outbox relay is ready and the `usage.request_completed` consumer is the Phase 4 rollup)*
 - [x] Jobs infrastructure in the worker (claim, lease, retry, dead-letter), recurring jobs and the outbox relay (`SharedKernel/Jobs`)
-- [ ] Tenant-isolation test matrix
+- [x] Tenant-isolation test matrix *(admin routes are derived from `EndpointDataSource` and gated; the Phase 4 usage and request endpoints must add their rows)*
 
 **Exit:** a multi-tenant gateway with usage controls. FR-01, FR-06 and FR-07 are covered and DoD #5 and #7 are met.
 
