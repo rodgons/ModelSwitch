@@ -80,6 +80,23 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/features/evaluations/pages/PromptDetailPage.vue'),
         props: true,
       },
+      {
+        path: 'evaluations/new',
+        name: 'run-builder',
+        component: () => import('@/features/evaluations/pages/RunBuilderPage.vue'),
+      },
+      {
+        path: 'evaluations/runs/:runId',
+        name: 'run',
+        component: () => import('@/features/evaluations/pages/RunDetailPage.vue'),
+        props: true,
+      },
+      {
+        path: 'comparisons/:id',
+        name: 'comparison',
+        component: () => import('@/features/evaluations/pages/ComparisonPage.vue'),
+        props: true,
+      },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },

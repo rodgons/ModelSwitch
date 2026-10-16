@@ -30,6 +30,11 @@ export function formatPercent(ratio: number | null | undefined): string {
   return ratio === null || ratio === undefined ? dash : `${(ratio * 100).toFixed(2)} %`
 }
 
+/** A 0–1 Evaluator score or quality value (accuracy, mean score, mean token F1) with three decimals: 0.857. */
+export function formatScore(value: number | null | undefined): string {
+  return value === null || value === undefined ? dash : value.toFixed(3)
+}
+
 /** Identifiers are truncated in the middle; the full value goes in a tooltip and a copy button (design-system.md section 3.2). */
 export function truncateMiddle(value: string, head = 8, tail = 4): string {
   return value.length <= head + tail + 1 ? value : `${value.slice(0, head)}…${value.slice(-tail)}`
