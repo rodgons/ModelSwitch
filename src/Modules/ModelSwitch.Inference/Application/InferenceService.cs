@@ -15,7 +15,7 @@ namespace ModelSwitch.Inference.Application;
 /// <summary>
 /// <see cref="IInferenceService"/>: reads the configuration snapshot once, asks <see cref="IRouter"/> for the ordered
 /// Candidates, and runs them through the <see cref="AttemptExecutor"/> under the Policy Version's execution settings. The
-/// request is recorded: one <c>inference_request</c> opened before routing and settled after the last Attempt, with the
+/// request is recorded: one <c>inference_request</c> opened (with its Budget Reservation) once routing has chosen the Candidates, and settled after the last Attempt, with the
 /// Policy Version, the Routing Decision and every Attempt. It never logs or persists content (ADR-0010).
 /// </summary>
 internal sealed partial class InferenceService(
@@ -37,33 +37,35 @@ internal sealed partial class InferenceService(
     private static readonly ConditionalWeakTable<ConfigurationSnapshot, string[]> _tokenizers = [];
 
     /// <summary>What routing decided, kept for the settlement: the Policy Version and the Routing Decision.</summary>
-    private sealed record Routed(Guid? PolicyId, int? PolicyVersion, string? DecisionJson, Error? Error, ExecutionPlan? Plan, NeutralChatRequest? Chat);
+    private sealed record Routed(
+        Guid? PolicyId,
+        int? PolicyVersion,
+        string? DecisionJson,
+        Error? Error,
+        ExecutionPlan? Plan,
+        NeutralChatRequest? Chat,
+        RoutingSnapshot? Catalog = null);
+
+    /// <summary>How long after the Deadline a held Reservation survives before the sweeper may treat the request as abandoned.</summary>
+    internal static readonly TimeSpan ReservationGrace = TimeSpan.FromMinutes(1);
+
+    /// <summary>A stream is bounded only by the Provider and the client once it has started, so its Reservation expires much later.</summary>
+    internal static readonly TimeSpan StreamReservationGrace = TimeSpan.FromMinutes(15);
 
     public async Task<Result<InferenceResult>> CompleteAsync(InferenceRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var opened = await ledger.OpenAsync(
-            new OpenInferenceRequest(
-                request.RequestId,
-                request.TenantId,
-                request.Origin,
-                request.ApiKeyId,
-                request.EvaluationRunId,
-                request.ClientRequestId,
-                request.Alias,
-                request.TaskType,
-                Streaming: false,
-                request.InputBytes,
-                Activity.Current?.TraceId.ToString() ?? string.Empty),
-            cancellationToken);
+        var received = time.GetUtcNow();
+        var routed = Route(request, received, streaming: false);
+        var opened = await OpenAsync(request, routed, streaming: false, received, cancellationToken);
         if (opened.IsFailure)
         {
             return opened.Error;
         }
 
+        routed = opened.Value.Routed;
         var attempts = new List<AttemptRecord>();
-        var routed = Route(request, time.GetUtcNow(), streaming: false);
         Result<InferenceResult> result;
         try
         {
@@ -72,19 +74,19 @@ internal sealed partial class InferenceService(
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // The client went away. The Attempt in flight may have reached the Provider, so it is ambiguous, not cancelled.
-            await SettleAsync(request, opened.Value, routed, RequestOutcome.Cancelled, errorCode: null, ttftMs: null, attempts);
+            await SettleAsync(request, opened.Value.Request, routed, RequestOutcome.Cancelled, errorCode: null, ttftMs: null, attempts);
             throw;
         }
         catch
         {
             // A bug or infrastructure fault must not leave the request 'running'; the failure itself still propagates.
-            await SettleAsync(request, opened.Value, routed, RequestOutcome.Failed, ErrorCode.InternalError.Value, ttftMs: null, attempts);
+            await SettleAsync(request, opened.Value.Request, routed, RequestOutcome.Failed, ErrorCode.InternalError.Value, ttftMs: null, attempts);
             throw;
         }
 
         await SettleAsync(
             request,
-            opened.Value,
+            opened.Value.Request,
             routed,
             result.IsSuccess ? RequestOutcome.Succeeded : RequestOutcome.Failed,
             result.IsSuccess ? null : result.Error.Code.Value,
@@ -134,7 +136,7 @@ internal sealed partial class InferenceService(
         var json = decision is null ? null : RoutingDecisionJson.Write(decision);
         if (outcome.Error is not null || decision is null)
         {
-            return new Routed(decision?.PolicyId, decision?.PolicyVersion, json, outcome.Error! with { RetryAfter = outcome.RetryAfter }, null, null);
+            return new Routed(decision?.PolicyId, decision?.PolicyVersion, json, outcome.Error! with { RetryAfter = outcome.RetryAfter }, null, null, snapshot.Routing);
         }
 
         var settings = decision.Execution;
@@ -146,7 +148,7 @@ internal sealed partial class InferenceService(
 
         // The Reservation and the Routing Decision were costed at this ceiling, so the Provider is held to it.
         var chat = request.Chat with { MaxOutputTokens = decision.EffectiveMaxOutputTokens };
-        return new Routed(decision.PolicyId, decision.PolicyVersion, json, null, new ExecutionPlan(decision.Ordered, settings, deadline), chat);
+        return new Routed(decision.PolicyId, decision.PolicyVersion, json, null, new ExecutionPlan(decision.Ordered, settings, deadline), chat, snapshot.Routing);
     }
 
     private static List<string> RequiredCapabilities(InferenceRequest request, bool streaming)
@@ -204,6 +206,54 @@ internal sealed partial class InferenceService(
     }
 
     /// <summary>
+    /// Step 8: opens the request and reserves the worst case of the most expensive Candidate times <c>min(maxAttempts, 2)</c>, so a
+    /// Fallback normally needs no second round trip. A refusal is <c>budget_exceeded</c> (402).
+    /// </summary>
+    private async Task<Result<(OpenedRequest Request, Routed Routed)>> OpenAsync(InferenceRequest request, Routed routed, bool streaming, DateTimeOffset received, CancellationToken cancellationToken)
+    {
+        var hold = Money.Zero;
+        var expiresAt = received + (streaming ? StreamReservationGrace : ReservationGrace);
+        if (routed.Plan is { } plan)
+        {
+            var worst = plan.Candidates.Max(c => c.WorstCaseEstimatedCost);
+            hold = Money.FromUsd(worst * Math.Min(plan.Settings.MaxAttempts, 2)).Round();
+            expiresAt = plan.Deadline + (streaming ? StreamReservationGrace : ReservationGrace);
+        }
+
+        var opened = await ledger.OpenAsync(
+            new OpenInferenceRequest(
+                request.RequestId,
+                request.TenantId,
+                request.Origin,
+                request.ApiKeyId,
+                request.EvaluationRunId,
+                request.ClientRequestId,
+                request.Alias,
+                request.TaskType,
+                streaming,
+                request.InputBytes,
+                Activity.Current?.TraceId.ToString() ?? string.Empty,
+                new ReservationRequest(hold, expiresAt)),
+            cancellationToken);
+        if (opened.IsFailure)
+        {
+            return opened.Error;
+        }
+
+        if (routed.Plan is { } routedPlan)
+        {
+            routed = routed with { Plan = routedPlan with { Budget = new AttemptBudget(ledger, request.RequestId, hold) } };
+        }
+
+        return (opened.Value, routed);
+    }
+
+    private static AttemptPricing? PricingOf(Routed routed, Guid providerModelId)
+        => routed.Catalog is { } catalog && catalog.Models.TryGetValue(providerModelId, out var model) && model.Price is { } price
+            ? new AttemptPricing(price.ModelPriceId, new PriceRates(price.InputPerMillion, price.CachedInputPerMillion, price.OutputPerMillion))
+            : null;
+
+    /// <summary>
     /// Step 11. Runs on its own short-timeout token, never the client's, so an aborted request is still recorded. Retried
     /// with backoff inside that window; if it still fails the request stays 'running' for the sweeper (Phase 3), and the
     /// client is not made to wait or fail for it.
@@ -219,7 +269,8 @@ internal sealed partial class InferenceService(
             routed.PolicyVersion,
             routed.DecisionJson,
             ttftMs,
-            attempts);
+            [.. attempts.Select(a => a with { Pricing = PricingOf(routed, a.ProviderModelId) })],
+            routed.Chat?.MaxOutputTokens);
 
         using var timeout = new CancellationTokenSource(SettleTimeout, time);
         for (var attempt = 0; ; attempt++)

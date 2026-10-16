@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using ModelSwitch.Inference.Contracts;
 using ModelSwitch.SharedKernel;
@@ -15,27 +14,15 @@ internal sealed partial class InferenceService
         ArgumentNullException.ThrowIfNull(request);
         var received = time.GetUtcNow();
 
-        var opened = await ledger.OpenAsync(
-            new OpenInferenceRequest(
-                request.RequestId,
-                request.TenantId,
-                request.Origin,
-                request.ApiKeyId,
-                request.EvaluationRunId,
-                request.ClientRequestId,
-                request.Alias,
-                request.TaskType,
-                Streaming: true,
-                request.InputBytes,
-                Activity.Current?.TraceId.ToString() ?? string.Empty),
-            cancellationToken);
+        var routed = Route(request, received, streaming: true);
+        var opened = await OpenAsync(request, routed, streaming: true, received, cancellationToken);
         if (opened.IsFailure)
         {
             return opened.Error;
         }
 
+        routed = opened.Value.Routed;
         var attempts = new List<AttemptRecord>();
-        var routed = Route(request, received, streaming: true);
         Result<StreamingAttempt> started;
         try
         {
@@ -45,12 +32,12 @@ internal sealed partial class InferenceService
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await SettleAsync(request, opened.Value, routed, RequestOutcome.Cancelled, errorCode: null, ttftMs: null, attempts);
+            await SettleAsync(request, opened.Value.Request, routed, RequestOutcome.Cancelled, errorCode: null, ttftMs: null, attempts);
             throw;
         }
         catch
         {
-            await SettleAsync(request, opened.Value, routed, RequestOutcome.Failed, ErrorCode.InternalError.Value, ttftMs: null, attempts);
+            await SettleAsync(request, opened.Value.Request, routed, RequestOutcome.Failed, ErrorCode.InternalError.Value, ttftMs: null, attempts);
             throw;
         }
 
@@ -58,11 +45,11 @@ internal sealed partial class InferenceService
         {
             // Before the First Token the client has seen nothing, so this is an ordinary error response.
             var error = routed.Plan is { } failedPlan ? WithRetryAfter(started.Error, failedPlan, attempts) : started.Error;
-            await SettleAsync(request, opened.Value, routed, RequestOutcome.Failed, error.Code.Value, ttftMs: null, attempts);
+            await SettleAsync(request, opened.Value.Request, routed, RequestOutcome.Failed, error.Code.Value, ttftMs: null, attempts);
             return error;
         }
 
-        var run = new StreamRun(this, time, request, opened.Value, routed, attempts, started.Value, received);
+        var run = new StreamRun(this, time, request, opened.Value.Request, routed, attempts, started.Value, received);
         return new StreamingCompletion(request.RequestId, request.Alias, run.ReadAsync, run.AbandonAsync);
     }
 

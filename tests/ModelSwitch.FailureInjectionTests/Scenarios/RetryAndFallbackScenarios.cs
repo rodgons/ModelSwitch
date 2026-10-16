@@ -64,6 +64,8 @@ public sealed class Provider429Scenario(GatewayFixture gateway) : ScenarioTests(
     [Fact]
     public async Task A_long_Retry_After_is_not_waited_out_and_the_request_falls_back_at_once()
     {
+        // The first request through a cold host pays for JIT and connection setup; the bound below measures waiting, not warm-up.
+        await SendAsync(GatewayFixture.ChatAlias);
         await ResetAsync();
         var alias = await AddAliasAsync("s429long", FastPolicy, GatewayFixture.PrimaryModel, GatewayFixture.FallbackModel);
         await Gateway.SetFaultAsync(GatewayFixture.PrimaryModel, "status=429;retry-after=120");

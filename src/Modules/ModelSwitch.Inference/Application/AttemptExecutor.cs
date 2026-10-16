@@ -23,7 +23,8 @@ internal sealed class RandomJitterSource : IJitterSource
 /// <param name="Candidates">The Routing Decision's ordered Candidates, each with the Target to call.</param>
 /// <param name="Settings">The Policy Version's execution settings.</param>
 /// <param name="Deadline">When the request must be answered by: the earlier of the policy's and the client's Deadline.</param>
-internal sealed record ExecutionPlan(IReadOnlyList<RankedCandidate> Candidates, ExecutionSettings Settings, DateTimeOffset Deadline);
+/// <param name="Budget">The request's Budget hold, topped up before an Attempt that would pass it; null when the request holds none.</param>
+internal sealed record ExecutionPlan(IReadOnlyList<RankedCandidate> Candidates, ExecutionSettings Settings, DateTimeOffset Deadline, AttemptBudget? Budget = null);
 
 /// <summary>
 /// The Attempt loop (routing-and-resilience.md section 4, ADR-0004): walks the Candidates in order, retries transient
@@ -64,7 +65,7 @@ internal sealed partial class AttemptExecutor(
             (outcome, attempt) =>
             {
                 var success = (CompletionOutcome.Success)outcome;
-                attempts.Add(Succeeded(attempt.Target, attempt.Kind, attempt.Number, attempt.StartedAt, success.Usage));
+                attempts.Add(Succeeded(chat, attempt.Target, attempt.Kind, attempt.Number, attempt.StartedAt, success));
                 return success;
             },
             cancellationToken);
@@ -150,6 +151,12 @@ internal sealed partial class AttemptExecutor(
                 if (calls >= settings.MaxAttempts)
                 {
                     return lastError ?? new Error(ErrorCode.ProviderUnavailable, "The Provider is temporarily unavailable.");
+                }
+
+                // The worst case of this Attempt must fit the hold; if it does not, the hold is topped up first (usage-and-budgets.md section 3).
+                if (plan.Budget is { } budget && await budget.CommitAsync(candidate.WorstCaseEstimatedCost, cancellationToken) is { IsFailure: true } refused)
+                {
+                    return refused.Error;
                 }
 
                 var kind = KindFor(index, retry: attempt > 0);
@@ -292,20 +299,22 @@ internal sealed partial class AttemptExecutor(
             UsageSource.Reported);
     }
 
-    private AttemptRecord Succeeded(ProviderModelTarget target, AttemptKind kind, int number, DateTimeOffset startedAt, NeutralUsage? usage)
-        => Record(
-            target,
-            kind,
-            number,
-            startedAt,
-            AttemptStatus.Succeeded,
-            errorClass: null,
-            errorCode: null,
-            httpStatus: null,
-            providerErrorType: null,
-            inputTokens: usage?.InputTokens,
-            outputTokens: usage?.OutputTokens,
-            usage is null ? UsageSource.Unavailable : UsageSource.Reported);
+    // Usage the Provider reported is used as is. Without it the gateway counts what it sent and what it received, and says so
+    // (usage_source = estimated); it is never silently zero.
+    private AttemptRecord Succeeded(NeutralChatRequest chat, ProviderModelTarget target, AttemptKind kind, int number, DateTimeOffset startedAt, CompletionOutcome.Success success)
+    {
+        if (success.Usage is { } usage)
+        {
+            return Record(target, kind, number, startedAt, AttemptStatus.Succeeded, null, null, null, null, usage.InputTokens, usage.OutputTokens, UsageSource.Reported, usage.CachedInputTokens);
+        }
+
+        var input = estimator.Estimate(ChatInput.Texts(chat), target.Tokenizer);
+        var output = OutputTokens(success.Text, target.Tokenizer);
+        return Record(target, kind, number, startedAt, AttemptStatus.Succeeded, null, null, null, null, input.Tokens, output, UsageSource.Estimated, cachedInputTokens: null, input.Method);
+    }
+
+    private int OutputTokens(string forwarded, string? tokenizer)
+        => forwarded.Length == 0 ? 0 : Math.Max(0, estimator.Estimate([forwarded], tokenizer).Tokens - IInputTokenEstimator.PerMessageOverhead);
 
     // A definite failure cost nothing: the Provider refused the call, so zero tokens are the known truth, not a guess.
     private AttemptRecord Failed(ProviderModelTarget target, AttemptKind kind, int number, DateTimeOffset startedAt, ProviderFailure failure, string errorCode)
@@ -351,7 +360,9 @@ internal sealed partial class AttemptExecutor(
         string? providerErrorType,
         int? inputTokens,
         int? outputTokens,
-        UsageSource usageSource)
+        UsageSource usageSource,
+        int? cachedInputTokens = null,
+        string? estimateMethod = null)
         => new(
             number,
             target.ProviderId,
@@ -367,7 +378,9 @@ internal sealed partial class AttemptExecutor(
             TtftMs: null,
             inputTokens,
             outputTokens,
-            usageSource);
+            usageSource,
+            CachedInputTokens: cachedInputTokens,
+            EstimateMethod: estimateMethod);
 
     /// <summary>
     /// The Attempt record of a stream that has started (the First Token went out). Usage is the Provider's when it reported any;
@@ -389,6 +402,7 @@ internal sealed partial class AttemptExecutor(
         var target = attempt.Target;
         NeutralUsage usage;
         UsageSource source;
+        string? method = null;
         if (reported is not null)
         {
             usage = reported;
@@ -396,10 +410,10 @@ internal sealed partial class AttemptExecutor(
         }
         else
         {
-            var input = estimator.Estimate(ChatInput.Texts(chat), target.Tokenizer).Tokens;
-            var output = forwarded.Length == 0 ? 0 : Math.Max(0, estimator.Estimate([forwarded], target.Tokenizer).Tokens - IInputTokenEstimator.PerMessageOverhead);
-            usage = new NeutralUsage(input, output, null);
+            var input = estimator.Estimate(ChatInput.Texts(chat), target.Tokenizer);
+            usage = new NeutralUsage(input.Tokens, OutputTokens(forwarded, target.Tokenizer), null);
             source = UsageSource.Estimated;
+            method = input.Method;
         }
 
         var now = time.GetUtcNow();
@@ -418,7 +432,9 @@ internal sealed partial class AttemptExecutor(
             ttftMs,
             usage.InputTokens,
             usage.OutputTokens,
-            source);
+            source,
+            CachedInputTokens: source == UsageSource.Reported ? usage.CachedInputTokens : null,
+            EstimateMethod: method);
         return (record, usage, source);
     }
 

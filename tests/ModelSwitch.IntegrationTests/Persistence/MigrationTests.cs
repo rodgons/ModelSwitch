@@ -30,17 +30,21 @@ public sealed class MigrationTests(PostgresFixture postgres)
         second["identity"].ShouldBeEmpty();
         second["registry"].ShouldBeEmpty();
         second["routing"].ShouldBeEmpty();
-        first["usage"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
+        first["usage"].Count.ShouldBe(2);
+        first["usage"][0].ShouldEndWith("_Initial");
+        first["usage"][1].ShouldEndWith("_Budgets");
+        first["jobs"].ShouldBe(["outbox_event"]);
         second["usage"].ShouldBeEmpty();
         second["config"].ShouldBeEmpty();
+        second["jobs"].ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task Migrations_apply_in_the_fixed_order_identity_registry_routing_usage_config()
+    public async Task Migrations_apply_in_the_fixed_order_identity_registry_routing_usage_config_jobs()
     {
         await using var services = ModuleServices.ForMigrator(await postgres.CreateDatabaseAsync());
 
-        services.GetServices<IModuleMigrator>().Select(m => m.Schema).ShouldBe(["identity", "registry", "routing", "usage", "config"]);
+        services.GetServices<IModuleMigrator>().Select(m => m.Schema).ShouldBe(["identity", "registry", "routing", "usage", "config", "jobs"]);
     }
 
     [Fact]

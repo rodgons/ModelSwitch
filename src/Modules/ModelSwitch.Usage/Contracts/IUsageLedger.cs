@@ -63,6 +63,7 @@ public enum UsageSource
 /// <param name="Streaming">Whether the client asked for a stream.</param>
 /// <param name="InputBytes">Size of the request body in bytes (a size, not content).</param>
 /// <param name="TraceId">W3C trace id of the request, or empty when there is no trace.</param>
+/// <param name="Reservation">The Budget hold to place with the request; null places none.</param>
 public sealed record OpenInferenceRequest(
     Guid RequestId,
     Guid TenantId,
@@ -74,7 +75,18 @@ public sealed record OpenInferenceRequest(
     string? TaskType,
     bool Streaming,
     int InputBytes,
-    string TraceId);
+    string TraceId,
+    ReservationRequest? Reservation = null);
+
+/// <summary>A worst-case hold against the Tenant's Budget (usage-and-budgets.md section 3).</summary>
+/// <param name="Amount">The worst-case cost of the most expensive Candidate times <c>min(maxAttempts, 2)</c>.</param>
+/// <param name="ExpiresAt">When the sweeper may treat the request as abandoned: the Deadline plus a grace period.</param>
+public sealed record ReservationRequest(Money Amount, DateTimeOffset ExpiresAt);
+
+/// <summary>The Price an Attempt is costed with: the immutable Price row in force at Attempt start, and its rates.</summary>
+/// <param name="ModelPriceId">The <c>model_price</c> row, recorded on the Usage Record so history never changes when Prices do.</param>
+/// <param name="Rates">Its per-million-token rates.</param>
+public sealed record AttemptPricing(Guid? ModelPriceId, PriceRates Rates);
 
 /// <summary>What <see cref="IUsageLedger.OpenAsync"/> hands back; pass <see cref="StartedAt"/> to <see cref="IUsageLedger.SettleAsync"/>.</summary>
 /// <param name="RequestId">The opened request.</param>
@@ -97,7 +109,10 @@ public sealed record OpenedRequest(Guid RequestId, DateTimeOffset StartedAt);
 /// <param name="InputTokens">Null when unknown.</param>
 /// <param name="OutputTokens">Null when unknown.</param>
 /// <param name="UsageSource">Provenance of the token counts.</param>
-/// <param name="EstimatedCost">Null until costing is wired (Phase 3).</param>
+/// <param name="EstimatedCost">Filled by the ledger at settlement from <paramref name="Pricing"/>; callers leave it null.</param>
+/// <param name="CachedInputTokens">Provider-reported cached subset of <paramref name="InputTokens"/>; null when not reported.</param>
+/// <param name="EstimateMethod">How an estimated token count was obtained (<c>tokenizer:o200k_base</c>, <c>bytes_div_3</c>).</param>
+/// <param name="Pricing">The Price in force when the Attempt started; null costs the Attempt at zero with no Price recorded.</param>
 public sealed record AttemptRecord(
     int AttemptNumber,
     Guid ProviderId,
@@ -114,7 +129,10 @@ public sealed record AttemptRecord(
     int? InputTokens,
     int? OutputTokens,
     UsageSource UsageSource,
-    Money? EstimatedCost = null);
+    Money? EstimatedCost = null,
+    int? CachedInputTokens = null,
+    string? EstimateMethod = null,
+    AttemptPricing? Pricing = null);
 
 /// <summary>Everything known when an Inference Request ends.</summary>
 /// <param name="RequestId">The request opened earlier.</param>
@@ -126,6 +144,7 @@ public sealed record AttemptRecord(
 /// <param name="RoutingDecisionJson">The Routing Decision as JSON (candidates, exclusions, rule); metadata only.</param>
 /// <param name="TtftMs">Time to first token of the winning Attempt; streaming only.</param>
 /// <param name="Attempts">Every Attempt made, in order. May be empty (the request failed before any Attempt).</param>
+/// <param name="MaxOutputTokens">The output ceiling the request ran with; an ambiguous Attempt's worst-case cost uses it. Null uses the default.</param>
 public sealed record SettleInferenceRequest(
     Guid RequestId,
     DateTimeOffset StartedAt,
@@ -135,7 +154,8 @@ public sealed record SettleInferenceRequest(
     int? PolicyVersion,
     string? RoutingDecisionJson,
     int? TtftMs,
-    IReadOnlyList<AttemptRecord> Attempts);
+    IReadOnlyList<AttemptRecord> Attempts,
+    int? MaxOutputTokens = null);
 
 /// <summary>
 /// The durable record of what the gateway did (usage-and-budgets.md, architecture.md section 5). <see cref="OpenAsync"/> is
@@ -146,8 +166,9 @@ public sealed record SettleInferenceRequest(
 public interface IUsageLedger
 {
     /// <summary>
-    /// Writes the Inference Request with <c>status = running</c>. Fails with <c>budget_exceeded</c> once Reservations exist
-    /// (Phase 3). Infrastructure faults throw.
+    /// Step 8, one transaction: places the Reservation (when given) and writes the Inference Request with <c>status = running</c>.
+    /// Fails with <c>budget_exceeded</c> when reserved + spent + hold would pass the Tenant's limit; the request is then recorded
+    /// as <c>failed</c> with no Reservation. Infrastructure faults throw.
     /// </summary>
     Task<Result<OpenedRequest>> OpenAsync(OpenInferenceRequest request, CancellationToken cancellationToken);
 
@@ -158,4 +179,10 @@ public interface IUsageLedger
     /// <see cref="SettleInferenceRequest.Attempts"/>. Callers pass a fresh, short-timeout token when the client has gone away.
     /// </summary>
     Task SettleAsync(SettleInferenceRequest settlement, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Raises the request's held amount by <paramref name="additional"/> with the same conditional update as the reservation, before an
+    /// Attempt whose worst case would pass the hold. Fails with <c>budget_exceeded</c> when the Budget cannot take it.
+    /// </summary>
+    Task<Result> TopUpAsync(Guid requestId, Money additional, CancellationToken cancellationToken);
 }

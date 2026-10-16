@@ -40,7 +40,7 @@ internal sealed class SnapshotBuilder(
             entry.ProviderEnabled,
             entry.ModelEnabled,
             capabilities,
-            entry.Price is { } price ? new PriceInForce(price.InputPerMillion, price.OutputPerMillion) : null,
+            entry.Price is { } price ? new PriceInForce(price.InputPerMillion, price.OutputPerMillion, price.CachedInputPerMillion, price.ModelPriceId) : null,
             // The tokenizer lives in the Capabilities document; the attempt loop needs it to estimate ambiguous and interrupted Attempts.
             entry.Target is { } target ? target with { Tokenizer = capabilities.Tokenizer } : null);
     }

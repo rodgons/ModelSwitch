@@ -49,6 +49,8 @@ public static class ConfigurationModule
         services.RequireSetting(_migratorConnection);
         services.AddSingleton<IModuleMigrator>(provider =>
             new ConfigurationMigrator(provider.GetRequiredService<IConfiguration>()[_migratorConnection]!));
+        services.AddSingleton<IModuleMigrator>(provider =>
+            new JobsSchemaMigrator(provider.GetRequiredService<IConfiguration>()[_migratorConnection]!));
         return services;
     }
 }
