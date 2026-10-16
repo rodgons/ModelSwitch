@@ -4,12 +4,12 @@ using Shouldly;
 namespace ModelSwitch.IntegrationTests.Infrastructure;
 
 /// <summary>The ids of the other Tenant's resources the matrix aims at; add a property when a new kind of tenant-scoped id appears.</summary>
-public sealed record ForeignIds(Guid TenantId, Guid ApiKeyId, Guid RequestId = default, Guid PolicyId = default);
+public sealed record ForeignIds(Guid TenantId, Guid ApiKeyId, Guid RequestId = default, Guid DatasetId = default, Guid PromptId = default, Guid PolicyId = default);
 
 /// <summary>
-/// One tenant-scoped admin endpoint: the verb, the path built from <see cref="ForeignIds"/> and a valid body for writes.
-/// <see cref="ByQuery"/> marks a route that takes the Tenant as a <c>tenantId</c> query filter or body member rather than a route
-/// parameter, which the route-parameter coverage gate cannot see.
+/// One tenant-scoped admin endpoint: the verb, the path built from <see cref="ForeignIds"/> and a valid body for writes (an
+/// <see cref="HttpContent"/> is sent as is, anything else as JSON). <see cref="ByQuery"/> marks a route that takes the Tenant as a
+/// <c>tenantId</c> query filter or body field rather than a route parameter, which the route-parameter coverage gate cannot see.
 /// </summary>
 public sealed record TenantScopedRoute(string Pattern, HttpMethod Method, Func<ForeignIds, string> Path, Func<ForeignIds, object?>? Body = null, bool ByQuery = false)
 {
@@ -39,6 +39,19 @@ public static class TenantIsolationMatrix
         new("/admin/requests", HttpMethod.Get, ids => $"/admin/requests?tenantId={ids.TenantId}", ByQuery: true),
         new("/admin/usage", HttpMethod.Get, ids => $"/admin/usage?tenantId={ids.TenantId}", ByQuery: true),
         new("/admin/overview", HttpMethod.Get, ids => $"/admin/overview?tenantId={ids.TenantId}", ByQuery: true),
+        new("/admin/datasets", HttpMethod.Get, ids => $"/admin/datasets?tenantId={ids.TenantId}", ByQuery: true),
+        new("/admin/datasets", HttpMethod.Post, _ => "/admin/datasets", ids => new { tenantId = ids.TenantId, name = "intruder", taskKind = "classification" }, ByQuery: true),
+        new("/admin/datasets/{datasetId:guid}", HttpMethod.Get, ids => $"/admin/datasets/{ids.DatasetId}"),
+        new("/admin/datasets/{datasetId:guid}/versions", HttpMethod.Get, ids => $"/admin/datasets/{ids.DatasetId}/versions"),
+        new("/admin/datasets/{datasetId:guid}/versions", HttpMethod.Post, ids => $"/admin/datasets/{ids.DatasetId}/versions", _ => Jsonl("{\"id\":\"x\",\"input\":{},\"expected\":\"spam\"}")),
+        new("/admin/datasets/{datasetId:guid}/versions/{version:int}", HttpMethod.Get, ids => $"/admin/datasets/{ids.DatasetId}/versions/1"),
+        new("/admin/datasets/{datasetId:guid}/versions/{version:int}/cases", HttpMethod.Get, ids => $"/admin/datasets/{ids.DatasetId}/versions/1/cases"),
+        new("/admin/prompts", HttpMethod.Get, ids => $"/admin/prompts?tenantId={ids.TenantId}", ByQuery: true),
+        new("/admin/prompts", HttpMethod.Post, _ => "/admin/prompts", ids => new { tenantId = ids.TenantId, name = "intruder" }, ByQuery: true),
+        new("/admin/prompts/{promptId:guid}", HttpMethod.Get, ids => $"/admin/prompts/{ids.PromptId}"),
+        new("/admin/prompts/{promptId:guid}/versions", HttpMethod.Get, ids => $"/admin/prompts/{ids.PromptId}/versions"),
+        new("/admin/prompts/{promptId:guid}/versions", HttpMethod.Post, ids => $"/admin/prompts/{ids.PromptId}/versions", _ => new { messages = new[] { new { role = "user", content = "{{text}}" } } }),
+        new("/admin/prompts/{promptId:guid}/versions/{version:int}", HttpMethod.Get, ids => $"/admin/prompts/{ids.PromptId}/versions/1"),
         new(
             "/admin/routing-policies/{policyId:guid}/simulate",
             HttpMethod.Post,
@@ -48,7 +61,10 @@ public static class TenantIsolationMatrix
     ];
 
     /// <summary>The route parameters that carry a tenant-scoped id; a route with one must be in <see cref="Routes"/> (the coverage gate).</summary>
-    public static IReadOnlyList<string> TenantScopedParameters { get; } = ["tenantId", "keyId", "apiKeyId", "requestId"];
+    public static IReadOnlyList<string> TenantScopedParameters { get; } = ["tenantId", "keyId", "apiKeyId", "requestId", "datasetId", "promptId"];
+
+    /// <summary>A JSONL Dataset Version upload body.</summary>
+    public static HttpContent Jsonl(string text) => new StringContent(text, System.Text.Encoding.UTF8, "application/x-ndjson");
 
     /// <summary>
     /// Calls every route that has a child id with the caller's <em>own</em> Tenant in the path and a foreign child id; the child

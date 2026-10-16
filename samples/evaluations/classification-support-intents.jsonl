@@ -1,0 +1,20 @@
+{"id": "t-001", "input": {"ticket": "I was charged twice for my subscription this month."}, "expected": "billing"}
+{"id": "t-002", "input": {"ticket": "Can I get an invoice with my company's VAT number on it?"}, "expected": "billing"}
+{"id": "t-003", "input": {"ticket": "The app crashes every time I open the settings page."}, "expected": "bug"}
+{"id": "t-004", "input": {"ticket": "Export to CSV produces an empty file since the last update."}, "expected": "bug"}
+{"id": "t-005", "input": {"ticket": "It would be great if you supported dark mode."}, "expected": "feature_request"}
+{"id": "t-006", "input": {"ticket": "Please add an option to schedule reports weekly."}, "expected": "feature_request"}
+{"id": "t-007", "input": {"ticket": "I can't log in, it says my password is wrong but I just reset it."}, "expected": "account_access"}
+{"id": "t-008", "input": {"ticket": "My two-factor codes are not being accepted."}, "expected": "account_access"}
+{"id": "t-009", "input": {"ticket": "Why did my plan price go up without notice?"}, "expected": "billing"}
+{"id": "t-010", "input": {"ticket": "I want a refund for the unused months of my annual plan."}, "expected": "billing"}
+{"id": "t-011", "input": {"ticket": "Clicking 'Save' does nothing on the profile page in Firefox."}, "expected": "bug"}
+{"id": "t-012", "input": {"ticket": "The dashboard shows yesterday's numbers as zero."}, "expected": "bug"}
+{"id": "t-013", "input": {"ticket": "Could you integrate with calendar apps?"}, "expected": "feature_request"}
+{"id": "t-014", "input": {"ticket": "An API endpoint for bulk deletes would save us hours."}, "expected": "feature_request"}
+{"id": "t-015", "input": {"ticket": "I'm locked out after too many attempts, how long do I wait?"}, "expected": "account_access"}
+{"id": "t-016", "input": {"ticket": "Please change the email address on my account, I lost access to the old one."}, "expected": "account_access"}
+{"id": "t-017", "input": {"ticket": "My card was declined but my bank says everything is fine."}, "expected": "billing"}
+{"id": "t-018", "input": {"ticket": "Search returns results from other folders I didn't select."}, "expected": "bug"}
+{"id": "t-019", "input": {"ticket": "Let us set different notification sounds per project."}, "expected": "feature_request"}
+{"id": "t-020", "input": {"ticket": "The verification email link has expired and I can't request a new one."}, "expected": "account_access"}

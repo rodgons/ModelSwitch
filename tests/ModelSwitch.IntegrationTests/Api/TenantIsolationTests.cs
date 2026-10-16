@@ -115,7 +115,19 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
             $"insert into routing.routing_policy values ('{policyId}', 'iso-{policyId:N}', 1, now()); " +
             "insert into routing.routing_policy_version (policy_id, version, definition, resolved_candidates, created_at) " +
             $"values ('{policyId}', 1, '{{\"strategy\":\"static\",\"candidates\":[\"p/m\"]}}', '{{\"p/m\":\"{Guid.CreateVersion7()}\"}}', now())");
-        return new ForeignIds(admin.TenantB, keyId, requestId, policyId);
+
+        // A Dataset with one version and a Prompt with one version of Tenant B, as the Evaluation routes read them.
+        var dataset = await owner.SendJsonAsync(HttpMethod.Post, "/admin/datasets", new { tenantId = admin.TenantB, name = $"b-dataset-{Guid.CreateVersion7()}", taskKind = "classification" });
+        dataset.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var datasetId = (await AdminBrowser.JsonAsync(dataset)).GetProperty("id").GetGuid();
+        (await owner.SendJsonAsync(HttpMethod.Post, $"/admin/datasets/{datasetId}/versions", TenantIsolationMatrix.Jsonl("{\"id\":\"c1\",\"input\":{\"text\":\"hi\"},\"expected\":\"ham\"}")))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        var prompt = await owner.SendJsonAsync(HttpMethod.Post, "/admin/prompts", new { tenantId = admin.TenantB, name = $"b-prompt-{Guid.CreateVersion7()}" });
+        prompt.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var promptId = (await AdminBrowser.JsonAsync(prompt)).GetProperty("id").GetGuid();
+        (await owner.SendJsonAsync(HttpMethod.Post, $"/admin/prompts/{promptId}/versions", new { messages = new[] { new { role = "user", content = "{{text}}" } } }))
+            .StatusCode.ShouldBe(HttpStatusCode.Created);
+        return new ForeignIds(admin.TenantB, keyId, requestId, datasetId, promptId, policyId);
     }
 
     private async Task AssertTenantBUntouchedAsync(ForeignIds foreign)
@@ -125,6 +137,12 @@ public sealed class TenantIsolationTests(AdminFixture admin) : IClassFixture<Adm
         (await admin.ScalarAsync($"select count(*) from identity.tenant_limits where tenant_id = '{foreign.TenantId}'")).ShouldBe("0");
         (await admin.ScalarAsync($"select count(*) from identity.api_key where tenant_id = '{foreign.TenantId}' and revoked_at is not null")).ShouldBe("0");
         (await admin.ScalarAsync($"select count(*) from identity.api_key where tenant_id = '{foreign.TenantId}' and name = 'intruder'")).ShouldBe("0");
+
+        // No Dataset or Prompt was created for Tenant B and no version was added to its own.
+        (await admin.ScalarAsync($"select count(*) from evaluation.dataset where tenant_id = '{foreign.TenantId}' and name = 'intruder'")).ShouldBe("0");
+        (await admin.ScalarAsync($"select count(*) from evaluation.prompt where tenant_id = '{foreign.TenantId}' and name = 'intruder'")).ShouldBe("0");
+        (await admin.ScalarAsync($"select latest_version from evaluation.dataset where id = '{foreign.DatasetId}'")).ShouldBe("1");
+        (await admin.ScalarAsync($"select latest_version from evaluation.prompt where id = '{foreign.PromptId}'")).ShouldBe("1");
     }
 }
 

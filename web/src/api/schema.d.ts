@@ -1365,6 +1365,447 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/admin/datasets': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: {
+          tenantId?: string
+          limit?: string
+          cursor?: string
+        }
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PagedResultOfDatasetView']
+          }
+        }
+      }
+    }
+    put?: never
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: {
+        content: {
+          'application/json': null | components['schemas']['CreateDatasetRequest']
+        }
+      }
+      responses: {
+        /** @description Created */
+        201: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['DatasetView']
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/datasets/{datasetId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          datasetId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['DatasetView']
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/datasets/{datasetId}/versions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: {
+          limit?: string
+          cursor?: string
+        }
+        header?: never
+        path: {
+          datasetId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PagedResultOfDatasetVersionView']
+          }
+        }
+      }
+    }
+    put?: never
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          datasetId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description Created */
+        201: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['DatasetVersionView']
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/datasets/{datasetId}/versions/{version}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          datasetId: string
+          version: number
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['DatasetVersionView']
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/datasets/{datasetId}/versions/{version}/cases': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: {
+          limit?: string
+          cursor?: string
+        }
+        header?: never
+        path: {
+          datasetId: string
+          version: number
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PagedResultOfCaseView']
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/prompts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: {
+          tenantId?: string
+          limit?: string
+          cursor?: string
+        }
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PagedResultOfPromptView']
+          }
+        }
+      }
+    }
+    put?: never
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: {
+        content: {
+          'application/json': null | components['schemas']['CreatePromptRequest']
+        }
+      }
+      responses: {
+        /** @description Created */
+        201: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PromptView']
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/prompts/{promptId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          promptId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PromptView']
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/prompts/{promptId}/versions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: {
+          limit?: string
+          cursor?: string
+        }
+        header?: never
+        path: {
+          promptId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PagedResultOfPromptVersionView']
+          }
+        }
+      }
+    }
+    put?: never
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          promptId: string
+        }
+        cookie?: never
+      }
+      requestBody?: {
+        content: {
+          'application/json': null | components['schemas']['CreatePromptVersionRequest']
+        }
+      }
+      responses: {
+        /** @description Created */
+        201: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PromptVersionView']
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/admin/prompts/{promptId}/versions/{version}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          promptId: string
+          version: number
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': components['schemas']['PromptVersionView']
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/admin/overview': {
     parameters: {
       query?: never
@@ -1679,6 +2120,16 @@ export interface components {
       period: string
       currency: string
     }
+    CaseView: {
+      /** Format: uuid */
+      id: string
+      externalId: string
+      /** Format: int32 */
+      ordinal: number
+      input: null | components['schemas']['JsonNode']
+      expected: null | components['schemas']['JsonNode']
+      metadata: null | components['schemas']['JsonNode']
+    }
     ConnectivityFailureView: {
       class: string
       code: string
@@ -1704,6 +2155,12 @@ export interface components {
       /** Format: date-time */
       expiresAt: null | string
     }
+    CreateDatasetRequest: {
+      /** Format: uuid */
+      tenantId: null | string
+      name: null | string
+      taskKind: null | string
+    }
     CreateModelPriceRequest: {
       /** Format: double */
       inputPerMillion: null | number
@@ -1718,6 +2175,15 @@ export interface components {
     CreatePolicyRequest: {
       name: null | string
       definition: null | components['schemas']['JsonElement']
+    }
+    CreatePromptRequest: {
+      /** Format: uuid */
+      tenantId: null | string
+      name: null | string
+    }
+    CreatePromptVersionRequest: {
+      messages: null | components['schemas']['PromptMessageRequest'][]
+      responseFormat: null | components['schemas']['JsonElement']
     }
     CreateProviderModelRequest: {
       providerModelId: null | string
@@ -1760,6 +2226,32 @@ export interface components {
       configured: boolean
       /** Format: date-time */
       updatedAt: null | string
+    }
+    DatasetVersionView: {
+      /** Format: uuid */
+      datasetId: string
+      /** Format: int32 */
+      version: number
+      /** Format: int32 */
+      caseCount: number
+      contentSha256: string
+      scoringSchema: null | components['schemas']['JsonNode']
+      /** Format: date-time */
+      createdAt: string
+      /** Format: uuid */
+      createdByAdminId: null | string
+    }
+    DatasetView: {
+      /** Format: uuid */
+      id: string
+      /** Format: uuid */
+      tenantId: string
+      name: string
+      taskKind: string
+      /** Format: int32 */
+      latestVersion: number
+      /** Format: date-time */
+      createdAt: string
     }
     ExcludedCandidateView: {
       /** Format: uuid */
@@ -1872,6 +2364,21 @@ export interface components {
       nextCursor: null | string
     }
     /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
+    PagedResultOfCaseView: {
+      items: components['schemas']['CaseView'][]
+      nextCursor: null | string
+    }
+    /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
+    PagedResultOfDatasetVersionView: {
+      items: components['schemas']['DatasetVersionView'][]
+      nextCursor: null | string
+    }
+    /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
+    PagedResultOfDatasetView: {
+      items: components['schemas']['DatasetView'][]
+      nextCursor: null | string
+    }
+    /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
     PagedResultOfModelPriceView: {
       items: components['schemas']['ModelPriceView'][]
       nextCursor: null | string
@@ -1884,6 +2391,16 @@ export interface components {
     /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
     PagedResultOfPolicyView: {
       items: components['schemas']['PolicyView'][]
+      nextCursor: null | string
+    }
+    /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
+    PagedResultOfPromptVersionView: {
+      items: components['schemas']['PromptVersionView'][]
+      nextCursor: null | string
+    }
+    /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
+    PagedResultOfPromptView: {
+      items: components['schemas']['PromptView'][]
       nextCursor: null | string
     }
     /** @description One page of an admin list: `{ items, nextCursor }` (docs/api.md section 3). A null cursor is the last page. */
@@ -1931,6 +2448,40 @@ export interface components {
       createdAt: string
       /** Format: date-time */
       versionCreatedAt: string
+    }
+    PromptMessageRequest: {
+      role: null | string
+      content: null | string
+    }
+    PromptMessageView: {
+      role: string
+      content: string
+    }
+    PromptTemplateView: {
+      messages: components['schemas']['PromptMessageView'][]
+      responseFormat: null | components['schemas']['JsonNode']
+    }
+    PromptVersionView: {
+      /** Format: uuid */
+      promptId: string
+      /** Format: int32 */
+      version: number
+      template: components['schemas']['PromptTemplateView']
+      /** Format: date-time */
+      createdAt: string
+      /** Format: uuid */
+      createdByAdminId: null | string
+    }
+    PromptView: {
+      /** Format: uuid */
+      id: string
+      /** Format: uuid */
+      tenantId: string
+      name: string
+      /** Format: int32 */
+      latestVersion: number
+      /** Format: date-time */
+      createdAt: string
     }
     ProviderHealthView: {
       /** Format: date-time */

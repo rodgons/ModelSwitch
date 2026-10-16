@@ -8,6 +8,7 @@ namespace ModelSwitch.Inference.Application;
 /// <summary>
 /// The Routing Decision as recorded on <c>inference_request.routing_decision</c> (data-model.md): the strategy, the matched
 /// rule, the ordered Candidates and the exclusions with their reasons. Provider Model ids only: no names, no content (ADR-0010).
+/// A request pinned to one Provider Model is recorded with <c>"strategy": "pinned"</c> and that model as the only Candidate.
 /// </summary>
 internal static class RoutingDecisionJson
 {
@@ -18,7 +19,9 @@ internal static class RoutingDecisionJson
         using (var writer = new Utf8JsonWriter(buffer))
         {
             writer.WriteStartObject();
-            writer.WriteString("strategy", decision.Strategy.ToString().ToLowerInvariant());
+
+            // A pinned Provider Model consulted no policy: "pinned" stands where the policy's strategy would.
+            writer.WriteString("strategy", decision.Pinned ? "pinned" : decision.Strategy.ToString().ToLowerInvariant());
             if (decision.RuleMatched is { } rule)
             {
                 writer.WriteNumber("ruleMatched", rule);

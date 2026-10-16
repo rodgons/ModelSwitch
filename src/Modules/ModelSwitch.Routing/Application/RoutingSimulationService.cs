@@ -37,7 +37,7 @@ internal sealed class RoutingSimulationService(
             }
         }
 
-        var policy = await policies.GetVersionAsync(policyId, input.Value.Version, cancellationToken);
+        var policy = await policies.GetVersionOrLatestAsync(policyId, input.Value.Version, cancellationToken);
         if (policy is null)
         {
             return new Error(ErrorCode.NotFound, input.Value.Version is null ? "The routing policy was not found." : "The policy version was not found.");

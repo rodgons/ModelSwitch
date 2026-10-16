@@ -1,0 +1,10 @@
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "Extract the customer's name and email address from the support message. Reply with only a JSON object {\"name\": string or null, \"email\": string or null}. Use null when the message does not contain the value. Copy values exactly as written."
+    },
+    { "role": "user", "content": "{{text}}" }
+  ],
+  "responseFormat": { "type": "json_object" }
+}

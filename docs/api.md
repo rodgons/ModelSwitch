@@ -161,6 +161,7 @@ Every error has one code from this closed set. The `type` groups codes and maps 
 | `deadline_exceeded` | 504 | `timeout_error` | Deadline exceeded | Maybe |
 | `stream_interrupted` | — (SSE event) | `provider_error` | Stream interrupted | Maybe, but the output may be partial |
 | `run_cost_cap_reached` | — (Evaluation Run `error`) | `budget_error` | Run cost cap reached | No. The run's `maxEstimatedCost` would be exceeded; remaining Cases are `skipped` |
+| `template_variable_missing` | — (Case Result `error_code`) | `invalid_request_error` | Template variable missing | No. A Prompt Version variable is absent from the Case `input`; the Case is `errored` |
 | `internal_error` | 500 | `api_error` | Internal error | Maybe |
 | `validation_failed` | 400 | `invalid_request_error` | Validation failed | No. Admin API only (policy, dataset, limits… bodies) |
 | `unauthenticated` | 401 | `authentication_error` | Unauthenticated | No. Admin API only (no session, or wrong email or password; the same answer for an unknown account, a deactivated one and a lockout) |
@@ -263,12 +264,29 @@ Every Administrator may read these (Viewer). Results are narrowed to the caller'
 
 ### Evaluation
 
+Datasets and Prompts belong to one Tenant. Viewers read and Operators write inside their Tenant Grant; a Dataset or Prompt of a Tenant outside it is **404** `not_found`, like one that does not exist. Lists are newest first (`limit` 1-200, default 50, `cursor`) and take an optional `tenantId` filter (outside the grant → 404); without it they show every Tenant in the grant. Creating a Dataset or Prompt, and each new version of either, writes an Audit Record (`dataset.created`, `dataset.versioned`, `prompt.created`, `prompt.versioned`) with names, numbers and the content hash, never Case or template content. Names are trimmed, 1-128 characters, no control characters, unique per Tenant (duplicate → 409 `conflict`); an unknown `tenantId` → 404.
+
 | Method | Path | Notes |
 |---|---|---|
-| GET/POST | `/admin/datasets` | Scoped to a Tenant |
-| POST | `/admin/datasets/{id}/versions` | Upload JSONL (≤ 10 MiB, ≤ 5 000 Cases) → new immutable version. Invalid lines → 400 `validation_failed` |
-| GET | `/admin/datasets/{id}/versions/{v}/cases` | Paginated |
-| GET/POST | `/admin/prompts`, `/admin/prompts/{id}/versions` | Prompt Versions |
+| GET/POST | `/admin/datasets` | POST `{tenantId, name, taskKind: "extraction"\|"classification"\|"free_text"}` → 201 `DatasetView {id, tenantId, name, taskKind, latestVersion, createdAt}` (`latestVersion` is 0 until the first upload) |
+| GET | `/admin/datasets/{datasetId}` | `DatasetView` |
+| GET | `/admin/datasets/{datasetId}/versions` | Dataset Versions, newest first: `DatasetVersionView {datasetId, version, caseCount, contentSha256, scoringSchema, createdAt, createdByAdminId}` |
+| POST | `/admin/datasets/{datasetId}/versions` | Upload JSONL as the **raw request body** with `Content-Type: application/x-ndjson` (also `application/jsonl`, `application/x-jsonlines`; any other → 415 `unsupported_media_type`). ≤ 10 MiB (→ 413 `payload_too_large`), 1 to 5 000 Cases. → 201 `DatasetVersionView`, the next version number (concurrent uploads each get their own). Invalid upload → 400 `validation_failed`, see below |
+| GET | `/admin/datasets/{datasetId}/versions/{version}` | `DatasetVersionView` |
+| GET | `/admin/datasets/{datasetId}/versions/{version}/cases` | Cases in upload order, paginated: `CaseView {id, externalId, ordinal, input, expected, metadata}` (`externalId` is the JSONL `id`, `ordinal` counts from 0) |
+| GET/POST | `/admin/prompts` | POST `{tenantId, name}` → 201 `PromptView {id, tenantId, name, latestVersion, createdAt}` |
+| GET | `/admin/prompts/{promptId}` | `PromptView` |
+| GET/POST | `/admin/prompts/{promptId}/versions` | GET newest first. POST `{messages: [{role, content}], responseFormat?}` appends the next immutable Prompt Version → 201 `PromptVersionView {promptId, version, template: {messages, responseFormat}, createdAt, createdByAdminId}` |
+| GET | `/admin/prompts/{promptId}/versions/{version}` | `PromptVersionView` |
+
+**Dataset upload validation** (evaluation.md section 1). UTF-8 (a BOM is tolerated), one JSON object per line, `\n` or `\r\n`; blank lines are ignored. Each Case has exactly `id` (non-empty string ≤ 256 chars, unique in the upload), `input` (object), `expected` and optionally `metadata` (object); any other field, a repeated field name or nesting deeper than 32 is an error. `expected` is a non-empty object for `extraction`, a non-empty label string without surrounding whitespace (≤ 256 chars) for `classification`, a non-empty string for `free_text`. One bad line rejects the whole upload. `errors` keys are `lines[N]` (the line as a whole) or `lines[N].<field>`, where **N is the 1-based line number in the file**, plus `body` for the upload as a whole (no Cases, more than 5 000, not UTF-8, or "only the first 100 invalid lines are listed"). Messages never quote Case content.
+
+**`contentSha256`** is the lower-case hex SHA-256 of the UTF-8 canonical Cases: each Case as canonical JSON (members sorted by name in UTF-16 code-unit order as in RFC 8785, no whitespace, strings re-encoded from their decoded value with only `"`, `\` and control characters escaped, numbers kept as written, `metadata` omitted when absent), in upload order, joined by `\n` with no trailing newline. Equal content gives an equal hash whatever its key order, spacing, escapes, line endings or blank lines. **`scoringSchema`** is `{"taskKind":"classification","labels":[…]}` (distinct expected labels), `{"taskKind":"extraction","fields":[…]}` (every expected field name) or `{"taskKind":"free_text"}`, lists sorted ordinally.
+
+**Prompt template validation** (evaluation.md section 2). 1 to 256 `messages`, each with `role` `system`, `user` or `assistant` and non-blank `content` (`{{var}}` placeholders are checked when a run renders a Case, not here). `responseFormat`, when given, is `{type:"text"}`, `{type:"json_object"}` or `{type:"json_schema", schema:{…}, name?, strict?}` (`name` `[A-Za-z0-9_-]{1,64}`); other fields are errors. Errors are keyed `messages`, `messages[i].role`, `messages[i].content` (0-based `i`), `responseFormat` or `responseFormat.<field>`. The stored `responseFormat` is in canonical JSON form.
+
+| Method | Path | Notes |
+|---|---|---|
 | POST | `/admin/evaluations` | Creates a **Comparison** with one Evaluation Run per Run Configuration. Returns 202 + ids |
 | GET | `/admin/evaluations` | Comparisons and runs, filterable by dataset and status |
 | GET | `/admin/evaluations/{runId}` | Status, progress, aggregates, failure summary |

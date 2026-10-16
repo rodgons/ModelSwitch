@@ -9,16 +9,35 @@ internal sealed class EfProviderCatalog(IDbContextFactory<RegistryDbContext> con
     public async Task<ProviderModelTarget?> FindEnabledAsync(string providerName, string providerModelIdentifier, CancellationToken cancellationToken)
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        var found = await (
-            from model in db.ProviderModels.AsNoTracking()
-            join provider in db.Providers.AsNoTracking() on model.ProviderId equals provider.Id
-            where provider.Name == providerName
-                && model.ProviderModelIdentifier == providerModelIdentifier
-                && provider.Enabled
-                && model.Enabled
-            select new { Model = model, Provider = provider })
+        var found = await Enabled(db)
+            .Where(f => f.Provider.Name == providerName && f.Model.ProviderModelIdentifier == providerModelIdentifier)
             .FirstOrDefaultAsync(cancellationToken);
+        return ToTarget(found);
+    }
 
+    public async Task<ProviderModelTarget?> FindEnabledByIdAsync(Guid providerModelId, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var found = await Enabled(db).Where(f => f.Model.Id == providerModelId).FirstOrDefaultAsync(cancellationToken);
+        return ToTarget(found);
+    }
+
+    // A member-init projection (not a constructor), so EF Core can translate the filters composed over it.
+    private sealed class Found
+    {
+        public required ProviderModel Model { get; init; }
+
+        public required Provider Provider { get; init; }
+    }
+
+    private static IQueryable<Found> Enabled(RegistryDbContext db)
+        => from model in db.ProviderModels.AsNoTracking()
+           join provider in db.Providers.AsNoTracking() on model.ProviderId equals provider.Id
+           where provider.Enabled && model.Enabled
+           select new Found { Model = model, Provider = provider };
+
+    private static ProviderModelTarget? ToTarget(Found? found)
+    {
         if (found is null || !Uri.TryCreate(found.Provider.Endpoint, UriKind.Absolute, out var endpoint))
         {
             return null;

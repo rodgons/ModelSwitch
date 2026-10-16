@@ -33,19 +33,41 @@ public sealed record RankedCandidate(
 public sealed record ExcludedCandidate(Guid ProviderModelId, string Reason);
 
 /// <summary>The recorded outcome of routing (CONTEXT.md, Routing Decision).</summary>
+/// <param name="PolicyId">The Routing Policy decided on; null for a pinned Provider Model (<see cref="Pinned"/>), which bypasses routing.</param>
+/// <param name="PolicyVersion">The Policy Version decided on; null when <see cref="Pinned"/>.</param>
 /// <param name="RuleMatched">Index into the policy's <c>rules</c>; null when no rule matched or the strategy is not <c>rules</c>.</param>
 /// <param name="EffectiveMaxOutputTokens">The request's limit, or the policy default.</param>
 /// <param name="Truncated">Eligible Candidates ranked after <c>maxCandidates</c>, in rank order: never tried, kept so a simulation can show them.</param>
 public sealed record RoutingDecision(
-    Guid PolicyId,
-    int PolicyVersion,
+    Guid? PolicyId,
+    int? PolicyVersion,
     PolicyStrategy Strategy,
     int? RuleMatched,
     int EffectiveMaxOutputTokens,
     IReadOnlyList<RankedCandidate> Ordered,
     IReadOnlyList<ExcludedCandidate> Excluded,
     ExecutionSettings Execution,
-    IReadOnlyList<RankedCandidate>? Truncated = null);
+    IReadOnlyList<RankedCandidate>? Truncated = null)
+{
+    /// <summary>
+    /// True when the request named one Provider Model instead of a Model Alias (evaluation.md section 4): no Routing Policy was
+    /// consulted, the only Candidate is that model and the execution settings are <see cref="PinnedRouting.Execution"/>.
+    /// </summary>
+    public bool Pinned { get; init; }
+}
+
+/// <summary>
+/// What a request pinned to one Provider Model runs with, since no Routing Policy applies (routing-and-resilience.md section 1,
+/// "Pinned targets").
+/// </summary>
+public static class PinnedRouting
+{
+    /// <summary>The output ceiling when the request sets none: the same default a policy definition gets.</summary>
+    public const int DefaultMaxOutputTokens = 1024;
+
+    /// <summary>The policy-independent Attempt loop bounds: <see cref="ExecutionSettings.Default"/>.</summary>
+    public static ExecutionSettings Execution => ExecutionSettings.Default;
+}
 
 /// <summary>
 /// Either a decision with at least one Candidate, or an error (<c>model_not_found</c>, <c>model_not_allowed</c>,
@@ -59,12 +81,25 @@ public sealed record RoutingOutcome(RoutingDecision? Decision, Error? Error, Tim
 
 public interface IRouter
 {
-    /// <summary>A pure function of its input: no I/O, no clock, no randomness.</summary>
+    /// <summary>
+    /// A pure function of its input: no I/O, no clock, no randomness. Routes <see cref="RoutingInput.Alias"/> on its latest Policy
+    /// Version, or on <see cref="RoutingInput.PinnedPolicy"/> when set; or, when <see cref="RoutingInput.PinnedProviderModelId"/> is
+    /// set, bypasses the policy and decides on that one Provider Model (Eligibility still applies).
+    /// </summary>
     RoutingOutcome Decide(RoutingInput input);
 }
 
 public interface IPolicyStore
 {
-    /// <summary>The latest Policy Version of the policy the Model Alias points to, or null when it is unknown.</summary>
+    /// <summary>
+    /// The latest Policy Version of the policy the Model Alias points to, or null when it is unknown. Reads the database, so it is
+    /// not for the request hot path: an Evaluation Run calls it once, at creation, to freeze the version it will use.
+    /// </summary>
     Task<PolicySnapshot?> GetActiveForAliasAsync(string modelAlias, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// One Policy Version, as it was saved (its definition read against the <c>resolved_candidates</c> fixed then), or null when it
+    /// does not exist. Versions are immutable, so the result is cached after the first read.
+    /// </summary>
+    Task<PolicySnapshot?> GetVersionAsync(Guid policyId, int version, CancellationToken cancellationToken);
 }

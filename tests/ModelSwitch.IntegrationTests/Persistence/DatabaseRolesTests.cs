@@ -67,6 +67,42 @@ public sealed class DatabaseRolesTests(PostgresFixture postgres)
         (await ScalarAsync(admin, $"select has_table_privilege('{DatabaseRoles.RetentionRole}', 'identity.tenant', 'DELETE')")).ShouldBe("False");
     }
 
+    [Fact]
+    public async Task Evaluation_versions_are_append_only_for_the_app_role_yet_a_dataset_delete_cascades_to_them()
+    {
+        var admin = await postgres.CreateDatabaseAsync();
+        await using (var services = ModuleServices.ForMigrator(admin))
+        {
+            foreach (var migrator in services.GetServices<IModuleMigrator>())
+            {
+                await migrator.MigrateAsync(CancellationToken.None);
+            }
+        }
+
+        await new DatabaseRoles(NullLogger<DatabaseRoles>.Instance).ApplyAsync(admin, ["evaluation"], _appPassword, retentionPassword: null, CancellationToken.None);
+        var app = AsRole(admin, DatabaseRoles.AppRole, _appPassword);
+        const string dataset = "0192f0c8-0000-7000-8000-0000000000d1";
+        await ExecuteAsync(app, $"insert into evaluation.dataset (id, tenant_id, name, task_kind, latest_version, created_at) values ('{dataset}', gen_random_uuid(), 'd', 'free_text', 1, now())");
+        await ExecuteAsync(app, $"insert into evaluation.dataset_version (dataset_id, version, case_count, content_sha256, scoring_schema, created_at) values ('{dataset}', 1, 1, repeat('a', 64), '{{}}', now())");
+        await ExecuteAsync(app, $"insert into evaluation.eval_case (id, dataset_id, dataset_version, external_id, input, expected, ordinal) values (gen_random_uuid(), '{dataset}', 1, 'c', '{{}}', '\"x\"', 0)");
+
+        foreach (var statement in new[]
+        {
+            "update evaluation.dataset_version set case_count = 2",
+            "delete from evaluation.dataset_version",
+            "update evaluation.eval_case set ordinal = 1",
+            "delete from evaluation.eval_case",
+            "update evaluation.prompt_version set version = 2",
+        })
+        {
+            (await Should.ThrowAsync<PostgresException>(() => ExecuteAsync(app, statement))).SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, statement);
+        }
+
+        await ExecuteAsync(app, $"delete from evaluation.dataset where id = '{dataset}'");
+        (await ScalarAsync(admin, "select count(*) from evaluation.eval_case")).ShouldBe("0");
+        (await ScalarAsync(admin, "select count(*) from evaluation.dataset_version")).ShouldBe("0");
+    }
+
     private async Task<string> MigratedAndGrantedAsync()
     {
         var admin = await postgres.CreateDatabaseAsync();

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ModelSwitch.Evaluation.Infrastructure;
 using ModelSwitch.Identity.Infrastructure;
 using ModelSwitch.IntegrationTests.Infrastructure;
 using ModelSwitch.Registry.Infrastructure;
@@ -40,18 +41,20 @@ public sealed class MigrationTests(PostgresFixture postgres)
         first["usage"][2].ShouldEndWith("_UsageHourly");
         first["usage"][3].ShouldEndWith("_RetentionPartitions");
         first["usage"][4].ShouldEndWith("_UsageHourlyOrigin");
+        first["evaluation"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         first["jobs"].ShouldBe(["outbox_event", "job", "processed_event"]);
         second["usage"].ShouldBeEmpty();
+        second["evaluation"].ShouldBeEmpty();
         second["config"].ShouldBeEmpty();
         second["jobs"].ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task Migrations_apply_in_the_fixed_order_identity_registry_routing_usage_config_jobs()
+    public async Task Migrations_apply_in_the_fixed_order_identity_registry_routing_usage_evaluation_config_jobs()
     {
         await using var services = ModuleServices.ForMigrator(await postgres.CreateDatabaseAsync());
 
-        services.GetServices<IModuleMigrator>().Select(m => m.Schema).ShouldBe(["identity", "registry", "routing", "usage", "config", "jobs"]);
+        services.GetServices<IModuleMigrator>().Select(m => m.Schema).ShouldBe(["identity", "registry", "routing", "usage", "evaluation", "config", "jobs"]);
     }
 
     [Fact]
@@ -68,6 +71,9 @@ public sealed class MigrationTests(PostgresFixture postgres)
         identity.Database.HasPendingModelChanges().ShouldBeFalse("a model change needs a new Identity migration");
         registry.Database.HasPendingModelChanges().ShouldBeFalse("a model change needs a new Registry migration");
         routing.Database.HasPendingModelChanges().ShouldBeFalse("a model change needs a new Routing migration");
+
+        await using var evaluation = new EvaluationDbContext(new DbContextOptionsBuilder<EvaluationDbContext>().UseNpgsql(connectionString).Options);
+        evaluation.Database.HasPendingModelChanges().ShouldBeFalse("a model change needs a new Evaluation migration");
     }
 
     [Fact]
@@ -79,11 +85,20 @@ public sealed class MigrationTests(PostgresFixture postgres)
 
         var tables = await QueryAsync<string>(
             connectionString,
-            "select table_schema || '.' || table_name from information_schema.tables where table_schema in ('config','identity','registry','routing') order by 1");
+            "select table_schema || '.' || table_name from information_schema.tables where table_schema in ('config','evaluation','identity','registry','routing') order by 1");
 
         tables.ShouldBe(
         [
             "config.config_version",
+            "evaluation.__ef_migrations_history",
+            "evaluation.case_result",
+            "evaluation.comparison",
+            "evaluation.dataset",
+            "evaluation.dataset_version",
+            "evaluation.eval_case",
+            "evaluation.evaluation_run",
+            "evaluation.prompt",
+            "evaluation.prompt_version",
             "identity.__ef_migrations_history",
             "identity.administrator",
             "identity.administrator_session",

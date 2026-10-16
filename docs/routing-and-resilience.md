@@ -11,7 +11,7 @@ RoutingInput { tenant, alias, taskType?, requiredCapabilities, estimatedInputTok
  resolve alias ──(unknown)──────────────────────────▶ model_not_found
       │ tenant not allowed alias ────────────────────▶ model_not_allowed
       ▼
- load Policy Version (latest in snapshot)
+ load Policy Version (latest in snapshot, or the run's pinned version)
       ▼
  select candidate set
    static: policy.candidates
@@ -26,6 +26,13 @@ RoutingInput { tenant, alias, taskType?, requiredCapabilities, estimatedInputTok
       ▼
  RoutingDecision { policyId, policyVersion, ruleMatched?, ordered[], excluded[{model, reason}] }
 ```
+
+### Pinned targets
+
+Evaluation traffic can name a target an HTTP client cannot (`InferenceTarget`, [evaluation.md §4](evaluation.md#4-runs-and-comparisons)):
+
+- **Pinned Policy Version** (`RoutingInput.PinnedPolicy`). The alias is resolved and checked exactly as above (`model_not_found`, `model_not_allowed`), then the frozen Policy Version is used instead of the latest, even if the alias now points at another policy. Its Candidates, rules, limits and execution settings apply, and Eligibility is checked against the **current** catalog (a model disabled since is excluded). `IInferenceService` takes the version from the snapshot when it is still the latest, and otherwise reads it once through `IPolicyStore.GetVersionAsync` (the stored `definition` against its stored `resolved_candidates`; immutable, so cached). An unknown version is `model_not_found`.
+- **Pinned Provider Model** (`RoutingInput.PinnedProviderModelId`). No policy is consulted. Unknown model → `model_not_found`. Allowed aliases: a Tenant allowed `*` may pin any Provider Model; otherwise the model must be a Candidate (in `candidates`, a rule or `default`) of the latest Policy Version of at least one alias the Tenant is allowed (`RoutingSnapshot.AliasesReaching`), else `model_not_allowed`, so pinning never reaches a model the Tenant's aliases could not. Then the Eligibility filters run on that single Candidate, except `provider_not_allowed` (a policy setting), with the Tenant's `max_request_cost` as the only cost limit; an empty result maps to the outcomes below as usual. The decision has `Pinned = true`, no Policy Version (`policy_id`/`policy_version` are null on the request), `"strategy": "pinned"` in the recorded Routing Decision, `maxOutputTokens` = the request's or 1024 (`PinnedRouting.DefaultMaxOutputTokens`, a policy's default), and the default execution settings (`PinnedRouting.Execution` = `ExecutionSettings.Default`: Deadline 60 s, Attempt timeout 30 s, 4 Attempts, 1 Retry per Candidate, so at most 2 Attempts with one Candidate). The request goes through the same Attempt loop, Reservation and settlement, and is recorded under `requested_alias = <providerName>/<providerModelId>`, which cannot collide with an alias.
 
 `IRouter.Decide` is a **pure function** of `(RoutingInput, snapshot, circuitStates)`. It does no I/O, so it can be unit-tested exhaustively with a table of cases (PRD §13: "routing correctness on a known test matrix"). Eligible Candidates cut by `maxCandidates` are kept on the decision as `Truncated` (never tried, not recorded on the request).
 
