@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using ModelSwitch.Identity.Application;
 using ModelSwitch.Identity.Contracts;
+using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Http;
 
 namespace ModelSwitch.Identity.Endpoints;
@@ -74,6 +75,6 @@ internal static class TenantEndpoints
         return result.IsFailure ? ProblemResults.From(http, result.Error) : Results.NoContent();
     }
 
-    private static IResult Respond<T>(HttpContext http, ModelSwitch.SharedKernel.Result<T> result, Func<T, IResult> success)
+    private static IResult Respond<T>(HttpContext http, Result<T> result, Func<T, IResult> success)
         => result.IsFailure ? ProblemResults.From(http, result.Error) : success(result.Value);
 }
