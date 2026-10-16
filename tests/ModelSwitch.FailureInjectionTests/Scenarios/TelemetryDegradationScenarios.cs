@@ -9,10 +9,18 @@ namespace ModelSwitch.FailureInjectionTests.Scenarios;
 
 /// <summary>
 /// observability.md section 5 (NFR-02, PRD Phase 4 "test telemetry degradation"): telemetry is best-effort. Whatever the OTLP backend
-/// does (stops mid-load, hangs, or is not there at startup) the gateway starts, and inference succeeds at the same rate and without
+/// does (stops mid-load, hangs, or is unreachable at startup) the gateway starts, and inference succeeds at the same rate and without
 /// waiting on the exporter.
 /// </summary>
-public abstract class TelemetryDegradationScenario(PostgresFixture postgres, ValkeyFixture valkey, bool hang) : IAsyncLifetime
+/// <summary>What the OTLP backend does when the api starts.</summary>
+public enum BackendAtStartup
+{
+    Answering,
+    Hanging,
+    Down,
+}
+
+public abstract class TelemetryDegradationScenario(PostgresFixture postgres, ValkeyFixture valkey, BackendAtStartup backend) : IAsyncLifetime
 {
     private const int _requestsPerPhase = 40;
     private const int _concurrency = 8;
@@ -23,7 +31,13 @@ public abstract class TelemetryDegradationScenario(PostgresFixture postgres, Val
 
     public async ValueTask InitializeAsync()
     {
-        Backend = await FakeOtlpBackend.StartAsync(hang);
+        Backend = await FakeOtlpBackend.StartAsync(hang: backend == BackendAtStartup.Hanging);
+        if (backend == BackendAtStartup.Down)
+        {
+            // The endpoint is configured but nothing listens there: every export gets connection refused from the first one.
+            await Backend.StopAsync();
+        }
+
         Gateway = new GatewayFixture(postgres, valkey);
         Gateway.Settings["OTEL_EXPORTER_OTLP_ENDPOINT"] = Backend.Endpoint.ToString().TrimEnd('/');
         Gateway.Settings["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
@@ -90,7 +104,7 @@ public abstract class TelemetryDegradationScenario(PostgresFixture postgres, Val
 }
 
 [Slow]
-public sealed class TelemetryBackendStoppedMidLoad(PostgresFixture postgres, ValkeyFixture valkey) : TelemetryDegradationScenario(postgres, valkey, hang: false)
+public sealed class TelemetryBackendStoppedMidLoad(PostgresFixture postgres, ValkeyFixture valkey) : TelemetryDegradationScenario(postgres, valkey, BackendAtStartup.Answering)
 {
     [Fact]
     public async Task Stopping_the_backend_during_load_does_not_change_the_inference_success_rate()
@@ -98,8 +112,11 @@ public sealed class TelemetryBackendStoppedMidLoad(PostgresFixture postgres, Val
         var before = await LoadAsync();
         await WaitForExportAsync("traces");
 
+        // The backend goes away while a phase of requests is in flight, as when its container is killed under load.
+        var during = LoadAsync();
+        await Task.Delay(100, TestContext.Current.CancellationToken);
         await Backend.StopAsync();
-        var after = await LoadAsync();
+        var after = await during;
 
         SuccessRate(before).ShouldBe(1.0);
         SuccessRate(after).ShouldBe(SuccessRate(before));
@@ -108,7 +125,7 @@ public sealed class TelemetryBackendStoppedMidLoad(PostgresFixture postgres, Val
 }
 
 [Slow]
-public sealed class TelemetryBackendHangs(PostgresFixture postgres, ValkeyFixture valkey) : TelemetryDegradationScenario(postgres, valkey, hang: true)
+public sealed class TelemetryBackendHangs(PostgresFixture postgres, ValkeyFixture valkey) : TelemetryDegradationScenario(postgres, valkey, BackendAtStartup.Hanging)
 {
     [Fact]
     public async Task A_backend_that_never_answers_neither_blocks_startup_nor_slows_requests()
@@ -123,5 +140,20 @@ public sealed class TelemetryBackendHangs(PostgresFixture postgres, ValkeyFixtur
 
         // The exporter's own timeout is 10 s: a request that waited on it would take at least that long.
         P95(second).ShouldBeLessThan(TimeSpan.FromSeconds(3));
+    }
+}
+
+[Slow]
+public sealed class TelemetryBackendDownAtStartup(PostgresFixture postgres, ValkeyFixture valkey) : TelemetryDegradationScenario(postgres, valkey, BackendAtStartup.Down)
+{
+    [Fact]
+    public async Task The_gateway_starts_and_serves_requests_while_the_backend_is_unreachable()
+    {
+        // InitializeAsync started the api with an OTLP endpoint that refuses every connection.
+        (await Gateway.Anonymous.GetAsync("/ready", TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var phase = await LoadAsync();
+
+        SuccessRate(phase).ShouldBe(1.0);
+        P95(phase).ShouldBeLessThan(TimeSpan.FromSeconds(3));
     }
 }

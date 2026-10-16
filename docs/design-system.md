@@ -316,14 +316,14 @@ A feature component that writes its own `display: grid` or a media query is a re
 | `Container` | `size: 'page' \| 'wide' \| 'form'` | Max-width (§5) and the stepped gutters |
 | `Stack` | `gap` | Vertical flow with a uniform gap |
 | `Inline` | `gap`, `align`, `justify`, `wrap = true` | Horizontal row that wraps |
-| `Grid` | `min`, `gap` | `repeat(auto-fit, minmax(min(<min>, 100%), 1fr))`: the column count follows the available width |
+| `Grid` | `min` (`narrow` 160 · `field` 200 · `card` 280 · `chart` 420 px, layout tokens), `gap` | `repeat(auto-fit, minmax(min(<min>, 100%), 1fr))`: the column count follows the available width |
 | `Split` | `aside` slot, `asideAt = 'xl'` | Main + 360 px aside from the breakpoint; stacked below it |
 | `PageHeader` | `title`, `lede?`, `actions` slot | Title and actions share a row; the actions wrap under the title when space runs out |
 | `Section` | `title`, `actions?`, `surface = false` | A titled block on the canvas. `surface` adds `bg.surface`, a hairline and `radius.surface` for tables, forms and charts |
 | `Readout` | `items: { label, value, delta?, trend?, estimated? }[]` | One band of figures separated by vertical hairlines. Each figure is a `text.caption` label in `fg.muted` (with an `EstimatedBadge` when `estimated`), a `text.readout` value, an optional `delta` line in `text.caption` against the previous period of equal length, and an optional 24 px sparkline. Wraps to rows of 3 below lg and 2 below sm. This replaces separate stat cards |
 | `Facts` | `items: { label, value }[]` | A `<dl>` of label/value pairs laid out with `Inline`. Labels in `fg.muted`, values in `fg.default`. Used for request metadata, never a dot-joined string |
 | `Toolbar` | default slot | `Inline` with gap 8 that wraps filters |
-| `TableScroll` | none | Wide tables scroll inside themselves (`overflow-x: auto`, focusable, labelled). Pins the first column below lg. The page never scrolls sideways |
+| `TableScroll` | none | Wide tables scroll inside themselves (`overflow-x: auto`, focusable, labelled). The page never scrolls sideways. Below lg the first column stays in view: its cells take the `table.pinned` style (StyleX has no descendant selectors, so the table opts in per cell; the Request Explorer does) |
 | `VisuallyHidden` | none | Screen-reader-only text |
 
 Rules:

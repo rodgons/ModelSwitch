@@ -90,6 +90,15 @@ public sealed class DashboardQueryParserTests
     }
 
     [Fact]
+    public void A_cursor_that_decodes_but_is_not_a_request_cursor_is_rejected_rather_than_restarting_at_page_one()
+    {
+        var foreign = ModelSwitch.SharedKernel.Pagination.Pagination.Encode("not-a-position");
+
+        DashboardQueryParser.Requests(new DashboardQueryString { Cursor = foreign }, _now).Error.FieldErrors!.Keys.ShouldBe(["cursor"]);
+        DashboardQueryParser.Requests(new DashboardQueryString { Cursor = ModelSwitch.SharedKernel.Pagination.Pagination.Encode($"123|{Guid.CreateVersion7()}") }, _now).IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
     public void From_must_be_before_to_and_the_range_is_bounded()
     {
         DashboardQueryParser.Requests(new DashboardQueryString { From = "2026-10-15T00:00:00Z", To = "2026-10-14T00:00:00Z" }, _now)

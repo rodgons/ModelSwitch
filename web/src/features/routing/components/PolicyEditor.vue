@@ -143,7 +143,7 @@ const strategies = [
       </ul>
     </Alert>
     <template v-if="view === 'form'">
-      <Grid min="200px" :gap="12">
+      <Grid min="field" :gap="12">
         <Field v-slot="{ id }" label="Strategy"
           ><SelectInput :id="id" v-model="form.strategy" :options="strategies"
         /></Field>

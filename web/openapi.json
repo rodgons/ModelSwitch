@@ -2366,6 +2366,22 @@
           }
         }
       },
+      "ExcludedCandidateView": {
+        "required": [
+          "model",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
       "InstanceHealthView": {
         "required": [
           "instanceId",
@@ -3239,7 +3255,7 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/JsonNode"
+                "$ref": "#/components/schemas/RoutingDecisionView"
               }
             ]
           },
@@ -3405,6 +3421,51 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AttemptTimelineView"
+            }
+          }
+        }
+      },
+      "RoutingDecisionView": {
+        "required": [
+          "strategy",
+          "ruleMatched",
+          "maxOutputTokens",
+          "ordered",
+          "excluded"
+        ],
+        "type": "object",
+        "properties": {
+          "strategy": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ruleMatched": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "maxOutputTokens": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "ordered": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "excluded": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExcludedCandidateView"
             }
           }
         }

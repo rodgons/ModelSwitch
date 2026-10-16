@@ -92,7 +92,7 @@ const save = useFormMutation(
           <Checkbox v-model="capabilities.jsonObject" label="JSON object output" />
           <Checkbox v-model="capabilities.jsonSchema" label="JSON-schema output" />
         </Inline>
-        <Grid min="160px" :gap="12">
+        <Grid min="narrow" :gap="12">
           <Field
             v-slot="{ id, invalid }"
             label="Context window"

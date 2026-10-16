@@ -94,6 +94,11 @@ internal static partial class DashboardQueryParser
                 errors[field] = messages;
             }
         }
+        else if (page.Value.After is { } after && !IsRequestCursor(after))
+        {
+            // A well-formed base64 value that is not one of our positions must not silently restart the list at page one.
+            errors["cursor"] = ["The cursor is not valid."];
+        }
 
         if (errors.Count > 0)
         {
@@ -244,6 +249,12 @@ internal static partial class DashboardQueryParser
 
         return (from, to);
     }
+
+    /// <summary>A request-list position: <c>&lt;ticks or duration&gt;|&lt;request id&gt;</c>, as <c>IUsageQueries</c> encodes it.</summary>
+    private static bool IsRequestCursor(string after)
+        => after.Split('|') is [var key, var id]
+            && long.TryParse(key, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _)
+            && System.Guid.TryParse(id, out _);
 
     private static DateTimeOffset? Time(string? value, string name, Dictionary<string, string[]> errors)
     {

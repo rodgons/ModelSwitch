@@ -20,6 +20,8 @@ withDefaults(
 const s = {
   table: stylex.props(table.table),
   th: stylex.props(table.th),
+  thPinned: stylex.props(table.th, table.pinned),
+  tdPinned: stylex.props(table.td, table.pinned),
   thNumber: stylex.props(table.th, table.number),
   td: stylex.props(table.td),
   tdNoWrap: stylex.props(table.td, table.noWrap),
@@ -36,7 +38,7 @@ const s = {
     <table v-bind="s.table">
       <thead>
         <tr>
-          <th v-bind="s.th" scope="col">Request</th>
+          <th v-bind="s.thPinned" scope="col">Request</th>
           <th v-bind="s.th" scope="col">Model Alias</th>
           <th v-bind="s.th" scope="col">Route</th>
           <th v-bind="s.th" scope="col">Status</th>
@@ -51,7 +53,7 @@ const s = {
       </thead>
       <tbody>
         <tr v-for="request in items" :key="request.id" v-bind="s.row">
-          <td v-bind="s.td">
+          <td v-bind="s.tdPinned">
             <RouterLink :to="`/requests/${request.id}`" v-bind="s.id" :title="request.id">{{
               truncateMiddle(request.id)
             }}</RouterLink>

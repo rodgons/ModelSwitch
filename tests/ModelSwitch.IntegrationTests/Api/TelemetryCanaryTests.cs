@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelSwitch.IntegrationTests.Infrastructure;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
@@ -32,11 +33,15 @@ public sealed class TelemetryCanaryTests(GatewayFixture gateway) : IClassFixture
         var spans = new List<Activity>();
         var metrics = new List<Metric>();
         var logs = new List<LogRecord>();
+        var lines = new CapturingLoggerProvider();
         await using var host = gateway.StartHost().WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddInMemoryExporter(spans));
             services.ConfigureOpenTelemetryMeterProvider(meters => meters.AddInMemoryExporter(metrics));
             services.ConfigureOpenTelemetryLoggerProvider(logging => logging.AddInMemoryExporter(logs));
+
+            // Every ordinary logger sink (the JSON console among them) gets what this provider gets: message, state and scopes.
+            services.AddSingleton<ILoggerProvider>(lines);
         }));
         using var client = gateway.ClientFor(host);
 
@@ -56,7 +61,8 @@ public sealed class TelemetryCanaryTests(GatewayFixture gateway) : IClassFixture
         host.Services.GetRequiredService<MeterProvider>().ForceFlush();
         host.Services.GetRequiredService<LoggerProvider>().ForceFlush();
 
-        var exported = Render(spans.ToArray(), metrics.ToArray(), logs.ToArray());
+        var exported = Render(spans.ToArray(), metrics.ToArray(), logs.ToArray()) + lines.Text;
+        lines.Text.ShouldContain(requestId, Case.Sensitive, "the plain log lines carry the request id scope");
 
         // What must be there: the request path spans, the request metrics and the completion line, correlated by request id.
         spans.ShouldContain(s => s.OperationName == "modelswitch.attempt");
@@ -69,6 +75,46 @@ public sealed class TelemetryCanaryTests(GatewayFixture gateway) : IClassFixture
         exported.ShouldNotContain(canaryPrompt);
         exported.ShouldNotContain(canarySecret);
         exported.ShouldNotContain(gateway.FullKey);
+    }
+
+    /// <summary>A logger sink that keeps, as text, every line with its state and the scopes open when it was written.</summary>
+    private sealed class CapturingLoggerProvider : ILoggerProvider, ISupportExternalScope
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _lines = new();
+        private IExternalScopeProvider _scopes = new LoggerExternalScopeProvider();
+
+        public string Text => string.Join('\n', _lines);
+
+        public ILogger CreateLogger(string categoryName) => new Capturing(this, categoryName);
+
+        public void SetScopeProvider(IExternalScopeProvider scopeProvider) => _scopes = scopeProvider;
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Capturing(CapturingLoggerProvider provider, string category) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => provider._scopes.Push(state);
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                var line = new StringBuilder().Append(category).Append(' ').Append(formatter(state, exception)).Append(' ').Append(exception);
+                if (state is IEnumerable<KeyValuePair<string, object?>> pairs)
+                {
+                    foreach (var (key, value) in pairs)
+                    {
+                        line.Append(' ').Append(key).Append('=').Append(value);
+                    }
+                }
+
+                provider._scopes.ForEachScope((scope, builder) => builder.Append(" scope=").Append(scope is IEnumerable<KeyValuePair<string, object?>> kv ? string.Join(',', kv) : scope), line);
+                provider._lines.Enqueue(line.ToString());
+            }
+        }
     }
 
     private static StringContent Body(string prompt, bool stream)

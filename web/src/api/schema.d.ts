@@ -1709,6 +1709,11 @@ export interface components {
       /** Format: date-time */
       updatedAt: null | string
     }
+    ExcludedCandidateView: {
+      /** Format: uuid */
+      model: string
+      reason: string
+    }
     InstanceHealthView: {
       instanceId: string
       state: string
@@ -1943,7 +1948,7 @@ export interface components {
       inputBytes: number
       traceId: string
       traceUrl: null | string
-      routingDecision: null | components['schemas']['JsonNode']
+      routingDecision: null | components['schemas']['RoutingDecisionView']
       attempts: components['schemas']['AttemptTimelineView'][]
       usageRecords: components['schemas']['UsageRecordDetailView'][]
     }
@@ -1982,6 +1987,15 @@ export interface components {
       totalEstimatedCost: null | number
       usageStatus: string
       attempts: components['schemas']['AttemptTimelineView'][]
+    }
+    RoutingDecisionView: {
+      strategy: null | string
+      /** Format: int32 */
+      ruleMatched: null | number
+      /** Format: int32 */
+      maxOutputTokens: null | number
+      ordered: string[]
+      excluded: components['schemas']['ExcludedCandidateView'][]
     }
     SessionResponse: {
       administrator: components['schemas']['AdministratorSummary']

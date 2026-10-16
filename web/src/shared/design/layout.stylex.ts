@@ -9,6 +9,11 @@ export const layout = stylex.defineVars({
   rail: '56px',
   topbar: '56px',
   aside: '360px',
+  // Grid column minimums (design-system.md section 9.2): a numeric field, a form field, a card, a chart.
+  columnNarrow: '160px',
+  columnField: '200px',
+  columnCard: '280px',
+  columnChart: '420px',
   gutterSm: '16px',
   gutterMd: '24px',
   gutterXl: '40px',

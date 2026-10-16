@@ -73,3 +73,31 @@ public sealed class DashboardRulesTests
         DashboardService.FoldProviders(rows, names, byProvider: true, byModel: true).Count.ShouldBe(2);
     }
 }
+
+/// <summary>The request detail publishes the stored Routing Decision as a typed shape, so the dashboard needs no hand-written one.</summary>
+public sealed class RoutingDecisionViewTests
+{
+    [Fact]
+    public void The_stored_document_maps_to_the_typed_view()
+    {
+        var first = Guid.CreateVersion7();
+        var excluded = Guid.CreateVersion7();
+        var node = System.Text.Json.Nodes.JsonNode.Parse(
+            $$"""{"strategy":"rules","ruleMatched":0,"maxOutputTokens":1024,"ordered":["{{first}}"],"excluded":[{"model":"{{excluded}}","reason":"capability_missing"}]}""");
+
+        var view = RoutingDecisionView.From(node).ShouldNotBeNull();
+
+        view.Strategy.ShouldBe("rules");
+        view.RuleMatched.ShouldBe(0);
+        view.MaxOutputTokens.ShouldBe(1024);
+        view.Ordered.ShouldBe([first]);
+        view.Excluded.ShouldBe([new ExcludedCandidateView(excluded, "capability_missing")]);
+    }
+
+    [Fact]
+    public void A_request_routing_never_reached_has_no_decision_and_a_null_rule_is_none()
+    {
+        RoutingDecisionView.From(null).ShouldBeNull();
+        RoutingDecisionView.From(System.Text.Json.Nodes.JsonNode.Parse("""{"strategy":"static","ruleMatched":null,"ordered":[],"excluded":[]}"""))!.RuleMatched.ShouldBeNull();
+    }
+}

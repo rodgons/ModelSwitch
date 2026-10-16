@@ -78,6 +78,9 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 
 ## Phase 5: Evaluation (≈2 weeks)
 
+- [ ] Carried over from Phase 4: `origin` in the `usage_hourly` key, so long-range Overview and usage figures can separate evaluation traffic from API traffic (until then `origin`, `status`, `errorCode`, `hadFallback` and `providerId` usage filters read only the 30 days of raw rows)
+- [ ] Carried over from Phase 4: `POST /admin/routing-policies/{policyId}/simulate` and the Routing screen's simulate panel; the reserved amount of the current Budget period on the Tenant detail (its gauge shows spent and limit today)
+
 - [ ] `evaluation` schema; dataset JSONL upload + versioning; prompts + versions
 - [ ] Evaluators: exact_match, json_fields, classification (P/R/F1), reference_similarity, llm_judge
 - [ ] Run creation (frozen configuration), worker execution with resume, cancellation

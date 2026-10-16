@@ -1,10 +1,10 @@
 import * as stylex from '@stylexjs/stylex'
 import { color } from '@/shared/design/color.stylex'
-import { radius } from '@/shared/design/space.stylex'
+import { radius, space } from '@/shared/design/space.stylex'
 
 export const gauge = stylex.create({
   track: {
-    height: '8px',
+    height: space.s8,
     borderRadius: radius.hair,
     backgroundColor: color.bgSubtle,
     overflow: 'hidden',

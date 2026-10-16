@@ -79,9 +79,34 @@ internal sealed record RequestDetailView(
     int InputBytes,
     string TraceId,
     string? TraceUrl,
-    JsonNode? RoutingDecision,
+    RoutingDecisionView? RoutingDecision,
     IReadOnlyList<AttemptTimelineView> Attempts,
     IReadOnlyList<UsageRecordDetailView> UsageRecords);
+
+/// <summary>A Candidate routing left out, and why (an eligibility reason code, routing-and-resilience.md section 1).</summary>
+internal sealed record ExcludedCandidateView(Guid Model, string Reason);
+
+/// <summary>
+/// The recorded Routing Decision (data-model.md, <c>routing_decision</c>): the strategy, the rule matched (0-based, null for none), the
+/// output ceiling, the ordered eligible Candidates and the excluded ones. Provider Model ids only; the dashboard names them.
+/// </summary>
+internal sealed record RoutingDecisionView(string? Strategy, int? RuleMatched, int? MaxOutputTokens, IReadOnlyList<Guid> Ordered, IReadOnlyList<ExcludedCandidateView> Excluded)
+{
+    public static RoutingDecisionView? From(JsonNode? node)
+    {
+        if (node is not JsonObject decision)
+        {
+            return null;
+        }
+
+        return new RoutingDecisionView(
+            decision["strategy"]?.GetValue<string>(),
+            decision["ruleMatched"]?.GetValue<int>(),
+            decision["maxOutputTokens"]?.GetValue<int>(),
+            [.. (decision["ordered"] as JsonArray ?? []).Select(id => Guid.Parse(id!.GetValue<string>()))],
+            [.. (decision["excluded"] as JsonArray ?? []).Select(e => new ExcludedCandidateView(Guid.Parse(e!["model"]!.GetValue<string>()), e["reason"]!.GetValue<string>()))]);
+    }
+}
 
 /// <summary>One row of a usage report. Grouping columns that were not asked for are null.</summary>
 internal sealed record UsageRowView(

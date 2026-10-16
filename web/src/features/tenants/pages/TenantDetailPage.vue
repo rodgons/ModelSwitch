@@ -173,7 +173,7 @@ const s = {
                     <Alert v-if="saveLimits.mutation.isSuccess.value" tone="success"
                       >Limits saved. They apply to the next request on every instance.</Alert
                     >
-                    <Grid min="200px" :gap="12">
+                    <Grid min="field" :gap="12">
                       <Field
                         v-slot="{ id: fieldId, invalid }"
                         label="Requests per minute"

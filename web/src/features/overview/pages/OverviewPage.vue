@@ -188,7 +188,7 @@ const count = (value: number | null) => formatTokens(value)
         <template #default="{ data: report }">
           <Stack :gap="48">
             <Readout :items="readout" />
-            <Grid min="420px" :gap="24">
+            <Grid min="chart" :gap="24">
               <Section title="Requests over time" surface>
                 <TimeSeriesChart
                   label="Requests over time by outcome"

@@ -24,6 +24,7 @@ internal sealed class DashboardService(
     public const string TraceUrlTemplateSetting = "Telemetry:TraceUrlTemplate";
 
     private static readonly Error _notFound = new(ErrorCode.NotFound, "The resource was not found.");
+    private static readonly Error _signedOut = new(ErrorCode.Unauthenticated, "Sign in to continue.");
 
     public async Task<Result<RequestPage>> ListRequestsAsync(DashboardQueryString query, CancellationToken cancellationToken)
     {
@@ -47,7 +48,7 @@ internal sealed class DashboardService(
     {
         if (current.Current is not { } administrator)
         {
-            return new Error(ErrorCode.Unauthenticated, "Sign in to continue.");
+            return _signedOut;
         }
 
         var detail = await usage.GetRequestAsync(requestId, TenantIds(administrator), cancellationToken);
@@ -68,7 +69,7 @@ internal sealed class DashboardService(
             detail.InputBytes,
             detail.TraceId,
             TraceUrl(detail.TraceId),
-            detail.RoutingDecision,
+            RoutingDecisionView.From(detail.RoutingDecision),
             timeline,
             [.. detail.UsageRecords.Select(u => new UsageRecordDetailView(
                 u.Id,
@@ -144,17 +145,13 @@ internal sealed class DashboardService(
             return parsed.Error;
         }
 
-        if (current.Current is not { } administrator)
+        var scoped = Scope(new RequestFilter(null, TenantId: parsed.Value.TenantId));
+        if (scoped.IsFailure)
         {
-            return new Error(ErrorCode.Unauthenticated, "Sign in to continue.");
+            return scoped.Error;
         }
 
-        if (parsed.Value.TenantId is { } tenantId && grants.CheckAccess(administrator, tenantId) is { IsFailure: true } denied)
-        {
-            return denied.Error;
-        }
-
-        var report = await usage.OverviewAsync(parsed.Value with { TenantIds = TenantIds(administrator) }, cancellationToken);
+        var report = await usage.OverviewAsync(parsed.Value with { TenantIds = scoped.Value.TenantIds }, cancellationToken);
         return new OverviewView(
             report.From,
             report.To,
@@ -261,7 +258,7 @@ internal sealed class DashboardService(
     {
         if (current.Current is not { } administrator)
         {
-            return new Error(ErrorCode.Unauthenticated, "Sign in to continue.");
+            return _signedOut;
         }
 
         if (filter.TenantId is { } tenantId && grants.CheckAccess(administrator, tenantId) is { IsFailure: true } denied)

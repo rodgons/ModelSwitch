@@ -293,6 +293,13 @@ export const table = stylex.create({
   noWrap: { whiteSpace: 'nowrap' },
   row: { backgroundColor: { default: null, ':hover': color.bgSubtle } },
   highlighted: { backgroundColor: color.accentSubtle },
+  // design-system.md section 9.2, TableScroll: the first column stays in view while a wide table scrolls, below lg.
+  pinned: {
+    position: { default: 'sticky', [bp.lg]: 'static' },
+    insetInlineStart: 0,
+    zIndex: 1,
+    backgroundColor: color.bgSurface,
+  },
 })
 
 export const state = stylex.create({

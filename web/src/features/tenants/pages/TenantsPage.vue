@@ -49,7 +49,7 @@ const s = {
   <Container>
     <PageHeader
       title="Tenants"
-      lede="The customers of the gateway: each one's limits, Budget, model access and API Keys."
+      lede="Each Tenant's limits, Budget, model access and API Keys. Tenants never see each other's data."
     >
       <template #actions
         ><Button v-if="canCreate()" variant="primary" @click="createOpen = true"
