@@ -56,6 +56,8 @@ The "setup time from a clean checkout" metric (PRD §13) is measured by timing t
 | `MODELSWITCH__ConnectionStrings__PostgresMigrator` | ✔ | migrator | `modelswitch_migrator` role |
 | `MODELSWITCH__ConnectionStrings__Valkey` | ✔ | api | |
 | `MODELSWITCH__Security__MasterKey` | ✔ if any `db:` credential | api, worker | 32 bytes base64 |
+| `MODELSWITCH__Security__MasterKeyVersion` | | api, worker | `1`. Version id of the master key, stored with each secret. Raise it when rotating |
+| `MODELSWITCH__Security__PreviousMasterKey` / `PreviousMasterKeyVersion` | during rotation | api, worker | The old key and its version, so secrets written under it still decrypt until re-encrypted |
 | `MODELSWITCH__Security__ApiKeyPepper` | ✔ | api, migrator (`seed` only) | ≥32 bytes base64 |
 | `MODELSWITCH__Seed__TenantName` | for `seed` | migrator | Tenant to find or create. Also `seed --tenant <name>` |
 | `MODELSWITCH__Seed__KeyName` | | migrator | Name of the new API Key, default `seed`. Also `seed --key-name <name>` |

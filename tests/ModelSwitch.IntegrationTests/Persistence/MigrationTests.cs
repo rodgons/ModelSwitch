@@ -24,9 +24,10 @@ public sealed class MigrationTests(PostgresFixture postgres)
         first["identity"].Count.ShouldBe(2);
         first["identity"][0].ShouldEndWith("_Initial");
         first["identity"][1].ShouldEndWith("_Administrators");
-        first["registry"].Count.ShouldBe(2);
+        first["registry"].Count.ShouldBe(3);
         first["registry"][0].ShouldEndWith("_Initial");
         first["registry"][1].ShouldEndWith("_ProviderHealthSnapshot");
+        first["registry"][2].ShouldEndWith("_ProviderSecret");
         first["routing"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         first["config"].ShouldBe(["config_version"]);
         second["identity"].ShouldBeEmpty();
@@ -88,6 +89,7 @@ public sealed class MigrationTests(PostgresFixture postgres)
             "registry.provider",
             "registry.provider_health_snapshot",
             "registry.provider_model",
+            "registry.provider_secret",
             "routing.__ef_migrations_history",
             "routing.model_alias",
             "routing.routing_policy",
