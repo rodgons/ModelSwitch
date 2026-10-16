@@ -185,6 +185,22 @@ public sealed class DashboardEndpointTests(GatewayFixture gateway) : IClassFixtu
     }
 
     [Fact]
+    public async Task The_overview_separates_api_traffic_from_evaluation_traffic()
+    {
+        await CompleteAsync();
+        using var owner = await gateway.OwnerBrowserAsync();
+
+        var api = await OkJsonAsync(await owner.GetAsync($"/admin/overview?tenantId={gateway.TenantId}&origin=api"));
+        var evaluation = await OkJsonAsync(await owner.GetAsync($"/admin/overview?tenantId={gateway.TenantId}&origin=evaluation"));
+        var invalid = await owner.GetAsync("/admin/overview?origin=batch");
+
+        api.GetProperty("totals").GetProperty("requests").GetInt64().ShouldBeGreaterThanOrEqualTo(1);
+        evaluation.GetProperty("totals").GetProperty("requests").GetInt64().ShouldBe(0);
+        invalid.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await AdminBrowser.JsonAsync(invalid)).GetProperty("errors").EnumerateObject().Select(e => e.Name).ShouldBe(["origin"]);
+    }
+
+    [Fact]
     public async Task An_administrator_without_a_session_is_401()
         => (await gateway.Anonymous.GetAsync("/admin/requests", TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 }

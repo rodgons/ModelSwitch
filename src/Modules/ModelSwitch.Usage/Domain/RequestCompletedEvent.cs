@@ -6,6 +6,8 @@ namespace ModelSwitch.Usage.Domain;
 /// The payload of <c>usage.request_completed</c> (data-model.md, <c>outbox_event</c>): written by settlement and by the sweeper,
 /// read by the usage rollup. Metadata only (ADR-0010). One record for both sides, so the shape cannot drift. <c>ProviderModelId</c> is
 /// the Provider Model the request is attributed to in rollups: the one that succeeded, else the last one called, else null.
+/// <c>Origin</c> is the Request Origin (<c>api</c> or <c>evaluation</c>); events written before it was recorded have none, and the
+/// rollup reads them as <c>api</c>, the only origin that existed then.
 /// </summary>
 internal sealed record RequestCompletedEvent(
     Guid RequestId,
@@ -24,7 +26,8 @@ internal sealed record RequestCompletedEvent(
     string Currency,
     DateTimeOffset StartedAt,
     int? DurationMs,
-    int? TtftMs)
+    int? TtftMs,
+    string? Origin = null)
 {
     private static readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
 

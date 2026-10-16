@@ -117,6 +117,14 @@ public sealed class DashboardQueryParserTests
     }
 
     [Fact]
+    public void The_overview_can_be_narrowed_to_one_request_origin()
+    {
+        DashboardQueryParser.Overview(new DashboardQueryString { Origin = "evaluation" }, _now).Value.Origin.ShouldBe(RequestOrigin.Evaluation);
+        DashboardQueryParser.Overview(new DashboardQueryString(), _now).Value.Origin.ShouldBeNull();
+        DashboardQueryParser.Overview(new DashboardQueryString { Origin = "batch" }, _now).Error.FieldErrors!.Keys.ShouldBe(["origin"]);
+    }
+
+    [Fact]
     public void Usage_groups_by_any_combination_and_provider_is_folded_from_provider_models()
     {
         var parsed = DashboardQueryParser.Usage(new DashboardQueryString { GroupBy = ["tenant,provider", "alias"], Interval = "month" }, _now).Value;

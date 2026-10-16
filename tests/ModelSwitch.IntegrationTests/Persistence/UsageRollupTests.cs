@@ -62,12 +62,69 @@ public sealed class UsageRollupTests(PostgresFixture postgres) : IAsyncLifetime
             .ShouldBe([Guid.Empty.ToString(), "1", "1", "0"]);
     }
 
-    private static OpenInferenceRequest Open(Guid id)
-        => new(id, _tenant, RequestOrigin.Api, Guid.CreateVersion7(), null, null, "balanced", null, false, 10, string.Empty);
-
-    private async Task CompleteAsync(RequestOutcome outcome, int durationMs, bool fallback, int input, int output)
+    [Fact]
+    public async Task Api_and_evaluation_requests_of_the_same_hour_alias_and_model_are_rolled_up_in_separate_rows()
     {
-        var opened = (await Ledger.OpenAsync(Open(Guid.CreateVersion7()), CancellationToken.None)).Value;
+        await CompleteAsync(RequestOutcome.Succeeded, durationMs: 300, fallback: false, input: 100, output: 20);
+        await CompleteAsync(RequestOutcome.Succeeded, durationMs: 300, fallback: false, input: 100, output: 20, RequestOrigin.Evaluation);
+        await CompleteAsync(RequestOutcome.Failed, durationMs: 300, fallback: false, input: 10, output: 0, RequestOrigin.Evaluation);
+
+        await Relay.RelayAsync(10, CancellationToken.None);
+
+        (await Rows($"select origin, requests, failed_requests from usage.usage_hourly where tenant_id = '{_tenant}' order by origin"))
+            .ShouldBe([["api", "1", "0"], ["evaluation", "2", "1"]]);
+    }
+
+    [Fact]
+    public async Task An_event_written_before_origin_was_recorded_is_rolled_up_as_api_traffic()
+    {
+        var legacy =
+            $$"""{"requestId":"{{Guid.CreateVersion7()}}","tenantId":"{{_tenant}}","requestedAlias":"legacy","status":"succeeded","usageStatus":"reported","providerModelId":"{{_model}}","selectedProviderModelId":"{{_model}}","attemptCount":1,"hadFallback":false,"inputTokens":5,"cachedInputTokens":null,"outputTokens":1,"estimatedCost":0.001,"currency":"USD","startedAt":"2026-10-15T11:30:00+00:00","durationMs":100,"ttftMs":null}""";
+        await Execute($"insert into jobs.outbox_event (id, type, payload, occurred_at, attempts) values ('{Guid.CreateVersion7()}', 'usage.request_completed', '{legacy}', now(), 0)");
+
+        (await Relay.RelayAsync(10, CancellationToken.None)).ShouldBe(1);
+
+        (await Rows($"select origin, requests from usage.usage_hourly where tenant_id = '{_tenant}' and requested_alias = 'legacy'")).ShouldBe([["api", "1"]]);
+    }
+
+    [Fact]
+    public async Task Long_range_usage_and_overview_answer_an_origin_filter_from_the_rollup()
+    {
+        // Whole hours three days ago exist only in the rollup (no raw rows), so these figures can only come from usage_hourly.
+        var hour = new DateTimeOffset(2026, 10, 12, 9, 0, 0, TimeSpan.Zero).ToString("O", CultureInfo.InvariantCulture);
+        await Execute(
+            "insert into usage.usage_hourly (tenant_id, provider_model_id, requested_alias, origin, hour, requests, failed_requests, fallback_requests, attempts, input_tokens, " +
+            "cached_input_tokens, output_tokens, estimated_cost, duration_ms_sum, latency_histogram, ttft_histogram) values " +
+            $"('{_tenant}', '{_model}', 'balanced', 'api', '{hour}', 7, 1, 0, 7, 700, 0, 70, 0.7, 700, '{{0,0,7,0,0,0,0,0,0,0,0,0,0}}', '{{0,0,0,0,0,0,0,0,0,0,0,0,0}}'), " +
+            $"('{_tenant}', '{_model}', 'balanced', 'evaluation', '{hour}', 3, 0, 0, 3, 300, 0, 30, 0.3, 300, '{{0,0,3,0,0,0,0,0,0,0,0,0,0}}', '{{0,0,0,0,0,0,0,0,0,0,0,0,0}}')");
+        var queries = _services.GetRequiredService<IUsageQueries>();
+        var from = _time.GetUtcNow().AddDays(-7);
+        var to = _time.GetUtcNow();
+
+        var evaluation = await queries.UsageAsync(
+            new UsageQuery(new RequestFilter(null, TenantId: _tenant, Origin: RequestOrigin.Evaluation), from, to, UsageGrouping.None, UsageInterval.Month),
+            CancellationToken.None);
+        var both = await queries.UsageAsync(
+            new UsageQuery(new RequestFilter(null, TenantId: _tenant), from, to, UsageGrouping.None, UsageInterval.Month),
+            CancellationToken.None);
+        var overview = await queries.OverviewAsync(new OverviewQuery(null, from, to, _tenant, RequestOrigin.Api), CancellationToken.None);
+
+        evaluation.Single().Requests.ShouldBe(3);
+        evaluation.Single().EstimatedCost.ShouldBe(0.3m);
+        both.Sum(r => r.Requests).ShouldBe(10);
+        overview.Totals.Requests.ShouldBe(7);
+        overview.Totals.FailedRequests.ShouldBe(1);
+        overview.Totals.Exact.ShouldBeFalse();
+    }
+
+    private static OpenInferenceRequest Open(Guid id, RequestOrigin origin = RequestOrigin.Api)
+        => origin == RequestOrigin.Api
+            ? new(id, _tenant, RequestOrigin.Api, Guid.CreateVersion7(), null, null, "balanced", null, false, 10, string.Empty)
+            : new(id, _tenant, RequestOrigin.Evaluation, null, Guid.CreateVersion7(), null, "balanced", null, false, 10, string.Empty);
+
+    private async Task CompleteAsync(RequestOutcome outcome, int durationMs, bool fallback, int input, int output, RequestOrigin origin = RequestOrigin.Api)
+    {
+        var opened = (await Ledger.OpenAsync(Open(Guid.CreateVersion7(), origin), CancellationToken.None)).Value;
         var started = opened.StartedAt;
         var pricing = new AttemptPricing(Guid.CreateVersion7(), new PriceRates(1m, null, 2m));
         AttemptRecord[] attempts =

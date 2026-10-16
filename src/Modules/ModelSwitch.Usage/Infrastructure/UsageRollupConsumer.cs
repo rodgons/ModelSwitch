@@ -8,7 +8,8 @@ using NpgsqlTypes;
 namespace ModelSwitch.Usage.Infrastructure;
 
 /// <summary>
-/// Folds each <c>usage.request_completed</c> event into <c>usage.usage_hourly</c> (usage-and-budgets.md section 6). The relay runs it on
+/// Folds each <c>usage.request_completed</c> event into its <c>usage.usage_hourly</c> row, one per Tenant, Provider Model, alias,
+/// Request Origin and hour (usage-and-budgets.md section 6). The relay runs it on
 /// the transaction that records the event in <c>processed_event</c>, so a redelivered event changes nothing (NFR-06). One upsert:
 /// counters and histograms are added to the existing row, bucket by bucket.
 /// </summary>
@@ -18,10 +19,10 @@ internal sealed class UsageRollupConsumer : IOutboxConsumer
 
     private const string _upsert =
         """
-        INSERT INTO usage.usage_hourly AS h (tenant_id, provider_model_id, requested_alias, hour, requests, failed_requests, fallback_requests,
+        INSERT INTO usage.usage_hourly AS h (tenant_id, provider_model_id, requested_alias, origin, hour, requests, failed_requests, fallback_requests,
             attempts, input_tokens, cached_input_tokens, output_tokens, estimated_cost, duration_ms_sum, latency_histogram, ttft_histogram)
-        VALUES (@tenant, @model, @alias, @hour, @requests, @failed, @fallback, @attempts, @input, @cached, @output, @cost, @duration, @latency, @ttft)
-        ON CONFLICT (tenant_id, provider_model_id, requested_alias, hour) DO UPDATE SET
+        VALUES (@tenant, @model, @alias, @origin, @hour, @requests, @failed, @fallback, @attempts, @input, @cached, @output, @cost, @duration, @latency, @ttft)
+        ON CONFLICT (tenant_id, provider_model_id, requested_alias, origin, hour) DO UPDATE SET
             requests = h.requests + excluded.requests,
             failed_requests = h.failed_requests + excluded.failed_requests,
             fallback_requests = h.fallback_requests + excluded.fallback_requests,
@@ -53,6 +54,7 @@ internal sealed class UsageRollupConsumer : IOutboxConsumer
         Add(command, "tenant", row.TenantId);
         Add(command, "model", row.ProviderModelId);
         Add(command, "alias", row.RequestedAlias);
+        Add(command, "origin", row.Origin);
         Add(command, "hour", row.Hour);
         Add(command, "requests", row.Requests);
         Add(command, "failed", row.FailedRequests);

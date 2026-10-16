@@ -404,6 +404,10 @@ namespace ModelSwitch.Usage.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("requested_alias");
 
+                    b.Property<string>("Origin")
+                        .HasColumnType("text")
+                        .HasColumnName("origin");
+
                     b.Property<DateTimeOffset>("Hour")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("hour");
@@ -454,12 +458,15 @@ namespace ModelSwitch.Usage.Infrastructure.Migrations
                         .HasColumnType("integer[]")
                         .HasColumnName("ttft_histogram");
 
-                    b.HasKey("TenantId", "ProviderModelId", "RequestedAlias", "Hour");
+                    b.HasKey("TenantId", "ProviderModelId", "RequestedAlias", "Origin", "Hour");
 
                     b.HasIndex("Hour")
                         .HasDatabaseName("ix_usage_hourly_hour");
 
-                    b.ToTable("usage_hourly", "usage");
+                    b.ToTable("usage_hourly", "usage", t =>
+                        {
+                            t.HasCheckConstraint("ck_usage_hourly_origin", "origin in ('api', 'evaluation')");
+                        });
                 });
 
             modelBuilder.Entity("ModelSwitch.Usage.Domain.UsageRecordRow", b =>

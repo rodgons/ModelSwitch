@@ -54,7 +54,7 @@ internal sealed class EfReservationSweeper(IDbContextFactory<UsageDbContext> con
         // request is no longer running and there is nothing to recover.
         var identity = await db.InferenceRequests
             .Where(r => r.Id == reservation.RequestId && r.StartedAt == reservation.RequestStartedAt && r.Status == "running")
-            .Select(r => new { r.TenantId, r.RequestedAlias })
+            .Select(r => new { r.TenantId, r.RequestedAlias, r.Origin })
             .FirstOrDefaultAsync(cancellationToken);
         if (identity is null)
         {
@@ -132,7 +132,8 @@ internal sealed class EfReservationSweeper(IDbContextFactory<UsageDbContext> con
             Money.Usd,
             reservation.RequestStartedAt,
             DurationMs: null,
-            TtftMs: null).ToJson();
+            TtftMs: null,
+            identity.Origin).ToJson();
         await OutboxWriter.AppendAsync(
             db.Database.GetDbConnection(),
             db.Database.CurrentTransaction!.GetDbTransaction(),
