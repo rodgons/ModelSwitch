@@ -34,7 +34,7 @@ web/src/
 | `/providers` | Provider list + health; create/edit, write-only secret field, connectivity test button with result | Owner (write) |
 | `/providers/:id/models` | Models, capability editor (checkboxes + numeric fields), enable toggle, Price history + "add price" | Owner |
 | `/routing` | Policies + aliases; policy editor (form view for strategy, Candidates and execution limits + JSON view for everything else), validation, version history with diff. The **simulate** panel waits for `POST /admin/routing-policies/{id}/simulate` (api.md section 3) | Owner (write) |
-| `/tenants` | Tenant list, status; detail: limits, Budget gauge (this month's Estimated Cost against the limit, from `/admin/usage`; the reserved amount is not exposed by the API yet), allowed aliases, API keys (create shows the key once in a dialog with copy + "I've saved it"), usage summary | Operator |
+| `/tenants` | Tenant list, status; detail: limits, Budget gauge (the current period's spent and reserved amounts as two labelled segments against the limit, from the Tenant's `budgetPeriod`), allowed aliases, API keys (create shows the key once in a dialog with copy + "I've saved it"), usage summary | Operator |
 | `/evaluations` | Datasets (upload JSONL, versions, cases), prompts, Comparisons list | Operator |
 | `/evaluations/new` | Run Configuration builder (1–6 configurations) with a cost estimate before starting | Operator |
 | `/comparisons/:id` | Side-by-side table (quality, errored %, p50/p95 latency, Estimated Cost per case and total), quality-vs-cost scatter, per-class metrics, Case drill-down with diff between runs, export | Viewer |

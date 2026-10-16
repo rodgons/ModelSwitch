@@ -28,7 +28,18 @@ internal sealed record LimitsView(int? RequestsPerMinute, int? MaxConcurrent, de
 
 internal sealed record ModelAccessView(IReadOnlyList<string> AllowedAliases);
 
-internal sealed record TenantDetailView(Guid Id, string Name, string Status, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, LimitsView Limits, ModelAccessView ModelAccess);
+/// <summary>The current month of the Tenant's Budget: <c>spent + reserved</c> is what the next Reservation is checked against.</summary>
+internal sealed record BudgetPeriodView(DateOnly PeriodStart, decimal? Limit, decimal Reserved, decimal Spent, string Currency);
+
+internal sealed record TenantDetailView(
+    Guid Id,
+    string Name,
+    string Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    LimitsView Limits,
+    ModelAccessView ModelAccess,
+    BudgetPeriodView BudgetPeriod);
 
 /// <summary>
 /// Tenants, their limits and their model access (api.md section 3). The endpoint policy enforces the Role; every method here checks
@@ -241,6 +252,7 @@ internal sealed class TenantService(
     {
         var row = await store.FindLimitsAsync(tenant.Id, cancellationToken);
         var budget = await budgets.GetMonthlyLimitAsync(tenant.Id, cancellationToken);
+        var period = await budgets.GetCurrentPeriodAsync(tenant.Id, cancellationToken);
         return new TenantDetailView(
             tenant.Id,
             tenant.Name,
@@ -248,7 +260,8 @@ internal sealed class TenantService(
             tenant.CreatedAt,
             tenant.UpdatedAt,
             ToView(row?.RequestsPerMinute, row?.MaxConcurrent, row?.MaxRequestCost, budget),
-            new ModelAccessView(row?.AllowedAliases ?? [TenantRules.Wildcard]));
+            new ModelAccessView(row?.AllowedAliases ?? [TenantRules.Wildcard]),
+            new BudgetPeriodView(period.PeriodStart, period.Limit, period.Reserved, period.Spent, Money.Usd));
     }
 
     private static LimitsView ToView(int? requestsPerMinute, int? maxConcurrent, decimal? maxRequestCost, decimal? budget)

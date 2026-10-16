@@ -1925,6 +1925,40 @@
           }
         }
       },
+      "BudgetPeriodView": {
+        "required": [
+          "periodStart",
+          "limit",
+          "reserved",
+          "spent",
+          "currency"
+        ],
+        "type": "object",
+        "properties": {
+          "periodStart": {
+            "type": "string",
+            "format": "date"
+          },
+          "limit": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "reserved": {
+            "type": "number",
+            "format": "double"
+          },
+          "spent": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
+          }
+        }
+      },
       "BudgetRequest": {
         "required": [
           "amount",
@@ -3514,7 +3548,8 @@
           "createdAt",
           "updatedAt",
           "limits",
-          "modelAccess"
+          "modelAccess",
+          "budgetPeriod"
         ],
         "type": "object",
         "properties": {
@@ -3541,6 +3576,9 @@
           },
           "modelAccess": {
             "$ref": "#/components/schemas/ModelAccessView"
+          },
+          "budgetPeriod": {
+            "$ref": "#/components/schemas/BudgetPeriodView"
           }
         }
       },

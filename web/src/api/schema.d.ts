@@ -1616,6 +1616,17 @@ export interface components {
       policyId: null | string
       description: null | string
     }
+    BudgetPeriodView: {
+      /** Format: date */
+      periodStart: string
+      /** Format: double */
+      limit: null | number
+      /** Format: double */
+      reserved: number
+      /** Format: double */
+      spent: number
+      currency: string
+    }
     BudgetRequest: {
       /** Format: double */
       amount: null | number
@@ -2016,6 +2027,7 @@ export interface components {
       updatedAt: string
       limits: components['schemas']['LimitsView']
       modelAccess: components['schemas']['ModelAccessView']
+      budgetPeriod: components['schemas']['BudgetPeriodView']
     }
     TenantView: {
       /** Format: uuid */
