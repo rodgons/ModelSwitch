@@ -136,6 +136,28 @@ public sealed class TenantAdminEndpointTests(AdminFixture admin) : IClassFixture
     }
 
     [Fact]
+    public async Task The_tenant_detail_shows_the_current_budget_period_with_the_reserved_amount()
+    {
+        using var owner = await admin.SignedInOwnerAsync();
+        var id = await CreateTenantAsync(owner);
+        var untouched = await AdminBrowser.JsonAsync(await owner.GetAsync($"/admin/tenants/{id}"));
+        await admin.ScalarAsync(
+            "insert into usage.budget_period (tenant_id, period_start, limit_amount, reserved_amount, spent_amount, currency) " +
+            $"values ('{id}', date_trunc('month', now() at time zone 'utc')::date, 10, 0.25, 1.5, 'USD')");
+
+        var body = await AdminBrowser.JsonAsync(await owner.GetAsync($"/admin/tenants/{id}"));
+
+        var period = body.GetProperty("budgetPeriod");
+        period.GetProperty("periodStart").GetString().ShouldBe(new DateOnly(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+        period.GetProperty("limit").GetDecimal().ShouldBe(10m);
+        period.GetProperty("reserved").GetDecimal().ShouldBe(0.25m);
+        period.GetProperty("spent").GetDecimal().ShouldBe(1.5m);
+        period.GetProperty("currency").GetString().ShouldBe("USD");
+        untouched.GetProperty("budgetPeriod").GetProperty("reserved").GetDecimal().ShouldBe(0m);
+        untouched.GetProperty("budgetPeriod").GetProperty("limit").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
     [HappyPath("PATCH /admin/tenants/{tenantId:guid}")]
     public async Task Patching_renames_and_suspends_with_their_own_audit_actions()
     {

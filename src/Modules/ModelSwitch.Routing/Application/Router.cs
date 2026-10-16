@@ -1,4 +1,5 @@
 using ModelSwitch.Routing.Contracts;
+using ModelSwitch.Routing.Domain;
 using ModelSwitch.SharedKernel.Errors;
 
 namespace ModelSwitch.Routing.Application;
@@ -54,13 +55,15 @@ internal sealed class Router : IRouter
         }
 
         var ordered = Rank(definition.Strategy, eligible);
+        List<RankedCandidate> truncated = [];
         if (definition.MaxCandidates is { } max && ordered.Count > max)
         {
+            truncated = ordered.Skip(max).ToList();
             ordered = ordered.Take(max).ToList();
         }
 
         var decision = new RoutingDecision(
-            policy.PolicyId, policy.Version, definition.Strategy, ruleMatched, maxOutput, ordered, excluded, definition.Execution);
+            policy.PolicyId, policy.Version, definition.Strategy, ruleMatched, maxOutput, ordered, excluded, definition.Execution, truncated);
         return Conclude(decision, input);
     }
 
@@ -194,7 +197,7 @@ internal sealed class Router : IRouter
             return new Verdict(EligibilityReason.NoPrice, null);
         }
 
-        var worstCase = (inputTokens * price.InputPerMillion / 1_000_000m) + (maxOutput * price.OutputPerMillion / 1_000_000m);
+        var worstCase = WorstCase.Cost(inputTokens, maxOutput, price);
         if (costLimit is { } limit && worstCase > limit)
         {
             return new Verdict(EligibilityReason.OverRequestCostLimit, null);

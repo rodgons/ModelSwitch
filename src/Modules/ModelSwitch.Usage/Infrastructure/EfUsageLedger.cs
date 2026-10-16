@@ -120,7 +120,7 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
 
         var identity = await db.InferenceRequests
             .Where(r => r.Id == settlement.RequestId && r.StartedAt == settlement.StartedAt && r.Status == "running")
-            .Select(r => new { r.TenantId, r.RequestedAlias })
+            .Select(r => new { r.TenantId, r.RequestedAlias, r.Origin })
             .FirstOrDefaultAsync(cancellationToken);
         if (identity is null)
         {
@@ -249,7 +249,8 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
             Money.Usd,
             settlement.StartedAt,
             durationMs,
-            settlement.TtftMs).ToJson();
+            settlement.TtftMs,
+            identity.Origin).ToJson();
         await OutboxWriter.AppendAsync(
             db.Database.GetDbConnection(),
             db.Database.CurrentTransaction!.GetDbTransaction(),

@@ -20,6 +20,7 @@ import TableScroll from '@/shared/layout/TableScroll.vue'
 import AliasDialog from '../components/AliasDialog.vue'
 import CreatePolicyDialog from '../components/CreatePolicyDialog.vue'
 import PolicyEditor from '../components/PolicyEditor.vue'
+import SimulatePanel from '../components/SimulatePanel.vue'
 import VersionHistory from '../components/VersionHistory.vue'
 import { routingKeys, usePolicies } from '../queries'
 
@@ -162,6 +163,9 @@ const rowAttrs = (id: string) =>
               </Section>
             </template>
           </Split>
+          <Section v-if="selected" :title="`Simulate a request on ${selected.name}`" surface>
+            <SimulatePanel :policy="selected" />
+          </Section>
         </Stack>
         <AliasDialog v-model:visible="aliasOpen" :policies="page.items" :policy-id="selectedId" />
       </template>

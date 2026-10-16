@@ -1,5 +1,6 @@
 using ModelSwitch.Routing.Application;
 using ModelSwitch.Routing.Contracts;
+using ModelSwitch.Routing.Domain;
 using ModelSwitch.SharedKernel.Errors;
 using Shouldly;
 using static ModelSwitch.UnitTests.Routing.RoutingFixtures;
@@ -392,6 +393,22 @@ public sealed class RouterTests
 
         ids.ShouldBe(strategy == PolicyStrategy.Cost ? [Cheap, Mid] : [Pricey, Mid]);
     }
+
+    [Fact]
+    public void Eligible_candidates_cut_by_max_candidates_are_kept_on_the_decision_in_rank_order()
+    {
+        var snapshot = Snapshot(Definition(PolicyStrategy.Cost, candidates: [Pricey, Mid, Cheap], maxCandidates: 1));
+
+        var decision = _router.Decide(Input(snapshot)).Decision!;
+
+        decision.Ordered.Select(c => c.ProviderModelId).ShouldBe([Cheap]);
+        decision.Truncated.ShouldNotBeNull().Select(c => c.ProviderModelId).ShouldBe([Mid, Pricey]);
+        decision.Truncated![0].WorstCaseEstimatedCost.ShouldBe(WorstCase.Cost(1_000, 500, new PriceInForce(3m, 6m)));
+    }
+
+    [Fact]
+    public void Worst_case_cost_is_the_input_estimate_and_the_output_ceiling_at_the_price_in_force()
+        => WorstCase.Cost(1_000, 500, new PriceInForce(3m, 6m)).ShouldBe(0.006m);
 
     // ---- rules strategy ----
 

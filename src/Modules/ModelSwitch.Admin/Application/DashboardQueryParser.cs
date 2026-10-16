@@ -172,26 +172,16 @@ internal static partial class DashboardQueryParser
         var errors = new Dictionary<string, string[]>();
         var (from, to) = Range(query, now, errors, defaultRange: true);
         var tenantId = Guid(query.TenantId, "tenantId", errors);
+        var origin = Origin(query.Origin, errors);
         return errors.Count > 0
             ? Error.Validation("The overview query is invalid.", errors)
-            : new OverviewQuery(null, from!.Value, to!.Value, tenantId);
+            : new OverviewQuery(null, from!.Value, to!.Value, tenantId, origin);
     }
 
     private static RequestFilter Filter(DashboardQueryString query, DateTimeOffset now, Dictionary<string, string[]> errors, bool defaultRange)
     {
         var (from, to) = Range(query, now, errors, defaultRange);
-        RequestOrigin? origin = null;
-        if (query.Origin is not null)
-        {
-            if (RequestOrigins.TryParse(query.Origin, out var parsed))
-            {
-                origin = parsed;
-            }
-            else
-            {
-                errors["origin"] = ["The origin must be api or evaluation."];
-            }
-        }
+        var origin = Origin(query.Origin, errors);
 
         if (query.Alias is not null && !AliasPattern().IsMatch(query.Alias))
         {
@@ -269,6 +259,22 @@ internal static partial class DashboardQueryParser
         }
 
         errors[name] = ["It must be an ISO-8601 UTC timestamp."];
+        return null;
+    }
+
+    private static RequestOrigin? Origin(string? value, Dictionary<string, string[]> errors)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (RequestOrigins.TryParse(value, out var parsed))
+        {
+            return parsed;
+        }
+
+        errors["origin"] = ["The origin must be api or evaluation."];
         return null;
     }
 

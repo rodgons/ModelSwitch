@@ -16,7 +16,8 @@ public sealed class HourlyContributionTests
         int? durationMs = 420,
         int? ttftMs = null,
         int? cached = null,
-        DateTimeOffset? startedAt = null)
+        DateTimeOffset? startedAt = null,
+        string? origin = "api")
         => new(
             Guid.CreateVersion7(),
             _tenant,
@@ -34,7 +35,8 @@ public sealed class HourlyContributionTests
             "USD",
             startedAt ?? new DateTimeOffset(2026, 10, 15, 13, 59, 59, 999, TimeSpan.FromHours(2)),
             durationMs,
-            ttftMs);
+            ttftMs,
+            origin);
 
     [Fact]
     public void A_request_is_counted_in_the_utc_hour_it_started_in()
@@ -94,5 +96,21 @@ public sealed class HourlyContributionTests
         var completed = Completed(model: _model, ttftMs: 12, cached: 3);
         RequestCompletedEvent.FromJson(completed.ToJson()).ShouldBe(completed);
         completed.ToJson().ShouldContain("\"requestedAlias\":\"balanced\"");
+    }
+
+    [Theory]
+    [InlineData("api")]
+    [InlineData("evaluation")]
+    public void A_request_is_rolled_up_under_its_request_origin(string origin)
+        => HourlyContribution.From(Completed(origin: origin)).Origin.ShouldBe(origin);
+
+    [Fact]
+    public void An_event_written_before_origin_was_recorded_counts_as_api_traffic()
+    {
+        // Events already in the outbox when the rollup learned origin have no origin member; only API traffic existed then.
+        var legacy = Completed(model: _model, origin: null).ToJson().Replace(",\"origin\":null", string.Empty, StringComparison.Ordinal);
+
+        legacy.ShouldNotContain("origin");
+        HourlyContribution.From(RequestCompletedEvent.FromJson(legacy)).Origin.ShouldBe("api");
     }
 }

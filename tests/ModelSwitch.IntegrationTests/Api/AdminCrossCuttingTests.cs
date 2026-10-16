@@ -72,6 +72,8 @@ public sealed class AdminCrossCuttingTests(AdminFixture admin) : IClassFixture<A
     {
         public Task<decimal?> GetMonthlyLimitAsync(Guid tenantId, CancellationToken cancellationToken) => inner.GetMonthlyLimitAsync(tenantId, cancellationToken);
 
+        public Task<TenantBudgetPeriod> GetCurrentPeriodAsync(Guid tenantId, CancellationToken cancellationToken) => inner.GetCurrentPeriodAsync(tenantId, cancellationToken);
+
         public async Task SetMonthlyLimitAsync(Guid tenantId, decimal? amount, DbTransaction transaction, CancellationToken cancellationToken)
         {
             await inner.SetMonthlyLimitAsync(tenantId, amount, transaction, cancellationToken);

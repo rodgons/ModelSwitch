@@ -22,6 +22,7 @@ internal static class RoutingAdminEndpoints
         admin.MapPost("/routing-policies", CreateAsync).Produces<PolicyVersionView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Owner);
         admin.MapPost("/routing-policies/validate", ValidateAsync).Produces<PolicyValidationView>().RequireAuthorization(AdminPolicies.Owner);
         admin.MapPut("/routing-policies/{policyId:guid}", UpdateAsync).Produces<PolicyVersionView>().RequireAuthorization(AdminPolicies.Owner);
+        admin.MapPost("/routing-policies/{policyId:guid}/simulate", SimulateAsync).Produces<RoutingSimulationView>().RequireAuthorization(AdminPolicies.Viewer);
         admin.MapGet("/routing-policies/{policyId:guid}/versions", ListVersionsAsync).Produces<PagedResult<PolicyVersionView>>().RequireAuthorization(AdminPolicies.Viewer);
         admin.MapGet("/routing-policies/{policyId:guid}/versions/{version:int}", GetVersionAsync).Produces<PolicyVersionView>().RequireAuthorization(AdminPolicies.Viewer);
 
@@ -52,6 +53,9 @@ internal static class RoutingAdminEndpoints
             ? ProblemResults.From(http, result.Error)
             : Results.Json(result.Value, statusCode: StatusCodes.Status200OK);
     }
+
+    private static async Task<IResult> SimulateAsync(HttpContext http, Guid policyId, SimulateRoutingRequest? request, RoutingSimulationService simulations)
+        => Json(http, await simulations.SimulateAsync(policyId, request ?? new SimulateRoutingRequest(null, null, null, null, null, null), http.RequestAborted));
 
     private static async Task<IResult> ListVersionsAsync(HttpContext http, Guid policyId, PolicyAdminService policies, string? limit, string? cursor)
         => Json(http, await policies.ListVersionsAsync(policyId, limit, cursor, http.RequestAborted));

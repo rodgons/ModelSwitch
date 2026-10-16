@@ -98,11 +98,12 @@ internal sealed class UsageDbContext(DbContextOptions<UsageDbContext> options) :
 
         modelBuilder.Entity<UsageHourlyRow>(hourly =>
         {
-            hourly.ToTable("usage_hourly");
-            hourly.HasKey(x => new { x.TenantId, x.ProviderModelId, x.RequestedAlias, x.Hour });
+            hourly.ToTable("usage_hourly", t => t.HasCheckConstraint("ck_usage_hourly_origin", "origin in ('api', 'evaluation')"));
+            hourly.HasKey(x => new { x.TenantId, x.ProviderModelId, x.RequestedAlias, x.Origin, x.Hour });
             hourly.Property(x => x.TenantId).HasColumnName("tenant_id");
             hourly.Property(x => x.ProviderModelId).HasColumnName("provider_model_id");
             hourly.Property(x => x.RequestedAlias).HasColumnName("requested_alias");
+            hourly.Property(x => x.Origin).HasColumnName("origin").IsRequired();
             hourly.Property(x => x.Hour).HasColumnName("hour");
             hourly.Property(x => x.Requests).HasColumnName("requests");
             hourly.Property(x => x.FailedRequests).HasColumnName("failed_requests");

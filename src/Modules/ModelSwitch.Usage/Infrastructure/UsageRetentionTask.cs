@@ -39,7 +39,7 @@ internal sealed class UsageRetentionTask : IRetentionTask
         removed += await RetentionSql.DeleteInBatchesAsync(source, "usage.provider_attempt", "id, started_at", "started_at < @cutoff", cutoffs.Requests, batch, cancellationToken);
         removed += await RetentionSql.DeleteInBatchesAsync(source, "usage.inference_request", "id, started_at", "started_at < @cutoff AND status <> 'running'", cutoffs.Requests, batch, cancellationToken);
         removed += await RetentionSql.DeleteInBatchesAsync(source, "usage.usage_record", "id", "recorded_at < @cutoff", cutoffs.Usage, batch, cancellationToken);
-        removed += await RetentionSql.DeleteInBatchesAsync(source, "usage.usage_hourly", "tenant_id, provider_model_id, requested_alias, hour", "hour < @cutoff", cutoffs.Usage, batch, cancellationToken);
+        removed += await RetentionSql.DeleteInBatchesAsync(source, "usage.usage_hourly", "tenant_id, provider_model_id, requested_alias, origin, hour", "hour < @cutoff", cutoffs.Usage, batch, cancellationToken);
         return removed;
     }
 }

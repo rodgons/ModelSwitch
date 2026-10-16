@@ -4,7 +4,7 @@ using Shouldly;
 namespace ModelSwitch.IntegrationTests.Infrastructure;
 
 /// <summary>The ids of the other Tenant's resources the matrix aims at; add a property when a new kind of tenant-scoped id appears.</summary>
-public sealed record ForeignIds(Guid TenantId, Guid ApiKeyId, Guid RequestId = default, Guid DatasetId = default, Guid PromptId = default);
+public sealed record ForeignIds(Guid TenantId, Guid ApiKeyId, Guid RequestId = default, Guid DatasetId = default, Guid PromptId = default, Guid PolicyId = default);
 
 /// <summary>
 /// One tenant-scoped admin endpoint: the verb, the path built from <see cref="ForeignIds"/> and a valid body for writes (an
@@ -52,6 +52,12 @@ public static class TenantIsolationMatrix
         new("/admin/prompts/{promptId:guid}/versions", HttpMethod.Get, ids => $"/admin/prompts/{ids.PromptId}/versions"),
         new("/admin/prompts/{promptId:guid}/versions", HttpMethod.Post, ids => $"/admin/prompts/{ids.PromptId}/versions", _ => new { messages = new[] { new { role = "user", content = "{{text}}" } } }),
         new("/admin/prompts/{promptId:guid}/versions/{version:int}", HttpMethod.Get, ids => $"/admin/prompts/{ids.PromptId}/versions/1"),
+        new(
+            "/admin/routing-policies/{policyId:guid}/simulate",
+            HttpMethod.Post,
+            ids => $"/admin/routing-policies/{ids.PolicyId}/simulate",
+            ids => new { tenantId = ids.TenantId, estimatedInputTokens = 100 },
+            ByQuery: true),
     ];
 
     /// <summary>The route parameters that carry a tenant-scoped id; a route with one must be in <see cref="Routes"/> (the coverage gate).</summary>
@@ -69,7 +75,8 @@ public static class TenantIsolationMatrix
         ArgumentNullException.ThrowIfNull(caller);
         foreach (var route in Routes.Where(r => r.HasChildId))
         {
-            using var response = await caller.SendJsonAsync(route.Method, route.Path(new ForeignIds(ownTenantId, foreignApiKeyId)), route.Body?.Invoke(new ForeignIds(ownTenantId, foreignApiKeyId)));
+            var ids = new ForeignIds(ownTenantId, foreignApiKeyId);
+            using var response = await caller.SendJsonAsync(route.Method, route.Path(ids), route.Body?.Invoke(ids));
             response.StatusCode.ShouldBe(HttpStatusCode.NotFound, $"{route.Name} must not reach another Tenant's child id");
             (await AdminBrowser.ErrorCodeAsync(response)).ShouldBe("not_found", route.Name);
         }

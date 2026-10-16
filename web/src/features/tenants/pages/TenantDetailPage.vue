@@ -103,18 +103,22 @@ const changeStatus = useFormMutation(
   () => (statusOpen.value = false),
 )
 
-const spent = computed(() =>
-  (usage.data.value?.items ?? []).reduce((sum, row) => sum + row.estimatedCost, 0),
+// The current Budget period as the Reservation sees it: settled Estimated Cost plus what requests in flight hold.
+const budget = computed(() => {
+  const period = tenant.data.value?.budgetPeriod
+  return budgetUse(period?.spent ?? 0, period?.reserved ?? 0, period?.limit)
+})
+const percent = (share: number) => `${(share * 100).toFixed(1)}%`
+const spentAttrs = computed(() =>
+  stylex.props(gauge.segment(percent(budget.value.spentShare)), gauge[budget.value.tone]),
 )
-const budget = computed(() => budgetUse(spent.value, tenant.data.value?.limits.budget?.amount))
-const fillAttrs = computed(() =>
-  stylex.props(
-    gauge.fill(`${Math.min(100, (budget.value.ratio ?? 0) * 100).toFixed(1)}%`),
-    gauge[budget.value.tone],
-  ),
+const reservedAttrs = computed(() =>
+  stylex.props(gauge.segment(percent(budget.value.reservedShare)), gauge.reserved),
 )
+const spentSwatch = computed(() => stylex.props(gauge.swatch, gauge[budget.value.tone]))
 const s = {
   track: stylex.props(gauge.track),
+  reservedSwatch: stylex.props(gauge.swatch, gauge.reserved),
   table: stylex.props(table.table),
   th: stylex.props(table.th),
   thNumber: stylex.props(table.th, table.number),
@@ -270,26 +274,49 @@ const s = {
               <Stack :gap="48">
                 <Section title="Budget this month">
                   <Stack :gap="8">
-                    <Inline :gap="6"
-                      ><Money :amount="spent" estimated />
-                      <span v-if="detail.limits.budget"
-                        >of <Money :amount="detail.limits.budget.amount" :estimated="false" /></span
-                    ></Inline>
                     <div
                       v-if="budget.ratio !== null"
                       v-bind="s.track"
                       role="meter"
-                      :aria-valuenow="Math.round((budget.ratio ?? 0) * 100)"
+                      :aria-valuenow="Math.round(budget.ratio * 100)"
                       aria-valuemin="0"
                       aria-valuemax="100"
+                      :aria-valuetext="`${formatPercent(budget.ratio)} of the Budget spent or reserved`"
                       aria-label="Budget used"
                     >
-                      <div v-bind="fillAttrs" />
+                      <div v-bind="spentAttrs" />
+                      <div v-bind="reservedAttrs" />
                     </div>
+                    <Facts
+                      :items="[
+                        { label: 'Spent', value: '', key: 'spent' },
+                        { label: 'Reserved', value: '', key: 'reserved' },
+                        { label: 'Limit', value: '', key: 'limit' },
+                      ]"
+                    >
+                      <template #spent
+                        ><span v-if="budget.ratio !== null" v-bind="spentSwatch" /><Money
+                          :amount="detail.budgetPeriod.spent"
+                          estimated
+                      /></template>
+                      <template #reserved
+                        ><span v-if="budget.ratio !== null" v-bind="s.reservedSwatch" /><Money
+                          :amount="detail.budgetPeriod.reserved"
+                          estimated
+                      /></template>
+                      <template #limit>
+                        <Money
+                          v-if="detail.budgetPeriod.limit !== null"
+                          :amount="detail.budgetPeriod.limit"
+                          :estimated="false"
+                        />
+                        <span v-else>None</span>
+                      </template>
+                    </Facts>
                     <span v-bind="s.caption">{{
                       budget.ratio === null
                         ? 'No Budget: spending is not capped.'
-                        : `${formatPercent(budget.ratio)} of the Budget used. Requests in flight hold a little more.`
+                        : `${formatPercent(budget.ratio)} of the Budget spent or reserved. Reserved is held by requests in flight until they settle.`
                     }}</span>
                   </Stack>
                 </Section>

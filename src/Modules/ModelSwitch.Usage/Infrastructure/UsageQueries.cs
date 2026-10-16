@@ -140,8 +140,9 @@ internal sealed class UsageQueries(IDbContextFactory<UsageDbContext> contexts) :
         ArgumentNullException.ThrowIfNull(query);
         var filter = query.Filter;
 
-        // The rollup has no origin, status, error code, fallback or Provider column: such filters are answered from the raw rows only.
-        var rawOnly = filter.Origin is not null || filter.Status is not null || filter.ErrorCode is not null || filter.HadFallback is not null || filter.ProviderId is not null;
+        // The rollup has no status, error code, fallback or Provider column: such filters are answered from the raw rows only. It is
+        // keyed by origin, so an origin filter still reads it.
+        var rawOnly = filter.Status is not null || filter.ErrorCode is not null || filter.HadFallback is not null || filter.ProviderId is not null;
         var plan = rawOnly ? new UsageRangePlan(true, null, [(query.From, query.To)]) : UsageRange.Plan(query.From, query.To);
         var unit = query.Interval switch
         {
@@ -188,7 +189,7 @@ internal sealed class UsageQueries(IDbContextFactory<UsageDbContext> contexts) :
         ArgumentNullException.ThrowIfNull(query);
         var plan = UsageRange.Plan(query.From, query.To);
         var step = UsageRange.StepFor(query.To - query.From);
-        var filter = new RequestFilter(query.TenantIds, TenantId: query.TenantId);
+        var filter = new RequestFilter(query.TenantIds, TenantId: query.TenantId, Origin: query.Origin);
 
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         var connection = await OpenAsync(db, cancellationToken);
@@ -504,6 +505,11 @@ internal sealed class UsageQueries(IDbContextFactory<UsageDbContext> contexts) :
         if (filter.Alias is { } alias)
         {
             where.Add($"h.requested_alias = {sql.Add(alias)}");
+        }
+
+        if (filter.Origin is { } origin)
+        {
+            where.Add($"h.origin = {sql.Add(RequestOrigins.ToWire(origin))}");
         }
 
         if (filter.ProviderModelId is { } model)

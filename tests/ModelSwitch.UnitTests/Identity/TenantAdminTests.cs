@@ -120,6 +120,11 @@ internal sealed class FakeBudgets : ITenantBudgets
         => Task.FromResult<decimal?>(Limits.TryGetValue(tenantId, out var limit) ? limit : null);
 
     public Task SetMonthlyLimitAsync(Guid tenantId, decimal? amount, DbTransaction transaction, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Dictionary<Guid, TenantBudgetPeriod> Periods { get; } = [];
+
+    public Task<TenantBudgetPeriod> GetCurrentPeriodAsync(Guid tenantId, CancellationToken cancellationToken)
+        => Task.FromResult(Periods.TryGetValue(tenantId, out var period) ? period : new TenantBudgetPeriod(new DateOnly(2026, 10, 1), null, 0m, 0m));
 }
 
 public sealed class TenantServiceTests
@@ -371,6 +376,17 @@ public sealed class TenantServiceTests
 
         result.Value.Limits.ShouldBe(new LimitsView(null, null, null, null));
         result.Value.ModelAccess.AllowedAliases.ShouldBe(["*"]);
+    }
+
+    [Fact]
+    public async Task The_detail_shows_the_current_budget_period_with_its_spent_and_reserved_amounts()
+    {
+        var tenant = _store.AddTenant("Acme");
+        _budgets.Periods[tenant.Id] = new TenantBudgetPeriod(new DateOnly(2026, 10, 1), 10m, 0.25m, 1.5m);
+
+        var result = await Service().GetAsync(tenant.Id, CancellationToken.None);
+
+        result.Value.BudgetPeriod.ShouldBe(new BudgetPeriodView(new DateOnly(2026, 10, 1), 10m, 0.25m, 1.5m, "USD"));
     }
 }
 

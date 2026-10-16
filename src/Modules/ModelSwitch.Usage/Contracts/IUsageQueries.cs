@@ -143,7 +143,8 @@ public sealed record UsageRow(
     decimal EstimatedCost);
 
 /// <summary>The Overview: tiles for the whole range and a time series.</summary>
-public sealed record OverviewQuery(IReadOnlyCollection<Guid>? TenantIds, DateTimeOffset From, DateTimeOffset To, Guid? TenantId = null);
+/// <param name="Origin">Only requests of this Request Origin; null reads both.</param>
+public sealed record OverviewQuery(IReadOnlyCollection<Guid>? TenantIds, DateTimeOffset From, DateTimeOffset To, Guid? TenantId = null, RequestOrigin? Origin = null);
 
 /// <summary>Aggregates over a range or a bucket. Latencies in ms; null when no request had one.</summary>
 /// <param name="Exact">True when the percentiles are exact; false when estimated from the rollup's buckets (ranges over 24 h).</param>

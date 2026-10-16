@@ -96,9 +96,9 @@ public sealed class RetentionTests(PostgresFixture postgres)
             insert into usage.usage_record (id, inference_request_id, tenant_id, usage_source, input_cost, output_cost, total_cost, currency, recorded_at, estimate_method) values
               (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 'reported', 0, 0, 0, 'USD', '{{Iso(now.AddDays(-401))}}', 'old'),
               (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 'reported', 0, 0, 0, 'USD', '{{Iso(now.AddDays(-399))}}', 'fresh');
-            insert into usage.usage_hourly (tenant_id, provider_model_id, requested_alias, hour, requests, failed_requests, fallback_requests, attempts, input_tokens, cached_input_tokens, output_tokens, estimated_cost, duration_ms_sum, latency_histogram, ttft_histogram) values
-              (gen_random_uuid(), gen_random_uuid(), 'old', '{{Iso(now.AddDays(-401))}}', 1, 0, 0, 1, 0, 0, 0, 0, 0, '{}', '{}'),
-              (gen_random_uuid(), gen_random_uuid(), 'fresh', '{{Iso(now.AddDays(-1))}}', 1, 0, 0, 1, 0, 0, 0, 0, 0, '{}', '{}');
+            insert into usage.usage_hourly (tenant_id, provider_model_id, requested_alias, origin, hour, requests, failed_requests, fallback_requests, attempts, input_tokens, cached_input_tokens, output_tokens, estimated_cost, duration_ms_sum, latency_histogram, ttft_histogram) values
+              (gen_random_uuid(), gen_random_uuid(), 'old', 'api', '{{Iso(now.AddDays(-401))}}', 1, 0, 0, 1, 0, 0, 0, 0, 0, '{}', '{}'),
+              (gen_random_uuid(), gen_random_uuid(), 'fresh', 'evaluation', '{{Iso(now.AddDays(-1))}}', 1, 0, 0, 1, 0, 0, 0, 0, 0, '{}', '{}');
             insert into identity.audit_record (id, occurred_at, action, target_type, details) values
               (gen_random_uuid(), '{{Iso(now.AddDays(-401))}}', 'old', 'test', '{}'),
               (gen_random_uuid(), '{{Iso(now.AddDays(-1))}}', 'fresh', 'test', '{}');

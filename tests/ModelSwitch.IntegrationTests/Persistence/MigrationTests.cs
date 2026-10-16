@@ -35,11 +35,12 @@ public sealed class MigrationTests(PostgresFixture postgres)
         second["identity"].ShouldBeEmpty();
         second["registry"].ShouldBeEmpty();
         second["routing"].ShouldBeEmpty();
-        first["usage"].Count.ShouldBe(4);
+        first["usage"].Count.ShouldBe(5);
         first["usage"][0].ShouldEndWith("_Initial");
         first["usage"][1].ShouldEndWith("_Budgets");
         first["usage"][2].ShouldEndWith("_UsageHourly");
         first["usage"][3].ShouldEndWith("_RetentionPartitions");
+        first["usage"][4].ShouldEndWith("_UsageHourlyOrigin");
         first["evaluation"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         first["jobs"].ShouldBe(["outbox_event", "job", "processed_event"]);
         second["usage"].ShouldBeEmpty();
