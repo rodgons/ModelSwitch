@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Identity.Domain;
 
 namespace ModelSwitch.Identity.Infrastructure;
@@ -12,6 +13,18 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
     public DbSet<Tenant> Tenants => Set<Tenant>();
 
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+
+    public DbSet<Administrator> Administrators => Set<Administrator>();
+
+    public DbSet<AdministratorTenantGrant> AdministratorTenantGrants => Set<AdministratorTenantGrant>();
+
+    public DbSet<AdministratorSession> AdministratorSessions => Set<AdministratorSession>();
+
+    public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
+
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+
+    private static AdministratorRole ParseRole(string text) => AdministratorRoles.TryParse(text, out var parsed) ? parsed : AdministratorRole.Viewer;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -53,5 +66,98 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
             key.HasIndex(x => new { x.TenantId, x.CreatedAt }).IsDescending(false, true).HasDatabaseName("ix_api_key_tenant_id_created_at");
             key.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).HasConstraintName("fk_api_key_tenant_id").OnDelete(DeleteBehavior.Restrict);
         });
+
+        var role = new ValueConverter<AdministratorRole, string>(
+            value => AdministratorRoles.ToWire(value),
+            text => ParseRole(text));
+
+        modelBuilder.Entity<Administrator>(admin =>
+        {
+            admin.ToTable("administrator", t =>
+            {
+                t.HasCheckConstraint("ck_administrator_role", "role in ('owner', 'operator', 'viewer')");
+                t.HasCheckConstraint("ck_administrator_owner_all_tenants", "role <> 'owner' or all_tenants");
+            });
+            admin.HasKey(x => x.Id);
+            admin.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            admin.Property(x => x.Email).HasColumnName("email").IsRequired();
+            admin.Property(x => x.PasswordHash).HasColumnName("password_hash").IsRequired();
+            admin.Property(x => x.Role).HasColumnName("role").HasConversion(role).IsRequired();
+            admin.Property(x => x.AllTenants).HasColumnName("all_tenants");
+            admin.Property(x => x.Active).HasColumnName("active");
+            admin.Property(x => x.FailedSignInCount).HasColumnName("failed_sign_in_count");
+            admin.Property(x => x.FailedSignInWindowStartedAt).HasColumnName("failed_sign_in_window_started_at");
+            admin.Property(x => x.LockedUntil).HasColumnName("locked_until");
+            admin.Property(x => x.LastSignedInAt).HasColumnName("last_signed_in_at");
+            admin.Property(x => x.CreatedAt).HasColumnName("created_at");
+            admin.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            admin.Ignore(x => x.Grant);
+            admin.HasIndex(x => x.Email).IsUnique().HasDatabaseName("ux_administrator_email");
+            admin.HasMany(x => x.Grants).WithOne().HasForeignKey(g => g.AdministratorId).HasConstraintName("fk_administrator_tenant_grant_administrator_id").OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AdministratorTenantGrant>(grant =>
+        {
+            grant.ToTable("administrator_tenant_grant");
+            grant.HasKey(x => new { x.AdministratorId, x.TenantId });
+            grant.Property(x => x.AdministratorId).HasColumnName("administrator_id");
+            grant.Property(x => x.TenantId).HasColumnName("tenant_id");
+            grant.HasIndex(x => x.TenantId).HasDatabaseName("ix_administrator_tenant_grant_tenant_id");
+            grant.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).HasConstraintName("fk_administrator_tenant_grant_tenant_id").OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AdministratorSession>(session =>
+        {
+            session.ToTable("administrator_session");
+            session.HasKey(x => x.Id);
+            session.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            session.Property(x => x.AdministratorId).HasColumnName("administrator_id");
+            session.Property(x => x.CreatedAt).HasColumnName("created_at");
+            session.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            session.Property(x => x.AbsoluteExpiresAt).HasColumnName("absolute_expires_at");
+            session.HasIndex(x => x.AdministratorId).HasDatabaseName("ix_administrator_session_administrator_id");
+            session.HasOne<Administrator>().WithMany().HasForeignKey(x => x.AdministratorId).HasConstraintName("fk_administrator_session_administrator_id").OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AuditRecord>(record =>
+        {
+            record.ToTable("audit_record");
+            record.HasKey(x => x.Id);
+            record.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            record.Property(x => x.OccurredAt).HasColumnName("occurred_at");
+            record.Property(x => x.AdministratorId).HasColumnName("administrator_id");
+            record.Property(x => x.Action).HasColumnName("action").IsRequired();
+            record.Property(x => x.TenantId).HasColumnName("tenant_id");
+            record.Property(x => x.TargetType).HasColumnName("target_type").IsRequired();
+            record.Property(x => x.TargetId).HasColumnName("target_id");
+            record.Property(x => x.Details).HasColumnName("details").HasColumnType("jsonb").IsRequired();
+            record.Property(x => x.SourceIp).HasColumnName("source_ip").HasColumnType("inet");
+            record.Property(x => x.RequestId).HasColumnName("request_id");
+            record.Property(x => x.TraceId).HasColumnName("trace_id");
+            record.HasIndex(x => x.OccurredAt).IsDescending().HasDatabaseName("ix_audit_record_occurred_at");
+            record.HasIndex(x => new { x.TenantId, x.OccurredAt }).IsDescending(false, true).HasDatabaseName("ix_audit_record_tenant_id_occurred_at");
+        });
+
+        modelBuilder.Entity<DataProtectionKey>(key =>
+        {
+            key.ToTable("data_protection_key");
+            key.HasKey(x => x.Id);
+            key.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
+            key.Property(x => x.FriendlyName).HasColumnName("friendly_name");
+            key.Property(x => x.Xml).HasColumnName("xml").IsRequired();
+            key.Property(x => x.CreatedAt).HasColumnName("created_at");
+        });
     }
+}
+
+/// <summary>An ASP.NET Core Data Protection key ring entry, shared by every api instance so cookies and antiforgery tokens work across them.</summary>
+internal sealed class DataProtectionKey
+{
+    public Guid Id { get; init; }
+
+    public string? FriendlyName { get; init; }
+
+    public required string Xml { get; init; }
+
+    public DateTimeOffset CreatedAt { get; init; }
 }

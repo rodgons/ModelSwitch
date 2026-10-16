@@ -28,6 +28,7 @@ public sealed class ErrorCode
     public static readonly ErrorCode RunCostCapReached = new("run_cost_cap_reached", null, "budget_error", "Run cost cap reached");
     public static readonly ErrorCode InternalError = new("internal_error", 500, "api_error", "Internal error");
     public static readonly ErrorCode ValidationFailed = new("validation_failed", 400, "invalid_request_error", "Validation failed");
+    public static readonly ErrorCode Unauthenticated = new("unauthenticated", 401, "authentication_error", "Unauthenticated");
     public static readonly ErrorCode Forbidden = new("forbidden", 403, "permission_error", "Forbidden");
     public static readonly ErrorCode NotFound = new("not_found", 404, "invalid_request_error", "Not found");
     public static readonly ErrorCode Conflict = new("conflict", 409, "invalid_request_error", "Conflict");
@@ -57,6 +58,7 @@ public sealed class ErrorCode
         RunCostCapReached,
         InternalError,
         ValidationFailed,
+        Unauthenticated,
         Forbidden,
         NotFound,
         Conflict,

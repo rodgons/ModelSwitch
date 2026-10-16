@@ -51,8 +51,8 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 
 ## Phase 3: Identity and usage (≈2 weeks)
 
-- [ ] Administrator accounts, cookie sessions, antiforgery, Roles + Tenant Grants, Owner bootstrap
-- [ ] Audit records
+- [x] Administrator accounts, cookie sessions, antiforgery, Roles + Tenant Grants, Owner bootstrap
+- [x] Audit records
 - [ ] Admin endpoints: tenants, keys (create-once display, revoke), limits, model access, providers, models, prices, policies, aliases
 - [ ] Encrypted `db:` provider secrets (AES-GCM) + write-only API
 - [ ] Valkey rate + concurrency limits (one Lua script), failure modes, multi-instance test

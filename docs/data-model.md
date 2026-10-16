@@ -33,11 +33,15 @@ The PostgreSQL schema, module by module. Every module owns one schema and is the
 **api_key**: `id`, `tenant_id fk`, `name text`, `key_prefix char(8) unique`, `key_hash bytea(32)`, `scopes text[]`, `expires_at null`, `revoked_at null`, `last_used_at null` (updated at most once per minute), `created_at`, `created_by_admin_id`
 - Index: `unique(key_prefix)`, `(tenant_id, created_at desc)`
 
-**administrator**: ASP.NET Core Identity tables in schema `identity` (`asp_net_users` etc.), extended with `role text check (owner|operator|viewer)` and `all_tenants bool`.
+**administrator**: a minimal custom store (not the `AspNetUsers` table set) that uses ASP.NET Core Identity's `PasswordHasher<T>` (PBKDF2): `id`, `email` (unique, lower-case), `password_hash`, `role text check (owner|operator|viewer)`, `all_tenants bool` (Owner implies true), `active bool`, `failed_sign_in_count`, `failed_sign_in_window_started_at`, `locked_until`, `last_signed_in_at`, `created_at`, `updated_at`.
 
 **administrator_tenant_grant**: `administrator_id`, `tenant_id`, pk both.
 
-**audit_record**: `id`, `occurred_at`, `administrator_id`, `action text` (e.g. `api_key.created`, `provider.secret_replaced`, `routing_policy.versioned`), `tenant_id null`, `target_type`, `target_id`, `details jsonb` (never secrets), `source_ip inet`, `trace_id text`
+**administrator_session**: `id` (SHA-256 of the cookie's session key, base64url), `administrator_id fk`, `created_at`, `expires_at` (sliding 8 h), `absolute_expires_at` (24 h). Deleted on sign-out, expiry and deactivation.
+
+**data_protection_key**: `id`, `friendly_name`, `xml`, `created_at`. The ASP.NET Core Data Protection key ring, shared by all api instances (cookie and antiforgery protection).
+
+**audit_record**: `id`, `occurred_at`, `administrator_id`, `action text` (e.g. `api_key.created`, `provider.secret_replaced`, `routing_policy.versioned`), `tenant_id null`, `target_type`, `target_id`, `details jsonb` (`before`/`after` summaries and extra keys; never secrets or content), `source_ip inet`, `request_id uuid null`, `trace_id text`
 - Append-only. The application DB role has no `UPDATE`/`DELETE` grant on this table.
 - Index: `(occurred_at desc)`, `(tenant_id, occurred_at desc)`
 
