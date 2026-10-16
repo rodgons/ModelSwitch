@@ -66,7 +66,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 ## Phase 4: Observability (≈2 weeks)
 
 - [x] OpenTelemetry traces/metrics/logs per [observability.md](observability.md); redaction; canary leak test
-- [ ] Usage rollup consumer + `usage_hourly`
+- [x] Usage rollup consumer + `usage_hourly`
 - [ ] Admin query endpoints: overview, requests (filters, cursor pagination), request detail, usage, provider health
 - [ ] Dashboard design tokens (StyleX) + layout primitives per [design-system.md](design-system.md)
 - [ ] Dashboard: app shell, sign-in, Overview, Request Explorer, Request detail, Providers, Routing, Tenants

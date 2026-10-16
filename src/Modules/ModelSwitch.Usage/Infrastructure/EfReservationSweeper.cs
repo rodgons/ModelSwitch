@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using ModelSwitch.SharedKernel;
@@ -116,18 +115,24 @@ internal sealed class EfReservationSweeper(IDbContextFactory<UsageDbContext> con
 
         await BudgetSql.SettleAsync(db, identity.TenantId, period, amount, amount, cancellationToken);
 
-        var payload = JsonSerializer.Serialize(new
-        {
-            requestId = reservation.RequestId,
-            tenantId = identity.TenantId,
-            requestedAlias = identity.RequestedAlias,
-            status = "abandoned",
-            usageStatus = "unavailable",
-            attemptCount = 0,
-            estimatedCost = amount,
-            currency = Money.Usd,
-            startedAt = reservation.RequestStartedAt,
-        });
+        var payload = new RequestCompletedEvent(
+            reservation.RequestId,
+            identity.TenantId,
+            identity.RequestedAlias,
+            "abandoned",
+            "unavailable",
+            ProviderModelId: null,
+            SelectedProviderModelId: null,
+            AttemptCount: 0,
+            HadFallback: false,
+            InputTokens: null,
+            CachedInputTokens: null,
+            OutputTokens: null,
+            amount,
+            Money.Usd,
+            reservation.RequestStartedAt,
+            DurationMs: null,
+            TtftMs: null).ToJson();
         await OutboxWriter.AppendAsync(
             db.Database.GetDbConnection(),
             db.Database.CurrentTransaction!.GetDbTransaction(),

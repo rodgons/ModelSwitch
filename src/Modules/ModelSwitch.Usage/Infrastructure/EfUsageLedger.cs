@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using ModelSwitch.SharedKernel;
@@ -230,24 +229,27 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
             await BudgetSql.SettleAsync(db, identity.TenantId, period, held, total, cancellationToken);
         }
 
-        var payload = JsonSerializer.Serialize(new
-        {
-            requestId = settlement.RequestId,
-            tenantId = identity.TenantId,
-            requestedAlias = identity.RequestedAlias,
+        var attributedModel = summary.SelectedProviderModelId
+            ?? settlement.Attempts.LastOrDefault(a => a.Status != AttemptStatus.SkippedCircuitOpen)?.ProviderModelId;
+        var cached = drafts.Sum(d => (long?)d?.CachedInputTokens ?? 0);
+        var payload = new RequestCompletedEvent(
+            settlement.RequestId,
+            identity.TenantId,
+            identity.RequestedAlias,
             status,
-            usageStatus = summary.UsageStatus,
-            selectedProviderModelId = summary.SelectedProviderModelId,
-            attemptCount = summary.AttemptCount,
-            hadFallback = summary.HadFallback,
-            inputTokens = summary.TotalInputTokens,
-            outputTokens = summary.TotalOutputTokens,
-            estimatedCost = total,
-            currency = Money.Usd,
-            startedAt = settlement.StartedAt,
+            summary.UsageStatus,
+            attributedModel,
+            summary.SelectedProviderModelId,
+            summary.AttemptCount,
+            summary.HadFallback,
+            summary.TotalInputTokens,
+            cached > 0 ? (int)Math.Min(cached, int.MaxValue) : null,
+            summary.TotalOutputTokens,
+            total,
+            Money.Usd,
+            settlement.StartedAt,
             durationMs,
-            ttftMs = settlement.TtftMs,
-        });
+            settlement.TtftMs).ToJson();
         await OutboxWriter.AppendAsync(
             db.Database.GetDbConnection(),
             db.Database.CurrentTransaction!.GetDbTransaction(),

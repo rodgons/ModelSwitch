@@ -25,6 +25,8 @@ internal sealed class UsageDbContext(DbContextOptions<UsageDbContext> options) :
 
     public DbSet<UsageRecordRow> UsageRecords => Set<UsageRecordRow>();
 
+    public DbSet<UsageHourlyRow> UsageHourly => Set<UsageHourlyRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -92,6 +94,30 @@ internal sealed class UsageDbContext(DbContextOptions<UsageDbContext> options) :
             record.HasIndex(x => x.ProviderAttemptId).IsUnique().HasDatabaseName("ux_usage_record_provider_attempt_id");
             record.HasIndex(x => new { x.TenantId, x.RecordedAt }).HasDatabaseName("ix_usage_record_tenant_id_recorded_at");
             record.HasIndex(x => x.InferenceRequestId).HasDatabaseName("ix_usage_record_inference_request_id");
+        });
+
+        modelBuilder.Entity<UsageHourlyRow>(hourly =>
+        {
+            hourly.ToTable("usage_hourly");
+            hourly.HasKey(x => new { x.TenantId, x.ProviderModelId, x.RequestedAlias, x.Hour });
+            hourly.Property(x => x.TenantId).HasColumnName("tenant_id");
+            hourly.Property(x => x.ProviderModelId).HasColumnName("provider_model_id");
+            hourly.Property(x => x.RequestedAlias).HasColumnName("requested_alias");
+            hourly.Property(x => x.Hour).HasColumnName("hour");
+            hourly.Property(x => x.Requests).HasColumnName("requests");
+            hourly.Property(x => x.FailedRequests).HasColumnName("failed_requests");
+            hourly.Property(x => x.FallbackRequests).HasColumnName("fallback_requests");
+            hourly.Property(x => x.Attempts).HasColumnName("attempts");
+            hourly.Property(x => x.InputTokens).HasColumnName("input_tokens");
+            hourly.Property(x => x.CachedInputTokens).HasColumnName("cached_input_tokens");
+            hourly.Property(x => x.OutputTokens).HasColumnName("output_tokens");
+            hourly.Property(x => x.EstimatedCost).HasColumnName("estimated_cost").HasColumnType("numeric(20,10)");
+            hourly.Property(x => x.DurationMsSum).HasColumnName("duration_ms_sum");
+            hourly.Property(x => x.LatencyHistogram).HasColumnName("latency_histogram").IsRequired();
+            hourly.Property(x => x.TtftHistogram).HasColumnName("ttft_histogram").IsRequired();
+
+            // The dashboard reads ranges of hours across Tenants (overview) and for one Tenant (usage).
+            hourly.HasIndex(x => x.Hour).HasDatabaseName("ix_usage_hourly_hour");
         });
 
         modelBuilder.Entity<InferenceRequestRow>(request =>

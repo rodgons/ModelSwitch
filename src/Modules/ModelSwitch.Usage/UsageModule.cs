@@ -36,6 +36,7 @@ public static class UsageModule
         services.TryAddSingleton<IReservationSweeper, EfReservationSweeper>();
         services.AddJobHandler<ReservationSweepJob>();
         services.AddRecurringJob(ReservationSweepJob.JobKind, ReservationSweepJob.Interval);
+        services.AddOutboxConsumer<UsageRollupConsumer>();
         return services;
     }
 

@@ -390,6 +390,78 @@ namespace ModelSwitch.Usage.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ModelSwitch.Usage.Domain.UsageHourlyRow", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("ProviderModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_model_id");
+
+                    b.Property<string>("RequestedAlias")
+                        .HasColumnType("text")
+                        .HasColumnName("requested_alias");
+
+                    b.Property<DateTimeOffset>("Hour")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("hour");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<long>("CachedInputTokens")
+                        .HasColumnType("bigint")
+                        .HasColumnName("cached_input_tokens");
+
+                    b.Property<long>("DurationMsSum")
+                        .HasColumnType("bigint")
+                        .HasColumnName("duration_ms_sum");
+
+                    b.Property<decimal>("EstimatedCost")
+                        .HasColumnType("numeric(20,10)")
+                        .HasColumnName("estimated_cost");
+
+                    b.Property<int>("FailedRequests")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed_requests");
+
+                    b.Property<int>("FallbackRequests")
+                        .HasColumnType("integer")
+                        .HasColumnName("fallback_requests");
+
+                    b.Property<long>("InputTokens")
+                        .HasColumnType("bigint")
+                        .HasColumnName("input_tokens");
+
+                    b.PrimitiveCollection<int[]>("LatencyHistogram")
+                        .IsRequired()
+                        .HasColumnType("integer[]")
+                        .HasColumnName("latency_histogram");
+
+                    b.Property<long>("OutputTokens")
+                        .HasColumnType("bigint")
+                        .HasColumnName("output_tokens");
+
+                    b.Property<int>("Requests")
+                        .HasColumnType("integer")
+                        .HasColumnName("requests");
+
+                    b.PrimitiveCollection<int[]>("TtftHistogram")
+                        .IsRequired()
+                        .HasColumnType("integer[]")
+                        .HasColumnName("ttft_histogram");
+
+                    b.HasKey("TenantId", "ProviderModelId", "RequestedAlias", "Hour");
+
+                    b.HasIndex("Hour")
+                        .HasDatabaseName("ix_usage_hourly_hour");
+
+                    b.ToTable("usage_hourly", "usage");
+                });
+
             modelBuilder.Entity("ModelSwitch.Usage.Domain.UsageRecordRow", b =>
                 {
                     b.Property<Guid>("Id")

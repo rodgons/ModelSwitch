@@ -27,7 +27,7 @@ return await StartupExit.RunAsync(
         builder.Services.AddRoutingModule();
 
         // Jobs infrastructure: claim loops, recurring-job scheduler and outbox relay. Modules contribute handlers, schedules and
-        // outbox consumers from their own registration. The usage rollup consumer arrives with Phase 4.
+        // outbox consumers from their own registration (Usage adds the Reservation sweeper and the usage rollup).
         builder.Services.AddJobEnqueuer(provider => NpgsqlDataSource.Create(provider.GetRequiredService<IConfiguration>()["ConnectionStrings:Postgres"]!));
         builder.Services.AddJobsWorker();
 
