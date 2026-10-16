@@ -68,8 +68,8 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [x] OpenTelemetry traces/metrics/logs per [observability.md](observability.md); redaction; canary leak test
 - [x] Usage rollup consumer + `usage_hourly`
 - [x] Admin query endpoints: overview, requests (filters, cursor pagination), request detail, usage, provider health *(the isolation matrix has rows for the request detail and for the `tenantId` filter of requests, usage and overview)*
-- [ ] Dashboard design tokens (StyleX) + layout primitives per [design-system.md](design-system.md)
-- [ ] Dashboard: app shell, sign-in, Overview, Request Explorer, Request detail, Providers, Routing, Tenants
+- [x] Dashboard design tokens (StyleX) + layout primitives per [design-system.md](design-system.md)
+- [x] Dashboard: app shell, sign-in, Overview, Request Explorer, Request detail, Providers, Routing, Tenants *(the Routing simulate panel waits for its endpoint; the Budget gauge shows spent, not reserved)*
 - [x] Grafana provisioning in `deploy/grafana`
 - [x] Telemetry degradation test
 - [x] Retention job + partition management

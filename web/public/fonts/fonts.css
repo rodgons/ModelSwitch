@@ -1,0 +1,16 @@
+/* Self-hosted, Latin subset, variable weight 200-800 (design-system.md section 3.1). SIL Open Font License: see OFL.txt. */
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/atkinson-hyperlegible-next-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible Mono';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/atkinson-hyperlegible-mono-latin.woff2') format('woff2');
+}

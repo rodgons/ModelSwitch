@@ -1,0 +1,7 @@
+/* The only global CSS: a box-sizing reset. Everything else is StyleX, which @stylexjs/unplugin appends to this file's bundle so the
+   compiled rules ship in a stylesheet the HTML links. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}

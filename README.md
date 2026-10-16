@@ -2,7 +2,7 @@
 
 A self-hosted AI gateway: one OpenAI-compatible API in front of multiple LLM Providers, with routing, Fallbacks, circuit breakers, per-Tenant limits and Budgets, cost tracking with explicit provenance, request tracing, and an evaluation lab for comparing models.
 
-> **Status: Phase 0 (repository skeleton).** The solution, dashboard scaffold, CI and Compose services exist, with no features yet. Progress is tracked in [docs/roadmap.md](docs/roadmap.md).
+> **Status: Phases 0–4 done** (gateway, routing and resilience, identity and usage, observability and the dashboard). Evaluation and release hardening come next. Progress is tracked in [docs/roadmap.md](docs/roadmap.md).
 
 ## Documentation
 

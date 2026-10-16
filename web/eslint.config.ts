@@ -10,4 +10,9 @@ export default defineConfigWithVueTs(
   pluginVue.configs['flat/recommended'],
   vueTsConfigs.recommended,
   skipFormatting,
+  {
+    // design-system.md section 9.2 names the primitives and components (Stack, Inline, Grid, Badge, Money...): they are the vocabulary.
+    files: ['src/shared/**/*.vue'],
+    rules: { 'vue/multi-word-component-names': 'off' },
+  },
 )

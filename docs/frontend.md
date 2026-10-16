@@ -4,7 +4,11 @@ This document covers PRD §9. The dashboard is an administrative tool, not a cha
 
 ## 1. Stack and structure
 
-Vue 3 (`<script setup>`, Composition API) + TypeScript (strict) + Vite. Vue Router, Pinia (session/UI state only), TanStack Query for Vue (all server state), StyleX for styling (constitution, *Stack*), PrimeVue (unstyled mode, styled through the token layer in [design-system.md](design-system.md)) for accessible tables, forms and dialogs, ECharts via `vue-echarts` for charts. The API client is generated from `/openapi/v1.json` with `openapi-typescript` and called through `openapi-fetch`. Generated types are committed, and CI fails if regenerating them produces a diff.
+Vue 3 (`<script setup>`, Composition API) + TypeScript (strict) + Vite. Vue Router, Pinia (session/UI state only), TanStack Query for Vue (all server state), StyleX for styling (constitution, *Stack*), PrimeVue 4 (unstyled mode, styled through pass-through classes from the token layer in [design-system.md](design-system.md)) for dialogs, ECharts via `vue-echarts` for charts. Tables are native `<table>` elements and form controls native `<input>`/`<select>` with `<label>`s, which are accessible as they are. The API client is generated from `/openapi/v1.json` with `openapi-typescript` and called through `openapi-fetch`. Generated types are committed: `web/openapi.json` is checked against the served document by `OpenApiDocumentTests` (rewrite it with `UPDATE_OPENAPI=1`), and `pnpm check:api` fails if regenerating `src/api/schema.d.ts` produces a diff.
+
+**Styles.** `stylex.create` calls live in `*.styles.ts` modules next to the components (and tokens in `shared/design/*.stylex.ts`), not in `.vue` files; templates apply them with `v-bind="stylex.props(...)"`. `app/global.css` holds only a box-sizing reset, and the StyleX plugin appends the compiled rules to it. Fonts are served from `web/public/fonts/` (SIL OFL). Chart colors are the one place outside the token files with hex values (`shared/design/chart.ts`), because canvas charts need concrete colors.
+
+**Development.** `pnpm dev` serves the dashboard on `http://localhost:5173` and proxies `/admin`, `/v1`, `/health`, `/ready` and `/openapi` to the api, so the browser sees one origin (ADR-0011). The api must be reached over HTTPS, because its `__Host-` cookies and antiforgery require it: run it with `ASPNETCORE_URLS=https://localhost:5081` and the ASP.NET development certificate (`dotnet dev-certs https`); the proxy accepts that certificate. `MODELSWITCH_API_URL` overrides the target.
 
 ```
 web/src/
@@ -29,8 +33,8 @@ web/src/
 | `/requests/:id` | Metadata, Routing Decision (chosen + excluded candidates with reasons), Attempt timeline drawn as the full Route Strip (design-system.md §10), Usage Records with source badges, error details, trace link, copy-able ids | Viewer |
 | `/providers` | Provider list + health; create/edit, write-only secret field, connectivity test button with result | Owner (write) |
 | `/providers/:id/models` | Models, capability editor (checkboxes + numeric fields), enable toggle, Price history + "add price" | Owner |
-| `/routing` | Policies + aliases; policy editor (form view + JSON view), validation, **simulate** panel, version history with diff | Owner (write) |
-| `/tenants` | Tenant list, status; detail: limits, Budget gauge (spent / reserved / limit), allowed aliases, API keys (create shows the key once in a dialog with copy + "I've saved it"), usage summary | Operator |
+| `/routing` | Policies + aliases; policy editor (form view for strategy, Candidates and execution limits + JSON view for everything else), validation, version history with diff. The **simulate** panel waits for `POST /admin/routing-policies/{id}/simulate` (api.md section 3) | Owner (write) |
+| `/tenants` | Tenant list, status; detail: limits, Budget gauge (this month's Estimated Cost against the limit, from `/admin/usage`; the reserved amount is not exposed by the API yet), allowed aliases, API keys (create shows the key once in a dialog with copy + "I've saved it"), usage summary | Operator |
 | `/evaluations` | Datasets (upload JSONL, versions, cases), prompts, Comparisons list | Operator |
 | `/evaluations/new` | Run Configuration builder (1–6 configurations) with a cost estimate before starting | Operator |
 | `/comparisons/:id` | Side-by-side table (quality, errored %, p50/p95 latency, Estimated Cost per case and total), quality-vs-cost scatter, per-class metrics, Case drill-down with diff between runs, export | Viewer |

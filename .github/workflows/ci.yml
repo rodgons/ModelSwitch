@@ -55,6 +55,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck
+      # The generated client must match web/openapi.json, which OpenApiDocumentTests keeps equal to the served document.
+      - run: pnpm check:api
       - run: pnpm test
       - run: pnpm build
 

@@ -1,0 +1,3 @@
+# vue-demi's postinstall only switches between Vue 2 and 3 builds; Vue 3 is its default, so the script is not needed.
+allowBuilds:
+  vue-demi: false

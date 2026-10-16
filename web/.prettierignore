@@ -1,3 +1,5 @@
 dist
 coverage
 pnpm-lock.yaml
+# Written byte for byte by OpenApiDocumentTests (UPDATE_OPENAPI=1); the drift check compares it to the served document.
+openapi.json
