@@ -163,7 +163,8 @@ internal sealed partial class RunExecutor(
         catch (Exception exception) when (exception is not OperationCanceledException)
 #pragma warning restore CA1031
         {
-            LogAggregatesFailed(logger, exception, runId);
+            // Only the exception type: aggregation parses stored outputs and expected results, which a message could quote (ADR-0010).
+            LogAggregatesFailed(logger, runId, exception.GetType().Name);
         }
 
         var now = time.GetUtcNow();
@@ -499,6 +500,6 @@ internal sealed partial class RunExecutor(
     [LoggerMessage(Level = LogLevel.Information, Message = "Evaluation Run {RunId} finished {Status}, error {Error}.")]
     private static partial void LogRunFinished(ILogger logger, Guid runId, string status, string? error);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Computing the aggregates of Evaluation Run {RunId} failed.")]
-    private static partial void LogAggregatesFailed(ILogger logger, Exception exception, Guid runId);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Computing the aggregates of Evaluation Run {RunId} failed with {ExceptionType}.")]
+    private static partial void LogAggregatesFailed(ILogger logger, Guid runId, string exceptionType);
 }
