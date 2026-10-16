@@ -28,7 +28,7 @@ public interface IReservationSweeper
     /// <summary>
     /// Settles up to <paramref name="batchSize"/> expired Reservations, each in its own transaction (usage-and-budgets.md section 3):
     /// the request becomes <c>abandoned</c>, one <c>unavailable</c> Usage Record charges the held amount, and the hold moves from
-    /// reserved to spent. Returns how many were swept. Scheduling (every 30 s) belongs to the worker's jobs infrastructure.
+    /// reserved to spent. Returns how many were swept. The recurring job `usage.sweep_reservations` (every 30 s, in the worker) calls it.
     /// </summary>
     Task<int> SweepAbandonedAsync(int batchSize, CancellationToken cancellationToken);
 }

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ModelSwitch.SharedKernel.Hosting;
+using ModelSwitch.SharedKernel.Jobs;
 using ModelSwitch.SharedKernel.Persistence;
 using ModelSwitch.Usage.Contracts;
 using ModelSwitch.Usage.Domain;
@@ -29,6 +30,8 @@ public static class UsageModule
         services.TryAddSingleton<IUsageLedger, EfUsageLedger>();
         services.TryAddSingleton<IBudgets, EfBudgets>();
         services.TryAddSingleton<IReservationSweeper, EfReservationSweeper>();
+        services.AddJobHandler<ReservationSweepJob>();
+        services.AddRecurringJob(ReservationSweepJob.JobKind, ReservationSweepJob.Interval);
         return services;
     }
 

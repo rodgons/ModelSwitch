@@ -7,7 +7,9 @@ using ModelSwitch.Configuration.Contracts;
 using ModelSwitch.Configuration.Infrastructure;
 using ModelSwitch.SharedKernel.Hosting;
 using ModelSwitch.SharedKernel.Http;
+using ModelSwitch.SharedKernel.Jobs;
 using ModelSwitch.SharedKernel.Persistence;
+using Npgsql;
 
 namespace ModelSwitch.Configuration;
 
@@ -49,8 +51,7 @@ public static class ConfigurationModule
         services.RequireSetting(_migratorConnection);
         services.AddSingleton<IModuleMigrator>(provider =>
             new ConfigurationMigrator(provider.GetRequiredService<IConfiguration>()[_migratorConnection]!));
-        services.AddSingleton<IModuleMigrator>(provider =>
-            new JobsSchemaMigrator(provider.GetRequiredService<IConfiguration>()[_migratorConnection]!));
+        services.AddJobsMigrations(provider => NpgsqlDataSource.Create(provider.GetRequiredService<IConfiguration>()[_migratorConnection]!));
         return services;
     }
 }

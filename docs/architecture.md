@@ -71,7 +71,7 @@ The [constitution](constitution.md) forbids adding a dependency without a writte
 ```
 
 - **api** is stateless apart from in-memory caches (configuration snapshot, verified API keys, circuit breakers), so it can be scaled horizontally. Each instance writes its own Provider Health snapshot, because the breakers live in its memory ([routing-and-resilience.md §5](routing-and-resilience.md#5-circuit-breakers)). Compose runs one replica by default. The multi-instance tests run two.
-- **worker** runs the outbox relay, usage aggregation, Reservation sweeping, Evaluation Run execution and retention jobs. More than one replica is safe because all work is claimed with `SKIP LOCKED`.
+- **worker** runs the outbox relay, usage aggregation, Reservation sweeping, Evaluation Run execution and retention jobs. More than one replica is safe because all work is claimed with `SKIP LOCKED`; the mechanics (leases, retries, recurring jobs, the relay) are in [data-model.md](data-model.md#how-the-worker-uses-them). Modules contribute their own `IJobHandler`, recurring schedule and `IOutboxConsumer` from their `Add<Module>Module` registration, and the worker host only calls `AddJobsWorker`.
 - **migrator** applies every module's EF Core migrations in a fixed order and exits. api and worker never migrate on startup.
 - **proxy** gives the browser one origin (ADR-0011) and terminates TLS when it is configured.
 
@@ -86,7 +86,7 @@ src/
   ModelSwitch.Api/               # host: endpoint wiring, auth handlers, middleware
   ModelSwitch.Worker/            # host: BackgroundService registrations
   ModelSwitch.Migrator/          # host: applies migrations, seeds first Owner
-  ModelSwitch.SharedKernel/      # ids (UUIDv7), Money, Clock, Result, error codes, outbox primitives (no ASP.NET Core)
+  ModelSwitch.SharedKernel/      # ids (UUIDv7), Money, Clock, Result, error codes, outbox and jobs primitives: `Outbox/` (writer), `Jobs/` (enqueue, claim/lease/retry processor, recurring scheduler, outbox relay, `jobs` schema migrator) (no ASP.NET Core)
   ModelSwitch.SharedKernel.Http/ # ASP.NET Core half: Problem Details writer, X-Request-Id middleware, readiness check contract.
                                  # Referenced only by the Api host and modules that have Endpoints or readiness checks
   ModelSwitch.Configuration/     # owns schema `config`; builds the ConfigurationSnapshot from the modules' Contracts loaders; LISTEN/poll refresh
