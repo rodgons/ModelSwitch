@@ -115,6 +115,7 @@ internal sealed partial class OutboxRelay
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            // CancellationToken.None is deliberate: the rollback and the failure record must finish even while the host shuts down.
             await transaction.RollbackAsync(CancellationToken.None);
             var attempt = await RecordFailureAsync(outboxEvent.Id, exception, now);
             LogConsumerFailed(_logger, exception, outboxEvent.Type, outboxEvent.Id, attempt);

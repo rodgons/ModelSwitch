@@ -147,7 +147,7 @@ internal sealed partial class JobProcessor
                     var now = _time.GetUtcNow();
                     var extended = await GuardedAsync(
                         job,
-                        "SET locked_until = @until, updated_at = @now",
+                        JobOutcome.Heartbeat,
                         c =>
                         {
                             JobSql.Add(c, "until", JobRetryPolicy.LeaseUntil(now, _options));
@@ -178,7 +178,7 @@ internal sealed partial class JobProcessor
         var now = _time.GetUtcNow();
         await GuardedAsync(
             job,
-            "SET status = 'succeeded', locked_by = NULL, locked_until = NULL, updated_at = @now",
+            JobOutcome.Succeeded,
             c => JobSql.Add(c, "now", now),
             cancellationToken);
         LogSucceeded(_logger, job.Kind, job.Id);
@@ -190,7 +190,7 @@ internal sealed partial class JobProcessor
         var decision = JobRetryPolicy.AfterFailure(job.Attempts, job.MaxAttempts, exception is PermanentJobFailureException, now, _options);
         var applied = await GuardedAsync(
             job,
-            "SET status = @status, run_after = @run_after, last_error = @error, locked_by = NULL, locked_until = NULL, updated_at = @now",
+            JobOutcome.Failed,
             c =>
             {
                 JobSql.Add(c, "status", decision.Dead ? "dead" : "pending", DbType.String);
@@ -219,17 +219,37 @@ internal sealed partial class JobProcessor
         var now = _time.GetUtcNow();
         await GuardedAsync(
             job,
-            "SET status = 'pending', attempts = attempts - 1, locked_by = NULL, locked_until = NULL, updated_at = @now",
+            JobOutcome.Released,
             c => JobSql.Add(c, "now", now),
+            // Deliberately not the worker's token: this runs because that token was cancelled (shutdown), and the claimed job
+            // must still be handed back or it would sit "running" until its lease expires.
             CancellationToken.None);
     }
 
+    /// <summary>What a claimed job's guarded update does. Each maps to fixed SQL, so no SQL text is ever passed around.</summary>
+    private enum JobOutcome
+    {
+        Heartbeat,
+        Succeeded,
+        Failed,
+        Released,
+    }
+
+    private static string SetClause(JobOutcome outcome) => outcome switch
+    {
+        JobOutcome.Heartbeat => "SET locked_until = @until, updated_at = @now",
+        JobOutcome.Succeeded => "SET status = 'succeeded', locked_by = NULL, locked_until = NULL, updated_at = @now",
+        JobOutcome.Failed => "SET status = @status, run_after = @run_after, last_error = @error, locked_by = NULL, locked_until = NULL, updated_at = @now",
+        JobOutcome.Released => "SET status = 'pending', attempts = attempts - 1, locked_by = NULL, locked_until = NULL, updated_at = @now",
+        _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
+    };
+
     // Every outcome is guarded by the claim (worker and attempt number), so a worker whose lease was taken over cannot overwrite the new owner's state.
-    private async Task<bool> GuardedAsync(Claimed job, string set, Action<DbCommand> parameters, CancellationToken cancellationToken)
+    private async Task<bool> GuardedAsync(Claimed job, JobOutcome outcome, Action<DbCommand> parameters, CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = $"UPDATE jobs.job {set} WHERE id = @id AND status = 'running' AND locked_by = @worker AND attempts = @attempts";
+        command.CommandText = $"UPDATE jobs.job {SetClause(outcome)} WHERE id = @id AND status = 'running' AND locked_by = @worker AND attempts = @attempts";
         JobSql.Add(command, "id", job.Id);
         JobSql.Add(command, "worker", WorkerId);
         JobSql.Add(command, "attempts", job.Attempts);
