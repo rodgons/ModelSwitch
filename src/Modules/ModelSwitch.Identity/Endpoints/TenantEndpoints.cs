@@ -20,21 +20,21 @@ internal static class TenantEndpoints
     {
         var tenants = app.MapGroup(AdminAuthentication.AdminPathPrefix);
 
-        tenants.MapGet("/tenants", ListAsync).RequireAuthorization(AdminPolicies.Viewer);
-        tenants.MapPost("/tenants", CreateAsync).RequireAuthorization(AdminPolicies.Operator);
-        tenants.MapGet("/tenants/{tenantId:guid}", GetAsync).RequireAuthorization(AdminPolicies.Viewer);
-        tenants.MapPatch("/tenants/{tenantId:guid}", UpdateAsync).RequireAuthorization(AdminPolicies.Operator);
-        tenants.MapPut("/tenants/{tenantId:guid}/limits", SetLimitsAsync).RequireAuthorization(AdminPolicies.Operator);
-        tenants.MapPut("/tenants/{tenantId:guid}/model-access", SetModelAccessAsync).RequireAuthorization(AdminPolicies.Operator);
+        tenants.MapGet("/tenants", ListAsync).Produces<Page<TenantView>>().RequireAuthorization(AdminPolicies.Viewer);
+        tenants.MapPost("/tenants", CreateAsync).Produces<TenantView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Operator);
+        tenants.MapGet("/tenants/{tenantId:guid}", GetAsync).Produces<TenantDetailView>().RequireAuthorization(AdminPolicies.Viewer);
+        tenants.MapPatch("/tenants/{tenantId:guid}", UpdateAsync).Produces<TenantView>().RequireAuthorization(AdminPolicies.Operator);
+        tenants.MapPut("/tenants/{tenantId:guid}/limits", SetLimitsAsync).Produces<LimitsView>().RequireAuthorization(AdminPolicies.Operator);
+        tenants.MapPut("/tenants/{tenantId:guid}/model-access", SetModelAccessAsync).Produces<ModelAccessView>().RequireAuthorization(AdminPolicies.Operator);
 
-        tenants.MapGet("/tenants/{tenantId:guid}/api-keys", ListKeysAsync).RequireAuthorization(AdminPolicies.Viewer);
-        tenants.MapPost("/tenants/{tenantId:guid}/api-keys", CreateKeyAsync).RequireAuthorization(AdminPolicies.Operator);
-        tenants.MapDelete("/tenants/{tenantId:guid}/api-keys/{keyId:guid}", RevokeKeyAsync).RequireAuthorization(AdminPolicies.Operator);
+        tenants.MapGet("/tenants/{tenantId:guid}/api-keys", ListKeysAsync).Produces<Page<ApiKeyView>>().RequireAuthorization(AdminPolicies.Viewer);
+        tenants.MapPost("/tenants/{tenantId:guid}/api-keys", CreateKeyAsync).Produces<CreatedApiKeyView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Operator);
+        tenants.MapDelete("/tenants/{tenantId:guid}/api-keys/{keyId:guid}", RevokeKeyAsync).Produces(StatusCodes.Status204NoContent).RequireAuthorization(AdminPolicies.Operator);
         return app;
     }
 
     private static async Task<IResult> ListAsync(HttpContext http, TenantService tenants, string? limit, string? cursor)
-        => Respond(http, await tenants.ListAsync(limit, cursor, http.RequestAborted), page => Results.Json(new { items = page.Items, nextCursor = page.NextCursor }));
+        => Respond(http, await tenants.ListAsync(limit, cursor, http.RequestAborted), page => Results.Json(page));
 
     private static async Task<IResult> CreateAsync(HttpContext http, CreateTenantRequest? request, TenantService tenants)
         => Respond(
@@ -55,7 +55,7 @@ internal static class TenantEndpoints
         => Respond(http, await tenants.SetModelAccessAsync(tenantId, request ?? new UpdateModelAccessRequest(null), http.RequestAborted), access => Results.Json(access));
 
     private static async Task<IResult> ListKeysAsync(HttpContext http, Guid tenantId, ApiKeyAdminService keys, string? limit, string? cursor)
-        => Respond(http, await keys.ListAsync(tenantId, limit, cursor, http.RequestAborted), page => Results.Json(new { items = page.Items, nextCursor = page.NextCursor }));
+        => Respond(http, await keys.ListAsync(tenantId, limit, cursor, http.RequestAborted), page => Results.Json(page));
 
     private static async Task<IResult> CreateKeyAsync(HttpContext http, Guid tenantId, CreateApiKeyRequest? request, ApiKeyAdminService keys)
     {

@@ -5,6 +5,7 @@ using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Routing.Application;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Http;
+using ModelSwitch.SharedKernel.Pagination;
 
 namespace ModelSwitch.Routing.Endpoints;
 
@@ -17,16 +18,16 @@ internal static class RoutingAdminEndpoints
     {
         var admin = app.MapGroup(_base);
 
-        admin.MapGet("/routing-policies", ListAsync).RequireAuthorization(AdminPolicies.Viewer);
-        admin.MapPost("/routing-policies", CreateAsync).RequireAuthorization(AdminPolicies.Owner);
-        admin.MapPost("/routing-policies/validate", ValidateAsync).RequireAuthorization(AdminPolicies.Owner);
-        admin.MapPut("/routing-policies/{policyId:guid}", UpdateAsync).RequireAuthorization(AdminPolicies.Owner);
-        admin.MapGet("/routing-policies/{policyId:guid}/versions", ListVersionsAsync).RequireAuthorization(AdminPolicies.Viewer);
-        admin.MapGet("/routing-policies/{policyId:guid}/versions/{version:int}", GetVersionAsync).RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapGet("/routing-policies", ListAsync).Produces<PagedResult<PolicyView>>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapPost("/routing-policies", CreateAsync).Produces<PolicyVersionView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Owner);
+        admin.MapPost("/routing-policies/validate", ValidateAsync).Produces<PolicyValidationView>().RequireAuthorization(AdminPolicies.Owner);
+        admin.MapPut("/routing-policies/{policyId:guid}", UpdateAsync).Produces<PolicyVersionView>().RequireAuthorization(AdminPolicies.Owner);
+        admin.MapGet("/routing-policies/{policyId:guid}/versions", ListVersionsAsync).Produces<PagedResult<PolicyVersionView>>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapGet("/routing-policies/{policyId:guid}/versions/{version:int}", GetVersionAsync).Produces<PolicyVersionView>().RequireAuthorization(AdminPolicies.Viewer);
 
-        admin.MapGet("/aliases/{alias}", GetAliasAsync).RequireAuthorization(AdminPolicies.Viewer);
-        admin.MapPut("/aliases/{alias}", BindAliasAsync).RequireAuthorization(AdminPolicies.Owner);
-        admin.MapDelete("/aliases/{alias}", UnbindAliasAsync).RequireAuthorization(AdminPolicies.Owner);
+        admin.MapGet("/aliases/{alias}", GetAliasAsync).Produces<AliasView>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapPut("/aliases/{alias}", BindAliasAsync).Produces<AliasView>().RequireAuthorization(AdminPolicies.Owner);
+        admin.MapDelete("/aliases/{alias}", UnbindAliasAsync).Produces(StatusCodes.Status204NoContent).RequireAuthorization(AdminPolicies.Owner);
         return app;
     }
 

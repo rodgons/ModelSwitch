@@ -31,17 +31,17 @@ internal static class AdministratorEndpoints
         var admin = app.MapGroup(AdminAuthentication.AdminPathPrefix);
 
         // Anonymous, so the sign-in form can fetch the token it must send with POST /admin/session.
-        admin.MapGet("/antiforgery-token", GetAntiforgeryToken).AllowAnonymous();
+        admin.MapGet("/antiforgery-token", GetAntiforgeryToken).Produces<AntiforgeryTokenResponse>().AllowAnonymous();
 
-        admin.MapPost("/session", SignInAsync).AllowAnonymous();
-        admin.MapGet("/session", GetSession).RequireAuthorization(AdminPolicies.Viewer);
-        admin.MapDelete("/session", SignOutAsync).RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapPost("/session", SignInAsync).Produces<SessionResponse>().AllowAnonymous();
+        admin.MapGet("/session", GetSession).Produces<SessionResponse>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapDelete("/session", SignOutAsync).Produces(StatusCodes.Status204NoContent).RequireAuthorization(AdminPolicies.Viewer);
 
-        admin.MapGet("/administrators", ListAdministratorsAsync).RequireAuthorization(AdminPolicies.Owner);
-        admin.MapPost("/administrators", CreateAdministratorAsync).RequireAuthorization(AdminPolicies.Owner);
-        admin.MapPatch("/administrators/{administratorId:guid}", UpdateAdministratorAsync).RequireAuthorization(AdminPolicies.Owner);
+        admin.MapGet("/administrators", ListAdministratorsAsync).Produces<AdministratorList>().RequireAuthorization(AdminPolicies.Owner);
+        admin.MapPost("/administrators", CreateAdministratorAsync).Produces<AdministratorView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Owner);
+        admin.MapPatch("/administrators/{administratorId:guid}", UpdateAdministratorAsync).Produces<AdministratorView>().RequireAuthorization(AdminPolicies.Owner);
 
-        admin.MapGet("/audit-records", ListAuditRecordsAsync).RequireAuthorization(AdminPolicies.Owner);
+        admin.MapGet("/audit-records", ListAuditRecordsAsync).Produces<AuditPage>().RequireAuthorization(AdminPolicies.Owner);
         return app;
     }
 

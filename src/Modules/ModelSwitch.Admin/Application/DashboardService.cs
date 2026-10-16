@@ -40,8 +40,7 @@ internal sealed class DashboardService(
         }
 
         var page = await usage.ListRequestsAsync(parsed.Value with { Filter = scoped.Value }, cancellationToken);
-        var names = await NamesAsync(cancellationToken);
-        return new RequestPage([.. page.Items.Select(r => Summary(r, names))], page.NextCursor);
+        return new RequestPage(await SummariesAsync(page.Items, cancellationToken), page.NextCursor);
     }
 
     public async Task<Result<RequestDetailView>> GetRequestAsync(Guid requestId, CancellationToken cancellationToken)
@@ -58,8 +57,9 @@ internal sealed class DashboardService(
         }
 
         var names = await NamesAsync(cancellationToken);
+        var timeline = detail.Attempts.Select(a => Timeline(a, names)).ToList();
         return new RequestDetailView(
-            Summary(detail.Request, names),
+            Summary(detail.Request, names, timeline),
             detail.ClientRequestId,
             detail.ApiKeyId,
             detail.EvaluationRunId,
@@ -69,23 +69,7 @@ internal sealed class DashboardService(
             detail.TraceId,
             TraceUrl(detail.TraceId),
             detail.RoutingDecision,
-            [.. detail.Attempts.Select(a => new AttemptTimelineView(
-                a.Id,
-                a.AttemptNumber,
-                Name(a.ProviderModelId, names) with { ProviderId = a.ProviderId },
-                a.Kind,
-                a.Status,
-                a.ErrorClass,
-                a.ErrorCode,
-                a.HttpStatus,
-                a.ProviderErrorType,
-                a.StartedAt,
-                a.CompletedAt,
-                a.DurationMs,
-                a.TtftMs,
-                a.InputTokens,
-                a.OutputTokens,
-                a.EstimatedCost))],
+            timeline,
             [.. detail.UsageRecords.Select(u => new UsageRecordDetailView(
                 u.Id,
                 u.ProviderAttemptId,
@@ -171,7 +155,6 @@ internal sealed class DashboardService(
         }
 
         var report = await usage.OverviewAsync(parsed.Value with { TenantIds = TenantIds(administrator) }, cancellationToken);
-        var names = await NamesAsync(cancellationToken);
         return new OverviewView(
             report.From,
             report.To,
@@ -179,7 +162,7 @@ internal sealed class DashboardService(
             ReportCurrency.Code,
             Figures(report.Totals),
             [.. report.Series.Select(p => new OverviewPointView(p.Start, Figures(p.Figures)))],
-            [.. report.RecentFailures.Select(r => Summary(r, names))]);
+            await SummariesAsync(report.RecentFailures, cancellationToken));
     }
 
     public async Task<ProviderHealthView> ProviderHealthAsync(CancellationToken cancellationToken)
@@ -302,7 +285,33 @@ internal sealed class DashboardService(
     private static ModelRef Name(Guid id, IReadOnlyDictionary<Guid, ModelRef> names)
         => names.TryGetValue(id, out var name) ? name : new ModelRef(id, null, null, null);
 
-    private static RequestSummaryView Summary(RequestListItem r, IReadOnlyDictionary<Guid, ModelRef> names) => new(
+    // Each row carries its Attempts so the list can draw a mini Route Strip: one query for the whole page.
+    private async Task<List<RequestSummaryView>> SummariesAsync(IReadOnlyList<RequestListItem> items, CancellationToken cancellationToken)
+    {
+        var names = await NamesAsync(cancellationToken);
+        var attempts = await usage.AttemptsForAsync([.. items.Select(i => i.Id)], cancellationToken);
+        return [.. items.Select(r => Summary(r, names, [.. (attempts.GetValueOrDefault(r.Id) ?? []).Select(a => Timeline(a, names))]))];
+    }
+
+    private static AttemptTimelineView Timeline(AttemptView a, IReadOnlyDictionary<Guid, ModelRef> names) => new(
+        a.Id,
+        a.AttemptNumber,
+        Name(a.ProviderModelId, names) with { ProviderId = a.ProviderId },
+        a.Kind,
+        a.Status,
+        a.ErrorClass,
+        a.ErrorCode,
+        a.HttpStatus,
+        a.ProviderErrorType,
+        a.StartedAt,
+        a.CompletedAt,
+        a.DurationMs,
+        a.TtftMs,
+        a.InputTokens,
+        a.OutputTokens,
+        a.EstimatedCost);
+
+    private static RequestSummaryView Summary(RequestListItem r, IReadOnlyDictionary<Guid, ModelRef> names, IReadOnlyList<AttemptTimelineView> attempts) => new(
         r.Id,
         r.TenantId,
         r.Origin,
@@ -321,5 +330,6 @@ internal sealed class DashboardService(
         r.TotalInputTokens,
         r.TotalOutputTokens,
         r.TotalEstimatedCost,
-        r.UsageStatus);
+        r.UsageStatus,
+        attempts);
 }

@@ -234,7 +234,7 @@ Not in the MVP: model discovery through the Adapter's `ListModelsAsync` (the Pro
 | POST | `/admin/routing-policies/validate` | Dry-run validation, writes nothing. 200 `{valid, resolvedCandidates}` or 400 |
 | GET/PUT/DELETE | `/admin/aliases/{alias}` | PUT `{policyId, description?}` binds (201 new, 200 rebind) |
 
-`POST /admin/routing-policies/{policyId}/simulate` is planned with the dashboard (Phase 4) and is not served yet.
+`POST /admin/routing-policies/{policyId}/simulate` is not served yet; the dashboard's Routing screen leaves the simulate panel out until it is.
 
 ### Requests and usage
 
@@ -242,7 +242,7 @@ Every Administrator may read these (Viewer). Results are narrowed to the caller'
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/admin/requests` | Filters: `from`, `to` (no default: pages back through everything retained), `tenantId`, `origin` (`api`, `evaluation`), `alias`, `providerId`, `modelId` (a request matches when any of its Attempts used that Provider / Provider Model), `status` (`running`, `succeeded`, `failed` = failed or abandoned, `cancelled`, `abandoned`), `errorCode` (closed set), `hadFallback` (`true`/`false`). `sort=startedAt` (default) or `durationMs`, `order=desc` (default) or `asc`, `limit` (1-200, default 50), `cursor`. Items carry `selectedModel: {id, providerId, providerName, name}` |
+| GET | `/admin/requests` | Filters: `from`, `to` (no default: pages back through everything retained), `tenantId`, `origin` (`api`, `evaluation`), `alias`, `providerId`, `modelId` (a request matches when any of its Attempts used that Provider / Provider Model), `status` (`running`, `succeeded`, `failed` = failed or abandoned, `cancelled`, `abandoned`), `errorCode` (closed set), `hadFallback` (`true`/`false`). `sort=startedAt` (default) or `durationMs`, `order=desc` (default) or `asc`, `limit` (1-200, default 50), `cursor`. Items carry `selectedModel: {id, providerId, providerName, name}` and their `attempts` (the same shape as in the detail), so a list can draw each request's Route Strip |
 | GET | `/admin/requests/{requestId}` | `{request, clientRequestId, apiKeyId, evaluationRunId, policyId, policyVersion, inputBytes, traceId, traceUrl, routingDecision, attempts[], usageRecords[]}`. `traceUrl` is `Telemetry:TraceUrlTemplate` with `{traceId}` replaced, or null. Attempts and Usage Records name their Provider Model |
 | GET | `/admin/usage` | `groupBy=tenant\|provider\|model\|alias` (comma-separated or repeated), `interval=hour\|day\|month` (default `day`; `hour` covers at most 31 days), `from`/`to` (default the last 24 h), filters as above. Rows: `{period, tenantId, providerId, providerName, model, alias, requests, failedRequests, inputTokens, cachedInputTokens, outputTokens, estimatedCost, currency}`; columns not grouped by are null. `origin`, `status`, `errorCode`, `hadFallback` and `providerId` filters are answered from the raw request rows only (within their 30-day retention), because the rollup does not keep them |
 | GET | `/admin/overview` | `from`/`to` (default the last 24 h), `tenantId`. `{from, to, stepSeconds, currency, totals, series[{start, figures}], recentFailures[]}`. Figures: `requests, failedRequests, fallbackRequests, successRate, fallbackRate, inputTokens, outputTokens, estimatedCost, latencyP50Ms, latencyP95Ms, ttftP50Ms, ttftP95Ms, exact`. The step is 5 min up to 1 h, 15 min up to 6 h, 1 h up to 7 d, else 1 day. `recentFailures` are the 10 newest failed or abandoned requests in the range |

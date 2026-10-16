@@ -180,6 +180,9 @@ public interface IUsageQueries
 
     Task<OverviewReport> OverviewAsync(OverviewQuery query, CancellationToken cancellationToken);
 
+    /// <summary>The Attempts of each given request, in order: one query for a whole page of requests (the Route Strip of every row).</summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<AttemptView>>> AttemptsForAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken);
+
     /// <summary>Per Provider Model, the Attempts that started at or after <paramref name="since"/>. Not Tenant-scoped: Provider Health is global.</summary>
     Task<IReadOnlyList<AttemptStats>> AttemptStatsAsync(DateTimeOffset since, CancellationToken cancellationToken);
 }

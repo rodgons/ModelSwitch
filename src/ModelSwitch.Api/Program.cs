@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using ModelSwitch.Adapters.Ollama;
 using ModelSwitch.Adapters.OpenAICompatible;
 using ModelSwitch.Admin;
+using ModelSwitch.Api;
 using ModelSwitch.Api.Authentication;
 using ModelSwitch.Api.Endpoints;
 using ModelSwitch.Configuration;
@@ -41,6 +42,9 @@ return await StartupExit.RunAsync(
         builder.Services.AddEvaluationModule();
         builder.Services.AddAdminModule();
 
+        // GET /openapi/v1.json: the dashboard's TypeScript client is generated from it (frontend.md section 1).
+        builder.Services.AddOpenApi(options => options.AddSchemaTransformer(OpenApiNumbers.NumbersOnly));
+
         builder.Services
             .AddAuthentication(ApiKeyDefaults.Scheme)
             .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyDefaults.Scheme, configureOptions: null)
@@ -62,6 +66,7 @@ return await StartupExit.RunAsync(
         app.UseAuthorization();
         app.UseAdminAntiforgery();
 
+        app.MapOpenApi();
         app.MapHealthEndpoints();
         app.MapIdentityEndpoints();
         app.MapRegistryEndpoints();

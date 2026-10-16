@@ -28,7 +28,8 @@ internal sealed record RequestSummaryView(
     int? TotalInputTokens,
     int? TotalOutputTokens,
     decimal? TotalEstimatedCost,
-    string UsageStatus);
+    string UsageStatus,
+    IReadOnlyList<AttemptTimelineView> Attempts);
 
 internal sealed record RequestPage(IReadOnlyList<RequestSummaryView> Items, string? NextCursor);
 

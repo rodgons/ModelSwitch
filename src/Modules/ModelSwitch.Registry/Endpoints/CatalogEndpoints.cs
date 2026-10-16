@@ -5,6 +5,7 @@ using ModelSwitch.Identity.Contracts;
 using ModelSwitch.Registry.Application;
 using ModelSwitch.SharedKernel;
 using ModelSwitch.SharedKernel.Http;
+using ModelSwitch.SharedKernel.Pagination;
 
 namespace ModelSwitch.Registry.Endpoints;
 
@@ -20,18 +21,18 @@ internal static class CatalogEndpoints
     {
         var admin = app.MapGroup(_base);
 
-        admin.MapGet("/providers", ListProvidersAsync).RequireAuthorization(AdminPolicies.Viewer);
-        admin.MapPost("/providers", CreateProviderAsync).RequireAuthorization(AdminPolicies.Owner);
-        admin.MapGet("/providers/{providerId:guid}", GetProviderAsync).RequireAuthorization(AdminPolicies.Viewer);
-        admin.MapPatch("/providers/{providerId:guid}", UpdateProviderAsync).RequireAuthorization(AdminPolicies.Owner);
-        admin.MapPost("/providers/{providerId:guid}/connectivity-check", CheckConnectivityAsync).RequireAuthorization(AdminPolicies.Owner);
+        admin.MapGet("/providers", ListProvidersAsync).Produces<PagedResult<ProviderView>>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapPost("/providers", CreateProviderAsync).Produces<ProviderView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Owner);
+        admin.MapGet("/providers/{providerId:guid}", GetProviderAsync).Produces<ProviderView>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapPatch("/providers/{providerId:guid}", UpdateProviderAsync).Produces<ProviderView>().RequireAuthorization(AdminPolicies.Owner);
+        admin.MapPost("/providers/{providerId:guid}/connectivity-check", CheckConnectivityAsync).Produces<ConnectivityView>().RequireAuthorization(AdminPolicies.Owner);
 
-        admin.MapGet("/providers/{providerId:guid}/models", ListModelsAsync).RequireAuthorization(AdminPolicies.Viewer);
-        admin.MapPost("/providers/{providerId:guid}/models", CreateModelAsync).RequireAuthorization(AdminPolicies.Owner);
-        admin.MapPatch("/models/{modelId:guid}", UpdateModelAsync).RequireAuthorization(AdminPolicies.Owner);
+        admin.MapGet("/providers/{providerId:guid}/models", ListModelsAsync).Produces<PagedResult<ProviderModelView>>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapPost("/providers/{providerId:guid}/models", CreateModelAsync).Produces<ProviderModelView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Owner);
+        admin.MapPatch("/models/{modelId:guid}", UpdateModelAsync).Produces<ProviderModelView>().RequireAuthorization(AdminPolicies.Owner);
 
-        admin.MapGet("/models/{modelId:guid}/prices", ListPricesAsync).RequireAuthorization(AdminPolicies.Viewer);
-        admin.MapPost("/models/{modelId:guid}/prices", CreatePriceAsync).RequireAuthorization(AdminPolicies.Owner);
+        admin.MapGet("/models/{modelId:guid}/prices", ListPricesAsync).Produces<PagedResult<ModelPriceView>>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapPost("/models/{modelId:guid}/prices", CreatePriceAsync).Produces<ModelPriceView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Owner);
         return app;
     }
 

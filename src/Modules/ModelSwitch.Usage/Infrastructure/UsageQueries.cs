@@ -90,36 +90,7 @@ internal sealed class UsageQueries(IDbContextFactory<UsageDbContext> contexts) :
                 []);
         }
 
-        var attempts = new List<AttemptView>();
-        await using (var command = new NpgsqlCommand(
-            "SELECT id, attempt_number, provider_id, provider_model_id, kind, status, error_class, error_code, http_status, provider_error_type, started_at, completed_at, " +
-            "duration_ms, ttft_ms, input_tokens, output_tokens, estimated_cost FROM usage.provider_attempt WHERE inference_request_id = @id ORDER BY attempt_number",
-            connection))
-        {
-            command.Parameters.AddWithValue("id", requestId);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                attempts.Add(new AttemptView(
-                    reader.GetGuid(0),
-                    reader.GetInt16(1),
-                    reader.GetGuid(2),
-                    reader.GetGuid(3),
-                    reader.GetString(4),
-                    reader.GetString(5),
-                    NullableString(reader, 6),
-                    NullableString(reader, 7),
-                    reader.IsDBNull(8) ? null : reader.GetInt16(8),
-                    NullableString(reader, 9),
-                    reader.GetFieldValue<DateTimeOffset>(10),
-                    reader.GetFieldValue<DateTimeOffset>(11),
-                    reader.GetInt32(12),
-                    Nullable<int>(reader, 13),
-                    Nullable<int>(reader, 14),
-                    Nullable<int>(reader, 15),
-                    Nullable<decimal>(reader, 16)));
-            }
-        }
+        var attempts = (await ReadAttemptsAsync(connection, [requestId], cancellationToken)).GetValueOrDefault(requestId) ?? [];
 
         var records = new List<UsageRecordView>();
         await using (var command = new NpgsqlCommand(
@@ -150,6 +121,18 @@ internal sealed class UsageQueries(IDbContextFactory<UsageDbContext> contexts) :
         }
 
         return detail with { Attempts = attempts, UsageRecords = records };
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<AttemptView>>> AttemptsForAsync(IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(requestIds);
+        if (requestIds.Count == 0)
+        {
+            return new Dictionary<Guid, IReadOnlyList<AttemptView>>();
+        }
+
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        return await ReadAttemptsAsync(await OpenAsync(db, cancellationToken), requestIds, cancellationToken);
     }
 
     public async Task<IReadOnlyList<UsageRow>> UsageAsync(UsageQuery query, CancellationToken cancellationToken)
@@ -365,6 +348,47 @@ internal sealed class UsageQueries(IDbContextFactory<UsageDbContext> contexts) :
         }
 
         return buckets;
+    }
+
+    private static async Task<Dictionary<Guid, IReadOnlyList<AttemptView>>> ReadAttemptsAsync(NpgsqlConnection connection, IReadOnlyCollection<Guid> requestIds, CancellationToken cancellationToken)
+    {
+        var byRequest = new Dictionary<Guid, List<AttemptView>>();
+        await using var command = new NpgsqlCommand(
+            "SELECT inference_request_id, id, attempt_number, provider_id, provider_model_id, kind, status, error_class, error_code, http_status, provider_error_type, " +
+            "started_at, completed_at, duration_ms, ttft_ms, input_tokens, output_tokens, estimated_cost FROM usage.provider_attempt " +
+            "WHERE inference_request_id = ANY(@ids) ORDER BY inference_request_id, attempt_number",
+            connection);
+        command.Parameters.AddWithValue("ids", requestIds.ToArray());
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var requestId = reader.GetGuid(0);
+            if (!byRequest.TryGetValue(requestId, out var list))
+            {
+                byRequest[requestId] = list = [];
+            }
+
+            list.Add(new AttemptView(
+                reader.GetGuid(1),
+                reader.GetInt16(2),
+                reader.GetGuid(3),
+                reader.GetGuid(4),
+                reader.GetString(5),
+                reader.GetString(6),
+                NullableString(reader, 7),
+                NullableString(reader, 8),
+                reader.IsDBNull(9) ? null : reader.GetInt16(9),
+                NullableString(reader, 10),
+                reader.GetFieldValue<DateTimeOffset>(11),
+                reader.GetFieldValue<DateTimeOffset>(12),
+                reader.GetInt32(13),
+                Nullable<int>(reader, 14),
+                Nullable<int>(reader, 15),
+                Nullable<int>(reader, 16),
+                Nullable<decimal>(reader, 17)));
+        }
+
+        return byRequest.ToDictionary(p => p.Key, p => (IReadOnlyList<AttemptView>)p.Value);
     }
 
     private static async Task AccumulateAsync(NpgsqlConnection connection, Sql sql, Dictionary<(DateTimeOffset, Guid?, Guid?, string?), UsageRow> totals, CancellationToken cancellationToken)
