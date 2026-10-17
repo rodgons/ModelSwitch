@@ -194,6 +194,7 @@ public sealed class TenantIsolationV1Tests(GatewayFixture gateway) : IClassFixtu
     }
 
     [Fact]
+    [TriggersError("model_not_allowed")]
     public async Task An_alias_only_another_tenant_may_use_is_403_model_not_allowed_and_leaks_nothing()
     {
         var (tenantA, a) = await TenantWithAccessAsync("iso-alias-a", 100, GatewayFixture.ChatAlias);

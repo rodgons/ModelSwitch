@@ -87,6 +87,7 @@ public sealed class AdminSessionEndpointTests(AdminFixture admin) : IClassFixtur
     }
 
     [Fact]
+    [TriggersError("unauthenticated")]
     public async Task Without_a_session_the_answer_is_a_401_problem_not_a_redirect()
     {
         using var browser = admin.NewBrowser();

@@ -365,6 +365,7 @@ public sealed class TenantAdminEndpointTests(AdminFixture admin) : IClassFixture
     }
 
     [Fact]
+    [TriggersError("tenant_suspended")]
     public async Task A_suspended_tenant_gets_403_on_v1_and_is_served_again_when_reactivated()
     {
         using var owner = await admin.SignedInOwnerAsync();

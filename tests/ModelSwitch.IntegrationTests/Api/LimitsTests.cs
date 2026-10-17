@@ -57,6 +57,7 @@ public sealed class LimitsTests(GatewayFixture gateway, PostgresFixture postgres
     }
 
     [Fact]
+    [TriggersError("rate_limit_exceeded")]
     public async Task The_rate_limit_admits_the_burst_then_refuses_with_429_and_retry_after()
     {
         // 20 per minute: one token every 3 s, burst max(1, 20 / 10) = 2.
@@ -97,6 +98,7 @@ public sealed class LimitsTests(GatewayFixture gateway, PostgresFixture postgres
     }
 
     [Fact]
+    [TriggersError("concurrency_limit_exceeded")]
     public async Task The_concurrency_limit_refuses_the_request_over_the_limit_and_frees_the_slot_when_a_request_ends()
     {
         var (_, key) = await gateway.SeedTenantAsync("concurrency", maxConcurrent: 3);
@@ -275,6 +277,31 @@ public sealed class LimitsTests(GatewayFixture gateway, PostgresFixture postgres
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         body.GetProperty("checks").GetProperty("valkey").GetString().ShouldBe("ok");
+    }
+
+    [Fact]
+    [TriggersError("limits_unavailable")]
+    public async Task An_unreachable_valkey_with_the_limits_failing_closed_is_a_503_limits_unavailable()
+    {
+        // Nothing listens on port 1, so every limit check fails; a Tenant with limits needs Valkey on every request.
+        var closed = new GatewayFixture(postgres, valkey) { ValkeyConnectionString = "127.0.0.1:1,connectTimeout=300" };
+        closed.Settings["Limits:FailureMode"] = "Closed";
+        await closed.InitializeAsync();
+        try
+        {
+            var (_, key) = await closed.SeedTenantAsync("valkey-unreachable", requestsPerMinute: 600);
+            using var client = closed.Authenticated(key);
+
+            var response = await PostAsync(client);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+            (await ErrorCodeAsync(response)).ShouldBe("limits_unavailable");
+            response.Headers.RetryAfter.ShouldNotBeNull();
+        }
+        finally
+        {
+            await closed.DisposeAsync();
+        }
     }
 
     [Fact]

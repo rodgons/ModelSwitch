@@ -12,6 +12,7 @@ public sealed class AdminSecurityTests(AdminFixture admin) : IClassFixture<Admin
     private const string _password = "an-ordinary-password-1";
 
     [Fact]
+    [TriggersError("validation_failed")]
     public async Task A_missing_antiforgery_token_on_sign_in_is_a_400_validation_problem()
     {
         using var browser = admin.NewBrowser();
@@ -65,6 +66,7 @@ public sealed class AdminSecurityTests(AdminFixture admin) : IClassFixture<Admin
     [Theory]
     [InlineData("viewer")]
     [InlineData("operator")]
+    [TriggersError("forbidden")]
     public async Task A_viewer_or_operator_posting_to_an_owner_endpoint_is_403_forbidden(string role)
     {
         await admin.CreateAdministratorAsync($"{role}-forbidden@example.com", role, admin.TenantA);
@@ -98,6 +100,7 @@ public sealed class AdminSecurityTests(AdminFixture admin) : IClassFixture<Admin
     }
 
     [Fact]
+    [TriggersError("not_found")]
     public async Task An_operator_outside_their_grant_gets_404_and_inside_it_gets_200()
     {
         await admin.CreateAdministratorAsync("operator-grant@example.com", "operator", admin.TenantA);

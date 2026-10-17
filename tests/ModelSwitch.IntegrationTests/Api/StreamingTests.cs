@@ -136,6 +136,7 @@ public sealed class StreamingTests(GatewayFixture gateway) : IClassFixture<Gatew
     }
 
     [Fact]
+    [TriggersError("stream_interrupted")]
     public async Task A_stream_cut_after_five_chunks_ends_with_the_error_event_no_done_and_no_replay()
     {
         await gateway.SetFaultAsync(null, null); // zero the Mock Provider's counters
@@ -196,6 +197,7 @@ public sealed class StreamingTests(GatewayFixture gateway) : IClassFixture<Gatew
     }
 
     [Fact]
+    [TriggersError("provider_error")]
     public async Task When_every_candidate_fails_before_the_first_token_the_answer_is_an_ordinary_error_not_an_event_stream()
     {
         await gateway.SetFaultAsync(GatewayFixture.PrimaryModel, "status=400");
