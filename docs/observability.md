@@ -70,6 +70,7 @@ Built-in ASP.NET Core, HttpClient, Npgsql and runtime metrics are also enabled. 
 - `[SecretData]` and `[ContentData]` (`SharedKernel.Telemetry`) classify `[LoggerMessage]` parameters; the hosts register an erasing redactor for both, and for anything else classified.
 - Use `[LoggerMessage]` source-generated methods only, with event ids grouped per module (Identity 1xxx, Registry 2xxx, Routing 3xxx, Inference 4xxx, Usage 5xxx, Evaluation 6xxx, Worker 7xxx).
 - Levels: one `Information` line per completed request (status, alias, model, attempts, duration), `Warning` per failed Attempt, and `Error` only for gateway faults, never for Provider errors that were handled.
+- Framework categories are raised to `Warning` in the hosts' `appsettings.json` (api and worker): `Microsoft.EntityFrameworkCore` (one line per DB command otherwise), `System.Net.Http.HttpClient` (four lines per Provider call), and in the api `Microsoft.AspNetCore` (request start and finish). Everything else, the gateway's own categories and `Microsoft.Hosting.Lifetime` included, stays at `Information`. Without these defaults a request wrote about ten lines (benchmarks/2026-10-17-266c696.md). An operator overrides a level with an environment variable, e.g. `Logging__LogLevel__Microsoft.EntityFrameworkCore=Information`; raising EF Core to `Debug` or enabling sensitive-data logging is never done, because parameter values could then reach the log (ADR-0010).
 
 ## 5. Degradation rules
 
