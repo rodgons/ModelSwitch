@@ -1,5 +1,4 @@
-# Continuous integration (docs/conventions.md "CI"). CodeQL runs in codeql.yml. Docker image builds
-# are added when the images exist.
+# Continuous integration (docs/conventions.md "CI"). CodeQL runs in codeql.yml.
 name: ci
 
 on:
@@ -59,6 +58,27 @@ jobs:
       - run: pnpm check:api
       - run: pnpm test
       - run: pnpm build
+
+  images:
+    # The Compose images (docs/deployment.md section 1) must keep building. Built only, never pushed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the .NET images
+        # One Dockerfile, one target per process; the targets share the restore and publish stage.
+        run: |
+          for target in api worker migrator mock-provider; do
+            docker build -f deploy/docker/dotnet.Dockerfile --target "$target" -t "modelswitch/$target:ci" .
+          done
+      - name: Build the web image
+        run: docker build -f deploy/docker/web.Dockerfile -t modelswitch/web:ci .
+      - name: Check the Compose file
+        run: |
+          cp .env.example .env
+          ./scripts/generate-secrets.sh
+          docker compose --profile demo --profile ollama config --quiet
+      - name: Lint the scripts
+        run: shellcheck scripts/generate-secrets.sh scripts/seed-demo.sh
 
   gitleaks:
     runs-on: ubuntu-latest
