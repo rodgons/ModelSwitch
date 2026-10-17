@@ -1,0 +1,28 @@
+# Overlay for the load runs (load/README.md), applied on top of the root compose.yaml by load/run.sh:
+#   docker compose -p modelswitch-load -f compose.yaml -f load/compose.load.yaml --profile demo --profile observability …
+# - Own image tags, so a load build never replaces the images another Compose project (the dev or e2e stack) runs.
+# - api and worker export to the bundled otel-lgtm, every 5 s instead of the SDK's 60 s, so each load step gets enough samples.
+# - otel-lgtm publishes no host port: Prometheus is queried from a throwaway container on the project network, so the run never
+#   collides with a dev stack that already holds 127.0.0.1:3000/4317/4318.
+
+x-load-telemetry: &load-telemetry
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm:4317
+  OTEL_METRIC_EXPORT_INTERVAL: "5000"
+
+services:
+  migrator:
+    image: modelswitch-load/migrator
+  api:
+    image: modelswitch-load/api
+    environment:
+      <<: *load-telemetry
+  worker:
+    image: modelswitch-load/worker
+    environment:
+      <<: *load-telemetry
+  web:
+    image: modelswitch-load/web
+  mock-provider:
+    image: modelswitch-load/mock-provider
+  otel-lgtm:
+    ports: !reset []

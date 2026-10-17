@@ -29,3 +29,6 @@ compose.override.yaml
 
 # Claude Code local state
 .claude/worktrees/
+
+# Load-run output (load/run.sh); published numbers go to docs/benchmarks/
+load/results/
