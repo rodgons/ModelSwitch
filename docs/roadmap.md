@@ -92,11 +92,32 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 
 ## Phase 6: Hardening and release (≈1–2 weeks)
 
-- [ ] Complete the failure-injection catalogue; retry-amplification numbers
-- [ ] k6 load runs; benchmark report with real numbers (DoD #10)
-- [ ] Security test pass ([testing.md §4](testing.md#4-security-tests-prd-104)); `gitleaks` + CodeQL clean
-- [ ] Data-retention review; README (architecture, deploy, API usage, testing, limitations) (DoD #12)
-- [ ] Demo script: deploy → connect app → inject Provider failure → watch Fallback → inspect usage → run a Comparison (PRD §15)
-- [ ] Playwright smoke + axe in nightly CI
+- [x] Complete the failure-injection catalogue; retry-amplification numbers *(PostgreSQL stopped mid-load and worker killed mid-evaluation added; both exposed bugs, fixed with regression tests)*
+- [x] k6 load runs; benchmark report with real numbers (DoD #10) *(the first run found a per-Tenant `budget_period` row lock and an oversized connection pool; fixed and re-measured)*
+- [x] Security test pass ([testing.md §4](testing.md#4-security-tests-prd-104)); `gitleaks` + CodeQL clean *(adds the invalid-key throttle security.md promised, and coverage gates for error codes, eligibility reasons, failure classification rows and Evaluator kinds)*
+- [x] Data-retention review; README (architecture, deploy, API usage, testing, limitations) (DoD #12) *(adds deletion of Datasets, Prompts and Comparisons, and retention for expired sessions and finished Reservations)*
+- [x] Demo script: deploy → connect app → inject Provider failure → watch Fallback → inspect usage → run a Comparison (PRD §15)
+- [x] Playwright smoke + axe in nightly CI
+
+Follow-ups found during Phase 6, not part of the MVP: the outbox relay publishes one event per transaction and falls behind above about 200 RPS sustained (benchmark report); a single Evaluation Run cannot be deleted on its own, only its Comparison.
 
 **Exit:** all 14 DoD items are checked, each with a link to its evidence.
+
+## Definition of Done evidence
+
+| # | PRD §11 item | Evidence |
+|---|---|---|
+| 1 | Deploy the stack from documented instructions | [deployment.md §2](deployment.md#2-quick-start-dod-1), [demo.md](demo.md) run on a clean `.env`; the `images` job in [ci.yml](../.github/workflows/ci.yml) builds every image |
+| 2 | Two Adapters pass the shared contract tests | [AdapterContractTests](../tests/ModelSwitch.AdapterContractTests): `OpenAICompatible/` and `Ollama/` against the shared suite |
+| 3 | Normalized non-streaming and streaming inference | [ChatCompletionsEndpointTests](../tests/ModelSwitch.IntegrationTests/Api/ChatCompletionsEndpointTests.cs), [StreamingTests](../tests/ModelSwitch.IntegrationTests/Api/StreamingTests.cs) |
+| 4 | Routing, retries, Fallbacks and circuit breakers have automated tests | [RouterTests](../tests/ModelSwitch.UnitTests/Routing/RouterTests.cs), [AttemptExecutorTests](../tests/ModelSwitch.UnitTests/Inference/AttemptExecutorTests.cs), [ResilienceTests](../tests/ModelSwitch.IntegrationTests/Api/ResilienceTests.cs), [FailureInjectionTests](../tests/ModelSwitch.FailureInjectionTests) |
+| 5 | Tenant isolation and API-key revocation verified | [TenantIsolationTests](../tests/ModelSwitch.IntegrationTests/Api/TenantIsolationTests.cs), revocation within the 30 s cap in [AdminCrossCuttingTests](../tests/ModelSwitch.IntegrationTests/Api/AdminCrossCuttingTests.cs); full list in [testing.md §4](testing.md#4-security-tests-prd-104) |
+| 6 | Request history and Attempts persisted and inspectable | [RequestRecordsTests](../tests/ModelSwitch.IntegrationTests/Api/RequestRecordsTests.cs); the request explorer in [smoke.spec.ts](../web/e2e/smoke.spec.ts) |
+| 7 | Token usage and cost recorded with provenance | [UsageAccountingTests](../tests/ModelSwitch.IntegrationTests/Api/UsageAccountingTests.cs); price preservation in [CatalogAdminEndpointTests](../tests/ModelSwitch.IntegrationTests/Api/CatalogAdminEndpointTests.cs) |
+| 8 | Dashboard shows request, cost, latency and failure information | Overview, Requests and request detail, checked with axe in [screens.spec.ts](../web/e2e/screens.spec.ts); [frontend.md](frontend.md) |
+| 9 | Evaluation Runs compare models on the same versioned Dataset | [EvaluationRunTests](../tests/ModelSwitch.IntegrationTests/Api/EvaluationRunTests.cs), [evaluation.spec.ts](../web/e2e/evaluation.spec.ts), [demo.md §6](demo.md#6-run-a-comparison) |
+| 10 | A benchmark report with actual, reproducible measurements | [benchmarks/2026-10-17-ec9c440.md](benchmarks/2026-10-17-ec9c440.md) (and the earlier [266c696](benchmarks/2026-10-17-266c696.md) run), produced by [load/run.sh](../load/run.sh) |
+| 11 | Logs and traces expose no API keys or content by default | [TelemetryCanaryTests](../tests/ModelSwitch.IntegrationTests/Api/TelemetryCanaryTests.cs), [LogRedactionTests](../tests/ModelSwitch.UnitTests/Telemetry/LogRedactionTests.cs), [ADR-0010](adr/0010-no-prompt-or-completion-content-retained.md) |
+| 12 | The README covers architecture, deployment, API usage, testing and limitations | [README.md](../README.md) |
+| 13 | CI runs formatting checks, automated tests and static analysis | [ci.yml](../.github/workflows/ci.yml) (format, analyzers as errors, tests, gitleaks), [codeql.yml](../.github/workflows/codeql.yml), [nightly.yml](../.github/workflows/nightly.yml) |
+| 14 | Failure-injection tests show bounded retries and controlled degradation | [FailureInjectionTests](../tests/ModelSwitch.FailureInjectionTests), [testing.md §3](testing.md#3-failure-injection-scenarios-prd-103), [benchmarks/retry-amplification.md](benchmarks/retry-amplification.md) |
