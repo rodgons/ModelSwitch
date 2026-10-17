@@ -109,7 +109,7 @@ In Compose, `.env` is the only place values are set. `deploy/docker-compose.yml`
 | `MODELSWITCH__Telemetry__TraceSampleRatio` | | api, worker | `1.0`. Parent-based head sampling ratio, 0 to 1 (observability.md section 2) |
 | `MODELSWITCH__Telemetry__TraceUrlTemplate` | | api | e.g. `http://localhost:3000/explore?…{traceId}` |
 | Provider env credentials (e.g. `OPENAI_API_KEY`) | | api, worker | referenced as `env:OPENAI_API_KEY`. Compose passes `OPENAI_API_KEY` only; add others to the `x-gateway-environment` block |
-| `MODELSWITCH_URL`, `MODELSWITCH_DEMO_OLLAMA_MODEL` | | `seed-demo.sh` | The gateway URL (default `http://localhost:$MODELSWITCH_HTTP_PORT`) and the Ollama model tag (default `qwen2.5:1.5b-instruct-q4_K_M`) |
+| `MODELSWITCH_URL`, `MODELSWITCH_DEMO_OLLAMA_MODEL`, `MODELSWITCH_DEMO_TENANT` | | `seed-demo.sh` | The gateway URL (default `http://localhost:$MODELSWITCH_HTTP_PORT`), the Ollama model tag (default `qwen2.5:1.5b-instruct-q4_K_M`), and the name of the Tenant to create or reuse (default `demo`; `load/run.sh` seeds several) |
 
 ## 4. Database initialization
 

@@ -4,7 +4,7 @@
 #   - Provider "ollama" with one small local model, pulled into the `ollama` container, when the `ollama` profile is running;
 #   - Routing Policy "balanced" and alias "balanced": mock-echo first, falling back to the Ollama model (or, without Ollama,
 #     to mock-fixed). docs/deployment.md section 2 shows how to make mock-echo fail through the mock's /__scenarios;
-#   - Tenant "demo" allowed every alias, and a new API Key with the inference and models:read Scopes.
+#   - Tenant "demo" (or MODELSWITCH_DEMO_TENANT) allowed every alias, and a new API Key with the inference and models:read Scopes.
 # The plaintext key is printed once, alone on stdout, so `KEY=$(./scripts/seed-demo.sh)` works; progress goes to stderr.
 # Safe to run again: existing Providers, models, Prices, the policy and the Tenant are reused, and a new key is created.
 #
@@ -16,7 +16,7 @@
 #
 # Environment: MODELSWITCH_URL (default http://localhost:$MODELSWITCH_HTTP_PORT, or :8080), MODELSWITCH_DEMO_OLLAMA_MODEL
 # (default below), MODELSWITCH_ENV_FILE (default .env, read for the port and the Owner credentials: MODELSWITCH__Bootstrap__OwnerEmail
-# / OwnerPassword).
+# / OwnerPassword), MODELSWITCH_DEMO_TENANT (the Tenant's name, default demo; load/run.sh seeds several).
 # Needs: bash, curl, jq, and docker compose (for Ollama only).
 set -euo pipefail
 
@@ -54,6 +54,7 @@ base_url="${MODELSWITCH_URL:-http://localhost:${port:-8080}}"
 owner_email="$(env_value MODELSWITCH__Bootstrap__OwnerEmail)"
 owner_password="$(env_value MODELSWITCH__Bootstrap__OwnerPassword)"
 ollama_model="${MODELSWITCH_DEMO_OLLAMA_MODEL:-$default_ollama_model}"
+tenant_name="${MODELSWITCH_DEMO_TENANT:-demo}"
 [ -n "$owner_email" ] && [ -n "$owner_password" ] || die "set MODELSWITCH__Bootstrap__OwnerEmail and OwnerPassword in .env"
 
 work="$(mktemp -d)"
@@ -185,11 +186,11 @@ fi
 api PUT /admin/aliases/balanced "$(jq -n --arg id "$policy_id" '{policyId: $id, description: "Demo: mock-echo with a Fallback"}')" >/dev/null
 log "Alias balanced → policy balanced"
 
-# --- Tenant "demo" and a new API Key ---
-tenant_id="$(api GET '/admin/tenants?limit=200' | jq -r '.items[] | select(.name == "demo") | .id')"
+# --- Tenant (default "demo") and a new API Key ---
+tenant_id="$(api GET '/admin/tenants?limit=200' | jq -r --arg name "$tenant_name" '.items[] | select(.name == $name) | .id')"
 if [ -z "$tenant_id" ]; then
-  tenant_id="$(api POST /admin/tenants '{"name": "demo"}' | jq -r .id)"
-  log "Created Tenant demo"
+  tenant_id="$(api POST /admin/tenants "$(jq -n --arg name "$tenant_name" '{name: $name}')" | jq -r .id)"
+  log "Created Tenant $tenant_name"
 fi
 api PUT "/admin/tenants/$tenant_id/model-access" '{"allowedAliases": ["*"]}' >/dev/null
 key="$(api POST "/admin/tenants/$tenant_id/api-keys" "$(jq -n --arg name "demo-$(date -u +%Y%m%dT%H%M%SZ)" \
@@ -197,7 +198,7 @@ key="$(api POST "/admin/tenants/$tenant_id/api-keys" "$(jq -n --arg name "demo-$
 [ -n "$key" ] && [ "$key" != null ] || die "the API Key was not returned"
 
 log ""
-log "Seeded. The API Key for Tenant demo is printed below (only now). Try:"
+log "Seeded. The API Key for Tenant $tenant_name is printed below (only now). Try:"
 log "  curl $base_url/v1/chat/completions -H \"Authorization: Bearer \$KEY\" -H 'Content-Type: application/json' \\"
 log "    -d '{\"model\":\"balanced\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}'"
 printf '%s\n' "$key"
