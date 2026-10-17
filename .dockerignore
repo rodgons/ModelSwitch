@@ -1,0 +1,25 @@
+# Build context for deploy/docker/*.Dockerfile (docs/deployment.md section 1). Keep it small: only sources and build props.
+**/bin/
+**/obj/
+**/node_modules/
+**/TestResults/
+web/dist/
+web/coverage/
+**/*.tsbuildinfo
+.git/
+.github/
+.claude/
+.vs/
+.idea/
+.vscode/
+.env
+.env.*
+compose.override.yaml
+docs/
+samples/
+tests/
+scripts/
+deploy/
+!deploy/docker/
+*.md
+!web/**/*.md
