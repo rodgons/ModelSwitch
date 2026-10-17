@@ -1,12 +1,25 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using ModelSwitch.SharedKernel.Errors;
 
 namespace ModelSwitch.SharedKernel.Http;
 
 public static class HttpPipelineExtensions
 {
+    /// <summary>
+    /// Makes a body or parameter that cannot be bound (malformed JSON, a value of the wrong type) throw, so the handler added by
+    /// <see cref="UseRequestIdAndErrorHandling"/> answers 400 with Problem Details. ASP.NET Core throws only in Development by
+    /// default; elsewhere it answers an empty 400, which the constitution forbids.
+    /// </summary>
+    public static IServiceCollection AddBadRequestProblemDetails(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
+    }
+
     /// <summary>
     /// Adds <see cref="RequestIdMiddleware"/> and a last-resort exception handler, in that order, so even an unhandled
     /// failure answers with Problem Details and an <c>X-Request-Id</c>. Call before authentication.
