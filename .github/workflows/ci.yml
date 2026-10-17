@@ -1,5 +1,5 @@
-# Continuous integration (docs/conventions.md "CI"). Later phases add CodeQL, the OpenAPI
-# client drift check and Docker image builds as those artefacts exist.
+# Continuous integration (docs/conventions.md "CI"). CodeQL runs in codeql.yml. Docker image builds
+# are added when the images exist.
 name: ci
 
 on:
