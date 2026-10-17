@@ -15,7 +15,8 @@
 #   --no-ollama    skip Ollama even when its container runs.
 #
 # Environment: MODELSWITCH_URL (default http://localhost:$MODELSWITCH_HTTP_PORT, or :8080), MODELSWITCH_DEMO_OLLAMA_MODEL
-# (default below), and the Owner credentials from .env (MODELSWITCH__Bootstrap__OwnerEmail / OwnerPassword).
+# (default below), MODELSWITCH_ENV_FILE (default .env, read for the port and the Owner credentials: MODELSWITCH__Bootstrap__OwnerEmail
+# / OwnerPassword).
 # Needs: bash, curl, jq, and docker compose (for Ollama only).
 set -euo pipefail
 
@@ -29,13 +30,13 @@ for argument in "$@"; do
   case "$argument" in
     --with-openai) with_openai=true ;;
     --no-ollama) use_ollama=false ;;
-    -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $argument (use --with-openai, --no-ollama)" >&2; exit 64 ;;
   esac
 done
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-env_file="$root/.env"
+env_file="${MODELSWITCH_ENV_FILE:-$root/.env}"
 log() { printf '%s\n' "$*" >&2; }
 die() { log "error: $*"; exit 1; }
 
