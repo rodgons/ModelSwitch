@@ -20,7 +20,8 @@
 #
 # Environment: STEP_DURATION (5m), RATES (50,100,200,400), VARIANTS (nonstream,stream), MOCK_LATENCY_MS (200),
 # WARMUP_DURATION (60s), STEP_GAP_SECONDS (20), LOAD_HTTP_PORT (8090), OUT_DIR (load/results/<UTC timestamp>),
-# WAIT_FOR_IDLE (1), IDLE_TIMEOUT_MINUTES (45), KEEP_STACK (0), SKIP_BUILD (0).
+# WAIT_FOR_IDLE (1), IDLE_TIMEOUT_MINUTES (45), KEEP_STACK (0), SKIP_BUILD (0), TENANTS (1: every request from Tenant `demo`;
+# N > 1 seeds `load-1`…`load-N` instead and spreads requests over their keys).
 # Needs: docker compose v2, k6, curl, jq.
 set -euo pipefail
 
@@ -83,7 +84,15 @@ log "Starting Compose project $project on port $port"
 if [ "${SKIP_BUILD:-0}" = 1 ]; then compose up -d --wait >&2; else compose up -d --build --wait >&2; fi
 
 # --- 4. seed and mock latency ---
-key="$(MODELSWITCH_URL="http://localhost:$port" ./scripts/seed-demo.sh --no-ollama 2>"$out_dir/seed.log")"
+tenants="${TENANTS:-1}"
+if [ "$tenants" -le 1 ]; then
+  key="$(MODELSWITCH_URL="http://localhost:$port" ./scripts/seed-demo.sh --no-ollama 2>"$out_dir/seed.log")"
+else
+  key=""
+  for i in $(seq 1 "$tenants"); do
+    key="$key${key:+,}$(MODELSWITCH_URL="http://localhost:$port" MODELSWITCH_DEMO_TENANT="load-$i" ./scripts/seed-demo.sh --no-ollama 2>>"$out_dir/seed.log")"
+  done
+fi
 docker run --rm --network "$network" curlimages/curl:8.11.1 -fsS http://mock-provider:8080/__scenarios \
   -H 'Content-Type: application/json' -d "{\"model\":\"mock-echo\",\"fault\":\"latency=$mock_latency_ms\"}" >/dev/null
 log "Seeded; mock-echo answers after $mock_latency_ms ms"
@@ -113,12 +122,13 @@ record_images > "$out_dir/images.txt"
   echo "docker $(docker info --format '{{.ServerVersion}} {{.OperatingSystem}}; VM {{.NCPU}} CPU {{.MemTotal}} bytes')"
   echo "k6 $(k6 version | head -1)"
   echo "other containers: ${others:-none}"
+  echo "tenants ${TENANTS:-1}"
 } > "$out_dir/environment.txt"
 
 # --- 5. warm-up (JIT, connection pools, tiered compilation); not measured ---
 log "Warm-up: $warmup_duration at 50 RPS per variant"
 for variant in ${variants//,/ }; do
-  API_KEY="$key" BASE_URL="http://localhost:$port" RATES=50 STEP_DURATION="$warmup_duration" STEP_GAP=0s \
+  API_KEYS="$key" BASE_URL="http://localhost:$port" RATES=50 STEP_DURATION="$warmup_duration" STEP_GAP=0s \
     STREAM=$([ "$variant" = stream ] && echo true || echo false) MOCK_LATENCY_MS="$mock_latency_ms" \
     SUMMARY_FILE="$out_dir/warmup-$variant.json" k6 run -q --no-color load/scenarios/overhead.js >/dev/null 2>&1 || true
 done
@@ -139,7 +149,7 @@ for variant in ${variants//,/ }; do
     ( sleep $(( $(to_seconds "$step_duration") / 2 )) \
       && docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}' $(compose ps -q) > "$out_dir/docker-stats-$step.txt" ) &
     stats_pid=$!
-    API_KEY="$key" BASE_URL="http://localhost:$port" RATES="$rate" STEP_DURATION="$step_duration" STEP_GAP=0s STREAM="$streaming" \
+    API_KEYS="$key" BASE_URL="http://localhost:$port" RATES="$rate" STEP_DURATION="$step_duration" STEP_GAP=0s STREAM="$streaming" \
       MOCK_LATENCY_MS="$mock_latency_ms" SUMMARY_FILE="$out_dir/k6-$step.json" \
       k6 run -q --no-color load/scenarios/overhead.js > "$out_dir/k6-$step.txt" 2>&1 || log "k6 exited non-zero for $step (see k6-$step.txt)"
     wait "$stats_pid" || true
@@ -186,7 +196,7 @@ for variant in ${variants//,/ }; do
     sel50="$sel,le=\"0.05\""
     pool="$api,db_client_connection_pool_name!~\".*Pooling=False.*\""
     pool_used="$pool,db_client_connection_state=\"used\""
-    gen2="$api,dotnet_gc_heap_generation=\"gen2\""
+    gen2="$api,gc_heap_generation=\"gen2\""
     jq -nc \
       --arg step "$step" --arg variant "$variant" --argjson rate "$rate" --arg start "$start_iso" --arg end "$end_iso" \
       --slurpfile k6 "$out_dir/k6-$step.json" \

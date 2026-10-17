@@ -29,7 +29,7 @@ STEP_DURATION=30s RATES=20,50 WARMUP_DURATION=10s load/run.sh   # smoke run (~4 
 5. a warm-up at 50 RPS per variant (`WARMUP_DURATION`, default 60 s, not measured), then one k6 run per (variant, rate) with `STEP_GAP_SECONDS` (default 20) plus 12 s between steps, collecting after each step;
 6. writes `results/<UTC timestamp>/` and tears the stack down with `down -v` (`KEEP_STACK=1` keeps it; `SKIP_BUILD=1` skips `--build`).
 
-Variables of `run.sh`: `STEP_DURATION` (`5m`; `Ns` or `Nm`), `RATES` (`50,100,200,400`), `VARIANTS` (`nonstream,stream`), `MOCK_LATENCY_MS`, `WARMUP_DURATION`, `STEP_GAP_SECONDS`, `LOAD_HTTP_PORT`, `OUT_DIR`, `WAIT_FOR_IDLE`, `IDLE_TIMEOUT_MINUTES`, `KEEP_STACK`, `SKIP_BUILD`. `overhead.js` also runs on its own against any running gateway; its variables are listed at the top of the file (`API_KEY` is required).
+Variables of `run.sh`: `STEP_DURATION` (`5m`; `Ns` or `Nm`), `RATES` (`50,100,200,400`), `VARIANTS` (`nonstream,stream`), `MOCK_LATENCY_MS`, `WARMUP_DURATION`, `STEP_GAP_SECONDS`, `LOAD_HTTP_PORT`, `OUT_DIR`, `WAIT_FOR_IDLE`, `IDLE_TIMEOUT_MINUTES`, `KEEP_STACK`, `SKIP_BUILD`, and `TENANTS`. With the default `TENANTS=1`, every request comes from Tenant `demo`, the worst case for the per-Tenant `budget_period` row. With `TENANTS=N`, the run seeds `load-1`…`load-N` (`MODELSWITCH_DEMO_TENANT`) and k6 picks one of their keys at random for each request. `overhead.js` also runs on its own against any running gateway. Its variables are listed at the top of the file, and `API_KEY` or `API_KEYS` is required.
 
 ## What is collected
 

@@ -3,7 +3,8 @@
 //
 // Environment:
 //   BASE_URL        gateway URL (default http://localhost:8090)
-//   API_KEY         an API Key with the `inference` Scope (required)
+//   API_KEY         an API Key with the `inference` Scope (required unless API_KEYS is set)
+//   API_KEYS        comma-separated keys of several Tenants; each request picks one at random (spreads per-Tenant rows)
 //   MODEL           Model Alias to call (default `balanced`, as seeded by scripts/seed-demo.sh)
 //   RATES           comma-separated arrival rates in requests per second, run one after the other (default 50,100,200,400)
 //   STEP_DURATION   how long each rate is held (default 5m); `30s` makes a smoke run
@@ -17,7 +18,7 @@ import { check } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
 
 const baseUrl = (__ENV.BASE_URL || 'http://localhost:8090').replace(/\/$/, '');
-const apiKey = __ENV.API_KEY;
+const apiKeys = (__ENV.API_KEYS || __ENV.API_KEY || '').split(',').map((k) => k.trim()).filter((k) => k.length > 0);
 const model = __ENV.MODEL || 'balanced';
 const rates = (__ENV.RATES || '50,100,200,400').split(',').map((r) => parseInt(r.trim(), 10)).filter((r) => r > 0);
 const stepDuration = __ENV.STEP_DURATION || '5m';
@@ -27,8 +28,8 @@ const mockLatencyMs = parseFloat(__ENV.MOCK_LATENCY_MS || '200');
 const maxVus = parseInt(__ENV.MAX_VUS || '1000', 10);
 const summaryFile = __ENV.SUMMARY_FILE || 'load/results/summary.json';
 
-if (!apiKey) {
-  throw new Error('API_KEY is required (an API Key with the inference Scope)');
+if (apiKeys.length === 0) {
+  throw new Error('API_KEY or API_KEYS is required (API Keys with the inference Scope)');
 }
 
 function seconds(text) {
@@ -84,10 +85,10 @@ const e2eMinusMock = new Trend('e2e_minus_mock', true);
 const requestFailed = new Rate('request_failed');
 const requests = new Counter('requests');
 
-const params = {
-  headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+const params = apiKeys.map((key) => ({
+  headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
   timeout: '30s',
-};
+}));
 
 export default function () {
   const stream = __ENV.STREAM === 'true';
@@ -97,7 +98,7 @@ export default function () {
     max_tokens: 16,
     messages: [{ role: 'user', content: 'load test: reply with this sentence' }],
   });
-  const response = http.post(`${baseUrl}/v1/chat/completions`, body, params);
+  const response = http.post(`${baseUrl}/v1/chat/completions`, body, params[Math.floor(Math.random() * params.length)]);
   const ok = check(response, {
     'status is 200': (r) => r.status === 200,
     'complete body': (r) =>
