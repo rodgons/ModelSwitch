@@ -1,6 +1,34 @@
-# Reference deployment (docs/deployment.md §1). Phase 0 ships only the stateful services;
-# migrator, api, worker, web and proxy are added as their images exist.
-# Run from the repository root: `docker compose up -d postgres valkey` (see ../compose.yaml).
+# Reference deployment (docs/deployment.md). Run from the repository root, which reads the root `.env` (see ../compose.yaml):
+#   cp .env.example .env && ./scripts/generate-secrets.sh    # then set the Owner e-mail and password in .env
+#   docker compose up -d --build                             # add `--profile demo` for the Mock Provider, `--profile ollama` for Ollama
+#   ./scripts/seed-demo.sh                                   # optional demo catalog, alias "balanced", Tenant and API Key
+# Only `proxy` publishes a port (MODELSWITCH_HTTP_PORT, default 8080). Images are built from deploy/docker/*.Dockerfile.
+# Optional variables are listed without a value: Compose passes them from `.env` when set and leaves them unset otherwise.
+
+x-dotnet-build: &dotnet-build
+  context: ..
+  dockerfile: deploy/docker/dotnet.Dockerfile
+
+# What both the api and the worker read (docs/deployment.md section 3). The worker composes the inference path too, to run
+# Evaluation Runs, so it needs the same Provider settings.
+x-gateway-environment: &gateway-environment
+  MODELSWITCH__ConnectionStrings__Postgres: ${MODELSWITCH__ConnectionStrings__Postgres:?set MODELSWITCH__ConnectionStrings__Postgres in .env}
+  MODELSWITCH__Security__MasterKey: ${MODELSWITCH__Security__MasterKey:?run ./scripts/generate-secrets.sh}
+  MODELSWITCH__Security__ApiKeyPepper: ${MODELSWITCH__Security__ApiKeyPepper:?run ./scripts/generate-secrets.sh}
+  MODELSWITCH__Security__MasterKeyVersion:
+  MODELSWITCH__Security__PreviousMasterKey:
+  MODELSWITCH__Security__PreviousMasterKeyVersion:
+  MODELSWITCH__Outbound__AllowedPrivateHosts: ${MODELSWITCH__Outbound__AllowedPrivateHosts-ollama,mock-provider}
+  MODELSWITCH__Circuit__SamplingWindowSeconds:
+  MODELSWITCH__Circuit__MinimumCalls:
+  MODELSWITCH__Circuit__FailureRatio:
+  MODELSWITCH__Circuit__BreakSeconds:
+  MODELSWITCH__Circuit__MaxBreakSeconds:
+  MODELSWITCH__Circuit__SnapshotIntervalSeconds:
+  MODELSWITCH__Telemetry__TraceSampleRatio:
+  OTEL_EXPORTER_OTLP_ENDPOINT:
+  # Provider credentials referenced as env:NAME (seed-demo.sh --with-openai uses env:OPENAI_API_KEY).
+  OPENAI_API_KEY:
 
 services:
   postgres:
@@ -30,9 +58,106 @@ services:
       timeout: 3s
       retries: 20
 
+  # Applies every module's migrations, creates the app and retention roles, bootstraps the Owner, then exits 0
+  # (docs/deployment.md section 4). `docker compose run --rm migrator seed --tenant acme` prints a new API Key.
+  migrator:
+    image: modelswitch/migrator
+    build:
+      <<: *dotnet-build
+      target: migrator
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MODELSWITCH__ConnectionStrings__PostgresMigrator: ${MODELSWITCH__ConnectionStrings__PostgresMigrator:?set MODELSWITCH__ConnectionStrings__PostgresMigrator in .env}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?run ./scripts/generate-secrets.sh}
+      POSTGRES_RETENTION_PASSWORD:
+      MODELSWITCH__Security__ApiKeyPepper: ${MODELSWITCH__Security__ApiKeyPepper:?run ./scripts/generate-secrets.sh}
+      MODELSWITCH__Bootstrap__OwnerEmail:
+      MODELSWITCH__Bootstrap__OwnerPassword:
+      MODELSWITCH__Seed__TenantName:
+      MODELSWITCH__Seed__KeyName:
+
+  api:
+    image: modelswitch/api
+    build:
+      <<: *dotnet-build
+      target: api
+    restart: unless-stopped
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    environment:
+      <<: *gateway-environment
+      MODELSWITCH__ConnectionStrings__Valkey: ${MODELSWITCH__ConnectionStrings__Valkey:-valkey:6379}
+      MODELSWITCH__Hosting__PublicBaseUrl: ${MODELSWITCH__Hosting__PublicBaseUrl:?set MODELSWITCH__Hosting__PublicBaseUrl in .env}
+      MODELSWITCH__Hosting__EndpointGroups:
+      MODELSWITCH__Limits__FailureMode:
+      MODELSWITCH__Limits__ValkeyTimeoutMs:
+      MODELSWITCH__Limits__MaxRequestBodyBytes:
+      MODELSWITCH__Limits__MaxMessages:
+      MODELSWITCH__Streaming__KeepAliveSeconds:
+      MODELSWITCH__Telemetry__TraceUrlTemplate:
+    # HEALTHCHECK is in the image (GET /health through the app's --health-check mode).
+
+  worker:
+    image: modelswitch/worker
+    build:
+      <<: *dotnet-build
+      target: worker
+    restart: unless-stopped
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    environment:
+      <<: *gateway-environment
+      MODELSWITCH__ConnectionStrings__PostgresRetention:
+      MODELSWITCH__Retention__RequestDays:
+
+  web:
+    image: modelswitch/web
+    build:
+      context: ..
+      dockerfile: deploy/docker/web.Dockerfile
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2.11
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+    ports:
+      - "${MODELSWITCH_HTTP_PORT:-8080}:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+  # Scriptable fake Provider (docs/provider-adapters.md section 5). Faults are injected through POST /__scenarios.
+  mock-provider:
+    image: modelswitch/mock-provider
+    build:
+      <<: *dotnet-build
+      target: mock-provider
+    profiles: ["demo"]
+    restart: unless-stopped
+
+  # Local models for the demo's Fallback and Comparisons. scripts/seed-demo.sh pulls the pinned model into the volume.
+  ollama:
+    image: ollama/ollama:0.40.5
+    profiles: ["ollama"]
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+
   # Local telemetry backend (docs/observability.md section 6): Grafana, Tempo, Loki and Prometheus in one container, with the
-  # provisioned "ModelSwitch Gateway" dashboard. `docker compose --profile observability up -d otel-lgtm`, then point the api and
-  # worker at it with OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-lgtm:4317.
+  # provisioned "ModelSwitch Gateway" dashboard. `docker compose --profile observability up -d otel-lgtm`, then set
+  # OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-lgtm:4317 in .env and recreate the api and worker.
   otel-lgtm:
     image: grafana/otel-lgtm:0.35.0
     profiles: ["observability"]
@@ -48,3 +173,5 @@ services:
 
 volumes:
   postgres-data:
+  caddy-data:
+  ollama-data:

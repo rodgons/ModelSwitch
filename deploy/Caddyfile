@@ -1,0 +1,34 @@
+# The `proxy` service (docs/deployment.md section 1): the only published port, one browser origin for the api and the
+# dashboard (ADR-0011), and the security headers (docs/security.md section 6).
+{
+	admin off
+	# Plain HTTP on :8080 for the local stack. For a real domain, replace `:8080` with the domain name and publish 80/443:
+	# Caddy then obtains certificates itself (docs/deployment.md section 5).
+	auto_https off
+}
+
+:8080 {
+	header {
+		Content-Security-Policy "default-src 'self'; frame-ancestors 'none'"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	@api path /v1/* /admin/* /health /ready
+	handle @api {
+		reverse_proxy api:8080 {
+			# The api's session and antiforgery cookies are Secure (ADR-0011), and ASP.NET Core refuses to issue them on a
+			# request it sees as plain HTTP. Browsers treat http://localhost as a secure context and accept those cookies, so
+			# the local listener presents requests as HTTPS. Any host other than localhost must be served over HTTPS: put the
+			# domain in place of `:8080` and Caddy terminates TLS, which makes this line true anyway.
+			header_up X-Forwarded-Proto https
+			# Server-sent events reach the client chunk by chunk.
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy web:8080
+	}
+}
