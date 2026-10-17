@@ -33,10 +33,19 @@ import Stack from '@/shared/layout/Stack.vue'
 import TableScroll from '@/shared/layout/TableScroll.vue'
 import { qualityMetricLabel, type RunAggregates } from '../aggregates'
 import CaseDrillDown from '../components/CaseDrillDown.vue'
+import DeleteAction from '../components/DeleteAction.vue'
 import RunMetrics from '../components/RunMetrics.vue'
 import { activeStatuses, costAxisMax, describeVariance, scatterPoints } from '../comparison'
 import { useDataset } from '../queries'
-import { cancelRun, exportUrl, rerun, runKeys, useComparison, useRuns } from '../runQueries'
+import {
+  cancelRun,
+  deleteComparison,
+  exportUrl,
+  rerun,
+  runKeys,
+  useComparison,
+  useRuns,
+} from '../runQueries'
 
 /** Runs of one Comparison side by side (frontend.md section 2), polled while any is queued or running. */
 const props = defineProps<{ id: string }>()
@@ -132,6 +141,19 @@ const s = {
                 }"
                 >Start a run on this Dataset</Button
               >
+              <DeleteAction
+                v-if="canWrite"
+                kind="Comparison"
+                :name="detail.name"
+                :remove="() => deleteComparison(detail.id)"
+                :invalidate="runKeys.all"
+                to="/evaluations?tab=comparisons"
+              >
+                <p>
+                  Its {{ detail.runs.length }} run(s) and every Case Result, model outputs included,
+                  are deleted. A run that is queued or running must be cancelled and stopped first.
+                </p>
+              </DeleteAction>
             </Inline>
           </template>
         </PageHeader>

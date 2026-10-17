@@ -10,14 +10,16 @@ import QueryView from '@/shared/components/QueryView.vue'
 import { formatTimestamp, formatTokens } from '@/shared/format'
 import Container from '@/shared/layout/Container.vue'
 import Facts from '@/shared/layout/Facts.vue'
+import Inline from '@/shared/layout/Inline.vue'
 import PageHeader from '@/shared/layout/PageHeader.vue'
 import Section from '@/shared/layout/Section.vue'
 import Split from '@/shared/layout/Split.vue'
 import Stack from '@/shared/layout/Stack.vue'
 import TableScroll from '@/shared/layout/TableScroll.vue'
+import DeleteAction from '../components/DeleteAction.vue'
 import UploadVersionForm from '../components/UploadVersionForm.vue'
 import { taskKindLabel } from '../labels'
-import { useDataset, useDatasetVersions } from '../queries'
+import { deleteDataset, evaluationKeys, useDataset, useDatasetVersions } from '../queries'
 
 const props = defineProps<{ id: string }>()
 const session = useSession()
@@ -48,7 +50,22 @@ const s = {
       <template #default="{ data: detail }">
         <PageHeader :title="detail.name" lede="Dataset">
           <template #actions>
-            <RouterLink to="/evaluations" v-bind="s.back">All Datasets</RouterLink>
+            <Inline :gap="12">
+              <RouterLink to="/evaluations" v-bind="s.back">All Datasets</RouterLink>
+              <DeleteAction
+                v-if="canWrite"
+                kind="Dataset"
+                :name="detail.name"
+                :remove="() => deleteDataset(detail.id)"
+                :invalidate="evaluationKeys.datasets"
+                to="/evaluations?tab=datasets"
+              >
+                <p>
+                  Every Dataset Version and its Cases are deleted. A Dataset that a Comparison still
+                  uses cannot be deleted: delete those Comparisons first.
+                </p>
+              </DeleteAction>
+            </Inline>
           </template>
         </PageHeader>
         <Stack :gap="48">

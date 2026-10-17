@@ -120,6 +120,19 @@ export async function uploadDatasetVersion(datasetId: string, file: Blob) {
   )
 }
 
+/**
+ * Deletes a Dataset with its versions and Cases (evaluation.md section 8). The server answers 409 `conflict` while a Comparison
+ * uses it, which rejects with that ApiError.
+ */
+export async function deleteDataset(datasetId: string) {
+  await api.DELETE('/admin/datasets/{datasetId}', { params: { path: { datasetId } } })
+}
+
+/** Deletes a Prompt with its versions; 409 `conflict` while a Comparison has a run built from it. */
+export async function deletePrompt(promptId: string) {
+  await api.DELETE('/admin/prompts/{promptId}', { params: { path: { promptId } } })
+}
+
 export function usePrompts(
   tenantId: MaybeRefOrGetter<string>,
   cursor: MaybeRefOrGetter<string | null>,

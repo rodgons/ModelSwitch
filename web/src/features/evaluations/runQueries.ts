@@ -151,6 +151,14 @@ export async function cancelRun(runId: string) {
   return data(await api.POST('/admin/evaluations/{runId}/cancel', { params: { path: { runId } } }))
 }
 
+/**
+ * Deletes a Comparison with its runs, Case Results and outputs (evaluation.md section 8); 409 `conflict` while a run is queued,
+ * running or still finishing after a cancel.
+ */
+export async function deleteComparison(comparisonId: string) {
+  await api.DELETE('/admin/comparisons/{comparisonId}', { params: { path: { comparisonId } } })
+}
+
 export async function rerun(runId: string) {
   return data(await api.POST('/admin/evaluations/{runId}/rerun', { params: { path: { runId } } }))
 }

@@ -19,10 +19,11 @@ import Section from '@/shared/layout/Section.vue'
 import Split from '@/shared/layout/Split.vue'
 import Stack from '@/shared/layout/Stack.vue'
 import TableScroll from '@/shared/layout/TableScroll.vue'
+import DeleteAction from '../components/DeleteAction.vue'
 import PromptVersionEditor from '../components/PromptVersionEditor.vue'
 import { code } from '../evaluations.styles'
 import { prettyJson } from '../json'
-import { usePrompt, usePromptVersions } from '../queries'
+import { deletePrompt, evaluationKeys, usePrompt, usePromptVersions } from '../queries'
 import { detectVariables } from '../template'
 
 /** A Prompt and its immutable Prompt Versions; the version shown is in the URL (`?version=`), the latest by default. */
@@ -83,6 +84,19 @@ const s = {
           <template #actions>
             <Inline :gap="12">
               <RouterLink to="/evaluations?tab=prompts" v-bind="s.back">All Prompts</RouterLink>
+              <DeleteAction
+                v-if="canWrite"
+                kind="Prompt"
+                :name="detail.name"
+                :remove="() => deletePrompt(detail.id)"
+                :invalidate="evaluationKeys.prompts"
+                to="/evaluations?tab=prompts"
+              >
+                <p>
+                  Every Prompt Version is deleted. A Prompt that a Comparison has a run built from
+                  cannot be deleted: delete those Comparisons first.
+                </p>
+              </DeleteAction>
               <Button v-if="canWrite && !editing" variant="primary" @click="editing = true"
                 >Create version</Button
               >
