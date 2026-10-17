@@ -20,6 +20,12 @@ using ModelSwitch.Telemetry;
 using ModelSwitch.Usage;
 using Npgsql;
 
+// The container HEALTHCHECK (docs/deployment.md section 1): the chiseled image has no curl, so the app probes itself.
+if (HealthProbe.IsRequested(args))
+{
+    return await HealthProbe.RunAsync("/health");
+}
+
 // Invalid deployment configuration exits with code 78 and names the variable (FR-10).
 return await StartupExit.RunAsync(
     async () =>

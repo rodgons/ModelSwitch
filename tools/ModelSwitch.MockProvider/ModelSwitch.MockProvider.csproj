@@ -5,4 +5,9 @@
     <InternalsVisibleTo Include="ModelSwitch.IntegrationTests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Only for HealthProbe, the container health check. -->
+    <ProjectReference Include="../../src/ModelSwitch.SharedKernel/ModelSwitch.SharedKernel.csproj" />
+  </ItemGroup>
+
 </Project>
