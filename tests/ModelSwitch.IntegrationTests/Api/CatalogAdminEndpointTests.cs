@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using ModelSwitch.Configuration.Contracts;
 using ModelSwitch.IntegrationTests.Infrastructure;
 using Shouldly;
 
@@ -599,6 +601,22 @@ public sealed class CatalogAdminEndpointTests(CatalogFixture fixture) : IClassFi
 
     // ---- Cross-cutting scenarios ---------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Waits until host B serves the configuration version the database holds now, failing after <paramref name="within"/>.
+    /// A fixed sleep raced the NOTIFY under full-suite load.
+    /// </summary>
+    private async Task HostBCaughtUpAsync(TimeSpan within)
+    {
+        var target = long.Parse(await fixture.ScalarAsync("select version from config.config_version"), System.Globalization.CultureInfo.InvariantCulture);
+        var snapshots = fixture.ServicesB.GetRequiredService<IConfigurationSnapshotProvider>();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!snapshots.IsLoaded || snapshots.Current.Version < target)
+        {
+            clock.Elapsed.ShouldBeLessThan(within, $"host B did not reach config version {target}");
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+    }
+
     private async Task<(string RequestId, string ProviderModelId)> ChatOnHostBAsync(string alias)
     {
         using var client = fixture.InferenceClientB();
@@ -618,12 +636,12 @@ public sealed class CatalogAdminEndpointTests(CatalogFixture fixture) : IClassFi
         var policyId = await CreatePolicyAsync(owner, Unique("pp"), $"{provider}/mock-echo");
         var alias = Unique("price");
         (await owner.SendJsonAsync(HttpMethod.Put, $"/admin/aliases/{alias}", new { policyId })).EnsureSuccessStatusCode();
-        await Task.Delay(300, TestContext.Current.CancellationToken);
+        await HostBCaughtUpAsync(TimeSpan.FromSeconds(10));
         var (firstRequest, _) = await ChatOnHostBAsync(alias);
         var costBefore = await fixture.ScalarAsync($"select total_cost::text || '/' || model_price_id::text from usage.usage_record where inference_request_id = '{firstRequest}'");
 
         await AddPriceAsync(owner, modelId, input: 100, output: 200);
-        await Task.Delay(300, TestContext.Current.CancellationToken);
+        await HostBCaughtUpAsync(TimeSpan.FromSeconds(10));
         var (secondRequest, _) = await ChatOnHostBAsync(alias);
 
         (await fixture.ScalarAsync($"select total_cost::text || '/' || model_price_id::text from usage.usage_record where inference_request_id = '{firstRequest}'")).ShouldBe(costBefore);
@@ -645,12 +663,12 @@ public sealed class CatalogAdminEndpointTests(CatalogFixture fixture) : IClassFi
         var policyId = await CreatePolicyAsync(owner, Unique("prop"), $"{provider}/mock-echo");
         var alias = Unique("prop");
         (await owner.SendJsonAsync(HttpMethod.Put, $"/admin/aliases/{alias}", new { policyId })).EnsureSuccessStatusCode();
-        await Task.Delay(300, TestContext.Current.CancellationToken);
+        await HostBCaughtUpAsync(TimeSpan.FromSeconds(10));
         (await ChatOnHostBAsync(alias)).ProviderModelId.ShouldBe(firstModel.ToString());
 
         var update = await owner.SendJsonAsync(HttpMethod.Put, $"/admin/routing-policies/{policyId}", new { definition = StaticPolicy($"{provider}/mock-fallback"), expectedVersion = 1 });
         update.EnsureSuccessStatusCode();
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await HostBCaughtUpAsync(TimeSpan.FromSeconds(1));
 
         var (requestId, used) = await ChatOnHostBAsync(alias);
         used.ShouldBe(secondModel.ToString());
