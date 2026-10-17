@@ -76,3 +76,7 @@ docker compose --profile demo --profile ollama down -v
 ## Without Ollama
 
 `docker compose --profile demo up -d --build` and `./scripts/seed-demo.sh --no-ollama` run the same demo with `mock/mock-fixed` as the Fallback. Step 6 then compares `mock-fixed` against `mock-echo`, which shows the workflow but not meaningful quality numbers.
+
+## Verification run
+
+Run end to end on 2026-10-17 with images built from `main` just before `d409a67`, on a laptop with a 4-CPU Docker VM, from a fresh `.env`: every service came up healthy and the migrator exited 0; the first request took one Attempt on `mock-echo`; after the injected 503s the same request took three Attempts and was answered by `qwen2.5:1.5b-instruct-q4_K_M` in about 5 s; ten requests with 50 injected 503s took three Attempts each for the first five and one each after the circuit opened; the support-intents Comparison finished with accuracy 0.75 for the Ollama model ($0) and 0 for `mock-echo`.

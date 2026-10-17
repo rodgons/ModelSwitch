@@ -1,9 +1,12 @@
+import type { Page } from '@playwright/test'
+
 import { expect, expectAccessible, settled, signIn, test } from './fixtures'
 
 /**
  * The smoke path of docs/testing.md section 1: sign in as the Owner, create a Tenant and an API Key in the dashboard, send an
- * inference request with that key, and find it in the request explorer with its Attempts. The Mock Provider and the alias
- * "balanced" come from scripts/seed-demo.sh, so no real Provider is called.
+ * inference request with that key, and find it in the request explorer with its Attempts, duration and Estimated Cost; then see
+ * the Overview report cost, latency and the failed request (DoD #8). The Mock Provider and the alias "balanced" come from
+ * scripts/seed-demo.sh, so no real Provider is called.
  */
 test('the Owner creates a Tenant and an API Key, and the request it makes shows in the explorer', async ({
   page,
@@ -13,6 +16,7 @@ test('the Owner creates a Tenant and an API Key, and the request it makes shows 
   let tenantId = ''
   let apiKey = ''
   let requestId = ''
+  let failedRequestId = ''
 
   await test.step('sign in', async () => {
     await signIn(page)
@@ -74,6 +78,16 @@ test('the Owner creates a Tenant and an API Key, and the request it makes shows 
     expect(body.choices[0].message.content).toContain('Hello from the smoke test')
   })
 
+  await test.step('send a request that fails', async () => {
+    const response = await request.post('/v1/chat/completions', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      data: { model: 'no-such-alias', messages: [{ role: 'user', content: 'fail' }] },
+    })
+    expect(response.status()).toBe(404)
+    failedRequestId = response.headers()['x-request-id'] ?? ''
+    expect(failedRequestId).not.toBe('')
+  })
+
   await test.step('find the request in the explorer', async () => {
     await page.goto(`/requests?tenantId=${tenantId}`)
     // The request is recorded as it settles, so its row can take a moment to appear.
@@ -92,7 +106,29 @@ test('the Owner creates a Tenant and an API Key, and the request it makes shows 
     await expect(attempts.getByRole('row')).toHaveCount(2)
     await expect(attempts.getByText('mock-echo')).toBeVisible()
     await expect(attempts.getByText('Succeeded')).toBeVisible()
+    await expect(fact(page, 'Duration')).toHaveText(/\d+(\.\d+)?\s?m?s/)
+    await expect(fact(page, 'Estimated Cost')).toContainText('$')
     await settled(page)
     await expectAccessible(page, 'Request detail')
   })
+
+  await test.step('see cost, latency and the failure on the Overview', async () => {
+    await page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('link', { name: 'Overview' })
+      .click()
+    await expect(fact(page, /^Cost/)).toContainText('$')
+    await expect(fact(page, /^Success/)).toContainText('%')
+    await expect(fact(page, /^Latency p50 \/ p95/)).toHaveText(/\d.*\/.*\d/)
+    // Failures are recorded as they settle, like the request above.
+    await expect(async () => {
+      await page.reload()
+      await expect(page.locator(`a[title="${failedRequestId}"]`)).toBeVisible({ timeout: 2_000 })
+    }).toPass({ timeout: 30_000 })
+  })
 })
+
+/** The value of a label/value pair (Facts or Readout, both a <dl>): the first <dd> after the <dt> whose text matches. */
+function fact(page: Page, label: string | RegExp) {
+  return page.locator('dt', { hasText: label }).first().locator('xpath=following-sibling::dd[1]')
+}
