@@ -56,9 +56,14 @@ internal static class InferenceEndpoints
         var reply = result.Value;
         WriteRateLimitHeaders(http.Response, reply.Rate);
         var created = time.GetUtcNow().ToUnixTimeSeconds();
-        return reply.Stream is { } stream
-            ? await StreamAsync(http, stream, reply.Lease, reply.IncludeUsage, options, time, created)
-            : Results.Json(ChatCompletionWire.ChatCompletion(reply.Completion!, created));
+        if (reply.Stream is { } stream)
+        {
+            return await StreamAsync(http, stream, reply.Lease, reply.IncludeUsage, options, time, created);
+        }
+
+        // A stream's headers go out at the First Token, before its Attempts are known; it reports them in its usage chunk instead.
+        http.Response.Headers["X-ModelSwitch-Attempts"] = reply.Completion!.Attempts.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Results.Json(ChatCompletionWire.ChatCompletion(reply.Completion, created));
     }
 
     // X-RateLimit-Reset is whole seconds until the full allowance is back (api.md section 1).

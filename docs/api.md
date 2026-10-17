@@ -39,7 +39,7 @@ The response never reveals *why* a key is invalid, so revoked and unknown keys l
 | Header | Value |
 |---|---|
 | `X-Request-Id` | The Inference Request ID (UUIDv7). Present on **every** response, including errors |
-| `X-ModelSwitch-Attempts` | Number of Attempts made |
+| `X-ModelSwitch-Attempts` | Number of Attempts made, on a non-streaming completion. A stream sends its headers at the First Token, before the count is final, so it reports the count in `modelswitch.attempts` of its final usage chunk instead |
 | `X-RateLimit-Limit` / `-Remaining` / `-Reset` | Rate Limit state (non-streaming and SSE) |
 | `Retry-After` | On 429 and on 503 `provider_unavailable` when the gateway knows it: the shortest remaining circuit break, whether routing found every Candidate's circuit open or the loop found them open when it got there. Whole seconds, at least 1 |
 

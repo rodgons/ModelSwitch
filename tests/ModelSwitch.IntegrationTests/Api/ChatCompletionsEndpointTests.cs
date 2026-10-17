@@ -41,6 +41,7 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
         body.GetProperty("usage").GetProperty("total_tokens").GetInt32().ShouldBeGreaterThan(0);
         body.GetProperty("modelswitch").GetProperty("request_id").GetString().ShouldBe(requestId);
         body.GetProperty("modelswitch").GetProperty("attempts").GetInt32().ShouldBe(1);
+        response.Headers.GetValues("X-ModelSwitch-Attempts").Single().ShouldBe("1");
         body.ToString().ShouldNotContain("mock-echo");
     }
 
