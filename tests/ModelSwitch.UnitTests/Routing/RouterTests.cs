@@ -90,6 +90,23 @@ public sealed class RouterTests
         snapshot.ShouldNotBeNull();
     }
 
+    [Fact]
+    public void Every_reason_code_has_an_exclusion_case()
+    {
+        // testing.md section 6: a new EligibilityReason fails here until ExclusionCases covers it.
+        var reasons = typeof(EligibilityReason).GetFields()
+            .Where(f => f.IsLiteral && f.Name != nameof(EligibilityReason.CapabilityMissingPrefix))
+            .Select(f => (string)f.GetRawConstantValue()!)
+            .Append(EligibilityReason.CapabilityMissingPrefix)
+            .ToHashSet();
+        var covered = ExclusionCases()
+            .Select(row => row.Data.Item1)
+            .Select(reason => reason.StartsWith(EligibilityReason.CapabilityMissingPrefix, StringComparison.Ordinal) ? EligibilityReason.CapabilityMissingPrefix : reason)
+            .ToHashSet();
+
+        reasons.Except(covered).ShouldBeEmpty();
+    }
+
     private static (RoutingSnapshot Snapshot, RoutingInput Input) Scenario(string scenario)
     {
         var definition = Definition();
