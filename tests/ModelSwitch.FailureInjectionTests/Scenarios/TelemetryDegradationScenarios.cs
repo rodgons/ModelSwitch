@@ -1,8 +1,11 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using ModelSwitch.FailureInjectionTests.Support;
 using ModelSwitch.IntegrationTests.Infrastructure;
+using ModelSwitch.SharedKernel;
+using ModelSwitch.Usage.Contracts;
 using Shouldly;
 
 namespace ModelSwitch.FailureInjectionTests.Scenarios;
@@ -20,14 +23,12 @@ public enum BackendAtStartup
     Down,
 }
 
-public abstract class TelemetryDegradationScenario(PostgresFixture postgres, ValkeyFixture valkey, BackendAtStartup backend) : IAsyncLifetime
+public abstract class TelemetryDegradationScenario(PostgresFixture postgres, ValkeyFixture valkey, BackendAtStartup backend) : ScenarioTests, IAsyncLifetime
 {
     private const int _requestsPerPhase = 40;
     private const int _concurrency = 8;
 
     protected FakeOtlpBackend Backend { get; private set; } = null!;
-
-    protected GatewayFixture Gateway { get; private set; } = null!;
 
     public async ValueTask InitializeAsync()
     {
@@ -47,6 +48,9 @@ public abstract class TelemetryDegradationScenario(PostgresFixture postgres, Val
         Gateway.Settings["OTEL_BLRP_SCHEDULE_DELAY"] = "100";
         Gateway.Settings["OTEL_METRIC_EXPORT_INTERVAL"] = "200";
         await Gateway.InitializeAsync();
+
+        // A Budget too large to refuse anything, so the accounting assertions have a budget_period row to check.
+        await Gateway.Services.GetRequiredService<IBudgets>().SetMonthlyLimitAsync(Gateway.TenantId, Money.FromUsd(1_000_000m), CancellationToken.None);
     }
 
     public async ValueTask DisposeAsync()
@@ -89,6 +93,21 @@ public abstract class TelemetryDegradationScenario(PostgresFixture postgres, Val
     protected async Task MeasureAmplificationAsync(string scenario, int clientRequests)
         => AmplificationReport.Measure(scenario, clientRequests, (await Gateway.MockStatsAsync()).Started.Values.Sum(), 1, "healthy Provider: no retry");
 
+    /// <summary>
+    /// Every request the class sent was recorded <c>succeeded</c> with consistent accounting (testing.md section 3): telemetry
+    /// trouble must not lose or skew a request record.
+    /// </summary>
+    protected async Task AssertEveryRequestRecordedAsync(int clientRequests)
+    {
+        var requests = await RowsAsync($"select id::text, status from usage.inference_request where tenant_id = '{Gateway.TenantId}'");
+        requests.Count.ShouldBe(clientRequests);
+        requests.ShouldAllBe(r => r[1] == "succeeded");
+        foreach (var request in requests)
+        {
+            await AssertConsistentAccountingAsync(request[0]);
+        }
+    }
+
     protected static double SuccessRate(List<(HttpStatusCode Status, TimeSpan Elapsed)> phase)
         => phase.Count(r => r.Status == HttpStatusCode.OK) / (double)phase.Count;
 
@@ -126,6 +145,7 @@ public sealed class TelemetryBackendStoppedMidLoad(PostgresFixture postgres, Val
         SuccessRate(after).ShouldBe(SuccessRate(before));
         (await Gateway.Anonymous.GetAsync("/ready", TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
         await MeasureAmplificationAsync("otlp backend stopped mid-load", before.Count + after.Count);
+        await AssertEveryRequestRecordedAsync(before.Count + after.Count);
     }
 }
 
@@ -146,6 +166,7 @@ public sealed class TelemetryBackendHangs(PostgresFixture postgres, ValkeyFixtur
         // The exporter's own timeout is 10 s: a request that waited on it would take at least that long.
         P95(second).ShouldBeLessThan(TimeSpan.FromSeconds(3));
         await MeasureAmplificationAsync("otlp backend hangs", phase.Count + second.Count);
+        await AssertEveryRequestRecordedAsync(phase.Count + second.Count);
     }
 }
 
@@ -162,5 +183,6 @@ public sealed class TelemetryBackendDownAtStartup(PostgresFixture postgres, Valk
         SuccessRate(phase).ShouldBe(1.0);
         P95(phase).ShouldBeLessThan(TimeSpan.FromSeconds(3));
         await MeasureAmplificationAsync("otlp backend down at startup", phase.Count);
+        await AssertEveryRequestRecordedAsync(phase.Count);
     }
 }

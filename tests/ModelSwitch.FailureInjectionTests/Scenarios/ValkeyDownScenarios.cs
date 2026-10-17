@@ -4,8 +4,11 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.DependencyInjection;
 using ModelSwitch.FailureInjectionTests.Support;
 using ModelSwitch.IntegrationTests.Infrastructure;
+using ModelSwitch.SharedKernel;
+using ModelSwitch.Usage.Contracts;
 using Shouldly;
 using Testcontainers.Redis;
 
@@ -13,13 +16,14 @@ namespace ModelSwitch.FailureInjectionTests.Scenarios;
 
 /// <summary>
 /// Base of the "Valkey stopped" scenarios (testing.md section 3). Each gets its own Valkey container, because the scenario stops it,
-/// and a Tenant with limits, so that every request really needs Valkey.
+/// and a Tenant with limits, so that every request really needs Valkey. The Tenant has a Budget too large to refuse anything, so the
+/// accounting assertions have a <c>budget_period</c> row to check.
 /// </summary>
-public abstract class ValkeyDownScenario(PostgresFixture postgres, ValkeyFixture valkey, string failureMode) : IAsyncLifetime
+public abstract class ValkeyDownScenario(PostgresFixture postgres, ValkeyFixture valkey, string failureMode) : ScenarioTests, IAsyncLifetime
 {
     private RedisContainer? _valkey;
 
-    protected GatewayFixture Gateway { get; private set; } = null!;
+    protected Guid LimitedTenantId { get; private set; }
 
     protected HttpClient Client { get; private set; } = null!;
 
@@ -33,7 +37,9 @@ public abstract class ValkeyDownScenario(PostgresFixture postgres, ValkeyFixture
         Gateway = new GatewayFixture(postgres, valkey) { ValkeyConnectionString = _valkey.GetConnectionString() };
         Gateway.Settings["Limits:FailureMode"] = failureMode;
         await Gateway.InitializeAsync();
-        var (_, key) = await Gateway.SeedTenantAsync("limited", requestsPerMinute: 6000, maxConcurrent: 50);
+        var (tenantId, key) = await Gateway.SeedTenantAsync("limited", requestsPerMinute: 6000, maxConcurrent: 50);
+        LimitedTenantId = tenantId;
+        await Gateway.Services.GetRequiredService<IBudgets>().SetMonthlyLimitAsync(tenantId, Money.FromUsd(1_000_000m), CancellationToken.None);
         LimitedClient = Gateway.Authenticated(key);
         Client = Gateway.Anonymous;
     }
@@ -55,7 +61,7 @@ public abstract class ValkeyDownScenario(PostgresFixture postgres, ValkeyFixture
     }
 
     /// <summary>Requests the Mock Provider has received so far, over every model.</summary>
-    protected async Task<int> ProviderCallsAsync() => (await Gateway.MockStatsAsync()).Started.Values.Sum();
+    protected async Task<int> TotalProviderCallsAsync() => (await ProviderCallsAsync()).Values.Sum();
 
     protected static Task<HttpResponseMessage> ChatAsync(HttpClient client)
         => client.PostAsync(
@@ -82,7 +88,7 @@ public sealed class ValkeyStoppedFailClosedScenario(PostgresFixture postgres, Va
         (await Client.GetAsync("/ready", TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         await StopValkeyAsync();
-        var callsBefore = await ProviderCallsAsync();
+        var callsBefore = await TotalProviderCallsAsync();
 
         var response = await ChatAsync(LimitedClient);
         response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
@@ -96,7 +102,12 @@ public sealed class ValkeyStoppedFailClosedScenario(PostgresFixture postgres, Va
         var ready = await Client.GetAsync("/ready", TestContext.Current.CancellationToken);
         ready.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
         (await ready.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("checks").GetProperty("valkey").GetString().ShouldBe("unavailable");
-        AmplificationReport.Measure("valkey stopped (fail-closed)", 1, await ProviderCallsAsync() - callsBefore, 0, "refused before routing");
+        AmplificationReport.Measure("valkey stopped (fail-closed)", 1, await TotalProviderCallsAsync() - callsBefore, 0, "refused before routing");
+
+        // Refused at the limits step, before the request is opened (architecture.md section 5), so nothing is recorded or reserved.
+        var requestId = response.Headers.GetValues("X-Request-Id").Single();
+        (await ScalarAsync($"select count(*)::text from usage.inference_request where id = '{requestId}'")).ShouldBe("0");
+        await AssertConsistentBudgetAsync(LimitedTenantId);
     }
 }
 
@@ -123,16 +134,25 @@ public sealed class ValkeyStoppedFailOpenScenario(PostgresFixture postgres, Valk
         Interlocked.Read(ref degraded).ShouldBe(0);
 
         await StopValkeyAsync();
-        var callsBefore = await ProviderCallsAsync();
+        var callsBefore = await TotalProviderCallsAsync();
 
+        var requestIds = new List<string>();
         for (var i = 0; i < 3; i++)
         {
-            (await ChatAsync(LimitedClient)).StatusCode.ShouldBe(HttpStatusCode.OK);
+            var response = await ChatAsync(LimitedClient);
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            requestIds.Add(response.Headers.GetValues("X-Request-Id").Single());
         }
 
         Interlocked.Read(ref degraded).ShouldBe(3);
         var ready = await Client.GetAsync("/ready", TestContext.Current.CancellationToken);
         ready.StatusCode.ShouldBe(HttpStatusCode.OK);
-        AmplificationReport.Measure("valkey stopped (fail-open)", 3, await ProviderCallsAsync() - callsBefore, 1, "healthy Provider: no retry");
+        AmplificationReport.Measure("valkey stopped (fail-open)", 3, await TotalProviderCallsAsync() - callsBefore, 1, "healthy Provider: no retry");
+
+        foreach (var requestId in requestIds)
+        {
+            (await RequestAsync(requestId))[0].ShouldBe("succeeded");
+            await AssertConsistentAccountingAsync(requestId);
+        }
     }
 }
