@@ -12,7 +12,7 @@ This document implements PRD §10 and DoD #2, #4, #5, #10, #13 and #14.
 | `ModelSwitch.IntegrationTests` | `WebApplicationFactory` + real PostgreSQL + Valkey via Testcontainers + Mock Provider in-process | Docker | every push |
 | `ModelSwitch.FailureInjectionTests` | Fault scenarios through the full stack, including container kills | Docker | every push (tagged `slow`, may run in parallel job) |
 | `web` (Vitest) | Components, composables, formatters (units, currency, "estimated" labels) | none | every push |
-| `web` (Playwright) | Smoke E2E: sign in, create tenant + key, run a request, see it in explorer | compose | main + nightly |
+| `web` (Playwright) | Smoke E2E: sign in, create tenant + key, run a request, see it in explorer; axe on every main screen; no CSP violation | compose | main + nightly (`nightly.yml`) |
 | `load/` (k6) | Gateway overhead, throughput | compose (Release images) | manual + nightly, results committed for releases |
 
 Rules from the [constitution](constitution.md), which apply to every task:
@@ -25,6 +25,14 @@ Rules from the [constitution](constitution.md), which apply to every task:
 Test runner: xUnit v3 on Microsoft.Testing.Platform (`global.json` `test.runner`), run with `dotnet test ModelSwitch.slnx`. `tests/Directory.Build.props` passes `--ignore-exit-code 8`, so a test project that has no tests yet does not fail the run; real failures still do.
 
 Other rules: no test calls a real external Provider. Testcontainers are shared per collection (one Postgres per test assembly, with a fresh database per test class via template DB clone) to keep the suite fast. Time is controlled with `FakeTimeProvider`, never `Thread.Sleep`.
+
+**Playwright suite (`web/e2e`).** `./scripts/e2e.sh` builds and starts the Compose stack as its own project, `modelswitch-e2e` (`.env.e2e` with generated secrets and an Owner, port 8081, image names from `deploy/compose.e2e.yaml`, default services plus the Mock Provider, no Ollama or observability), seeds it with `seed-demo.sh --no-ollama`, runs `playwright test` and always ends with `down -v`. `up`, `test [playwright args]` and `down` run the steps one at a time. It needs the browser once: `cd web && pnpm exec playwright install chromium`. The projects, in order:
+
+- `smoke`: `smoke.spec.ts` signs in as the Owner, creates a Tenant, allows alias `balanced`, creates an API Key and reads it from the one-time dialog, calls `/v1/chat/completions` with it through Playwright's request API, then finds the request in the explorer (filtered by the Tenant) and its Attempt (`mock-echo`, succeeded) in the detail. `evaluation.spec.ts` creates a free-text Dataset, a Prompt and a two-run Comparison through the admin API, waits for both runs to succeed with every Case passed, and opens the Comparison.
+- `screens` (after `smoke`): axe-core with the `wcag2a`, `wcag2aa`, `wcag21a` and `wcag21aa` tags on sign-in, Overview, Requests, request detail, Providers, Provider Models, Routing, Tenants, Tenant detail, the three Evaluations tabs, the run builder, Dataset, Dataset Version, Prompt, Comparison and Evaluation Run, once in the light and once in the dark theme. The smoke flow also checks the Create Tenant and new-key dialogs. Serious and critical violations fail; every violation is attached to the report (`E2E_AXE_LOG=1` prints them). No rule or element is excluded. The check waits for running animations to finish, because a dialog fading in measures as low contrast.
+- Every test fails if the browser reports a Content Security Policy violation (console message or `securitypolicyviolation` event).
+
+Chromium runs through `channel: 'chromium'` (the full browser in new headless mode): the headless shell crashed now and then on macOS after a few dozen contexts. `nightly.yml` runs the suite on pushes to main, every night and on demand, and uploads the HTML report, traces and Compose logs when it fails.
 
 ## 2. Integration test catalogue (minimum)
 
