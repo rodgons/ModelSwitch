@@ -113,7 +113,7 @@ Each security item of §2 and §4 and the test that proves it. `IT` is `ModelSwi
 
 ## 5. Load tests and benchmark report
 
-How to run: [load/README.md](../load/README.md).
+How to run: [load/README.md](../load/README.md). Latest report: [benchmarks/2026-10-17-ec9c440.md](benchmarks/2026-10-17-ec9c440.md) (NFR-01 holds up to 200 RPS on a 4-CPU Docker VM; [the run before the fixes](benchmarks/2026-10-17-266c696.md) is kept for comparison).
 
 - `load/scenarios/overhead.js` (k6): constant arrival rate in steps of 50, 100, 200 and 400 RPS for 5 min each (`RATES`, `STEP_DURATION`; `30s` steps make a smoke run), non-streaming and streaming variants (`STREAM=false|true|both`), against the alias `balanced` of `scripts/seed-demo.sh`. Every step is a separate k6 scenario, so the summary reports each one.
 - `load/run.sh` runs the whole measurement: it waits until no `modelswitch-e2e` container runs, starts the stack as its own Compose project `modelswitch-load` (Release images, profiles `demo` and `observability`, overlay `load/compose.load.yaml` that exports telemetry to `otel-lgtm` every 5 s), seeds a Tenant with no limits, makes the Mock Provider answer `mock-echo` after a fixed 200 ms (`POST /__scenarios` `latency=200`), warms up, runs one k6 step per (variant, rate), collects after each step, and tears the stack down.
