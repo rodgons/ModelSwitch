@@ -17,6 +17,12 @@ public static class HttpPipelineExtensions
         app.UseMiddleware<RequestIdMiddleware>();
         app.UseExceptionHandler(handler => handler.Run(context =>
         {
+            // The exception handler cleared the response, headers included, before running this: put the request id back.
+            if (RequestId.Get(context) is var id && id != Guid.Empty)
+            {
+                context.Response.Headers[RequestId.HeaderName] = id.ToString();
+            }
+
             var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
             return ProblemResults.From(context, Map(exception)).ExecuteAsync(context);
         }));
