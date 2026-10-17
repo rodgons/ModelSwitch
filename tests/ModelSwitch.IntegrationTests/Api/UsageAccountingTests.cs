@@ -107,6 +107,7 @@ public sealed class UsageAccountingTests(GatewayFixture gateway) : IClassFixture
     }
 
     [Fact]
+    [TriggersError("budget_exceeded")]
     public async Task A_request_over_the_budget_is_a_402_that_never_reaches_the_provider_and_is_recorded()
     {
         await Budgets.SetMonthlyLimitAsync(_tenant, Money.FromUsd(0.0000001m), CancellationToken.None);

@@ -39,7 +39,7 @@ These are the coding standards the code-review process checks against (NFR-04, D
 3. Unit + architecture + adapter contract tests
 4. Integration + failure-injection tests (Docker available on the runner)
 5. Web: `pnpm lint`, `vue-tsc`, `vitest`, OpenAPI client drift check
-6. `gitleaks`, CodeQL (C# + JS/TS) weekly and on PRs to main
+6. `gitleaks` (full history) on every push and PR. CodeQL (`codeql.yml`: C# with a manual `dotnet build` of the `.slnx`, JS/TS with no build, `security-extended` queries) on PRs to main, pushes to main and weekly
 7. Docker image builds (no push on PRs)
 
 `nightly.yml`: Playwright E2E against compose, k6 smoke load (2 min), dependency vulnerability scan (`dotnet list package --vulnerable`, `pnpm audit`).

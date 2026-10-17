@@ -1,0 +1,62 @@
+# CodeQL static analysis (docs/conventions.md "CI", step 6; roadmap Phase 6, DoD #13): C# and the Vue/TypeScript dashboard,
+# on pull requests to main, on pushes to main and weekly. Findings appear under Security > Code scanning.
+name: codeql
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  analyze:
+    name: analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Manual build: the solution is a .slnx, so the build command is spelled out instead of relying on autobuild.
+          - language: csharp
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v7
+      - if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # security-extended, not security-and-quality: the quality queries overlap the .NET analyzers that already fail the build.
+          queries: security-extended
+          config: |
+            paths-ignore:
+              - web/node_modules
+              - web/dist
+              - web/src/api/schema.d.ts
+              - "**/Migrations/**"
+      - if: matrix.build-mode == 'manual'
+        run: dotnet build ModelSwitch.slnx -c Release
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}

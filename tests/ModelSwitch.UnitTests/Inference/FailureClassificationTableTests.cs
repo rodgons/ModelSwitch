@@ -61,6 +61,44 @@ public sealed class FailureClassificationTableTests
         CircuitFailureRules.Counts(failure).ShouldBe(countsTowardCircuit, situation);
     }
 
+    // The doc table's rows (first cell, up to the first parenthesis or comma) and where each is tested. A new row in
+    // docs/routing-and-resilience.md section 3 fails Every_documented_row_is_covered until it is added here with its test.
+    private static readonly Dictionary<string, string> _documentedRows = new(StringComparer.Ordinal)
+    {
+        ["Connect failure"] = "this class",
+        ["HTTP 408"] = "this class",
+        ["HTTP 429"] = "this class; Retry-After bounds in RetryPolicyTests",
+        ["HTTP 429 whose `error.code` is a billing/quota code"] = "this class",
+        ["HTTP 500"] = "this class",
+        ["HTTP 524"] = "this class",
+        ["Per-Attempt timeout **before** response headers were received"] = "this class",
+        ["Connection reset after the request body was sent"] = "this class",
+        ["HTTP 400"] = "this class (400, 404, 413, 422 and context_length_exceeded)",
+        ["HTTP 401"] = "this class",
+        ["Any other unlisted 4xx"] = "this class",
+        ["An error object in a 200 body"] = "AdapterContractTests (AdapterContract.Failures)",
+        ["Malformed or unparseable success body"] = "this class",
+        ["Content filter / refusal reported by the Provider"] = "AdapterContractTests, SseTests",
+        ["Client cancellation"] = "InferenceServiceTests.Client_abort_settles_a_cancelled_request_on_a_fresh_token_and_rethrows",
+        ["Deadline reached"] = "InferenceServiceTests, RoutingEndpointTests.A_timeout_header_shortens_the_deadline",
+    };
+
+    [Fact]
+    public void Every_documented_row_is_covered()
+    {
+        var doc = File.ReadAllText(FindRepoFile("docs/routing-and-resilience.md"));
+        var section = doc[doc.IndexOf("## 3. Failure classification", StringComparison.Ordinal)..];
+        section = section[..section.IndexOf("## 4.", StringComparison.Ordinal)];
+        var situations = section.Split('\n')
+            .Where(l => l.StartsWith("| ", StringComparison.Ordinal) && !l.StartsWith("| Situation", StringComparison.Ordinal))
+            .Select(l => l.Split('|')[1].Trim())
+            .Select(cell => cell.Split(['(', ','])[0].Trim())
+            .ToList();
+
+        situations.ShouldNotBeEmpty();
+        situations.ShouldBe(_documentedRows.Keys, ignoreOrder: true);
+    }
+
     [Fact]
     public void Every_adapter_failure_code_has_a_row()
     {
@@ -68,5 +106,16 @@ public sealed class FailureClassificationTableTests
         var covered = _rows.Select(r => r.Code).ToHashSet();
 
         codes.Except(covered).ShouldBeEmpty("a new Adapter failure code needs a row in the classification table and in this test");
+    }
+
+    private static string FindRepoFile(string relative)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, relative)))
+        {
+            dir = dir.Parent;
+        }
+
+        return dir is null ? throw new FileNotFoundException(relative) : Path.Combine(dir.FullName, relative);
     }
 }

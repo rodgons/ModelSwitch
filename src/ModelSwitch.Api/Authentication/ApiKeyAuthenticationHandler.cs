@@ -26,7 +26,8 @@ internal sealed class ApiKeyAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IApiKeyAuthenticator authenticator)
+    IApiKeyAuthenticator authenticator,
+    ApiKeyFailureThrottle throttle)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     private const string _bearerPrefix = "Bearer ";
@@ -44,9 +45,22 @@ internal sealed class ApiKeyAuthenticationHandler(
             ? header[_bearerPrefix.Length..].Trim()
             : null;
 
+        var client = Context.Connection.RemoteIpAddress;
+        if (throttle.RetryAfter(client) is { } retryAfter)
+        {
+            var throttled = new Error(ErrorCode.RateLimitExceeded, "Too many invalid API keys from this address. Retry later.") { RetryAfter = retryAfter };
+            Context.Items[_failureKey] = throttled;
+            return AuthenticateResult.Fail(throttled.Code.Value);
+        }
+
         var result = await authenticator.AuthenticateAsync(token, Context.RequestAborted);
         if (result.IsFailure)
         {
+            if (result.Error.Code == ErrorCode.InvalidApiKey)
+            {
+                throttle.RecordFailure(client);
+            }
+
             Context.Items[_failureKey] = result.Error;
             return AuthenticateResult.Fail(result.Error.Code.Value);
         }

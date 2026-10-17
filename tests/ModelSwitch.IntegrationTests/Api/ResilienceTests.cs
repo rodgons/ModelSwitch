@@ -97,6 +97,26 @@ public sealed class ResilienceTests(GatewayFixture gateway) : IClassFixture<Gate
     }
 
     [Fact]
+    [TriggersError("context_length_exceeded")]
+    public async Task A_context_length_failure_from_the_only_candidate_is_a_400_context_length_exceeded()
+    {
+        await gateway.SetFaultAsync(GatewayFixture.PrimaryModel, "status=400;error=context_length_exceeded");
+        try
+        {
+            var response = await gateway.Client.PostAsync("/v1/chat/completions", Body(GatewayFixture.ChatAlias), TestContext.Current.CancellationToken);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            var problem = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+            problem.GetProperty("error").GetProperty("code").GetString().ShouldBe("context_length_exceeded");
+            problem.GetProperty("error").GetProperty("type").GetString().ShouldBe("invalid_request_error");
+        }
+        finally
+        {
+            await gateway.SetFaultAsync(null, null);
+        }
+    }
+
+    [Fact]
     public async Task Provider_health_snapshot_rows_are_written_per_instance()
     {
         await gateway.SetFaultAsync(null, null);

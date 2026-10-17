@@ -74,6 +74,7 @@ public sealed class RoutingEndpointTests(GatewayFixture gateway) : IClassFixture
     }
 
     [Fact]
+    [TriggersError("no_eligible_model")]
     public async Task A_model_without_a_price_is_not_eligible_so_the_alias_answers_422_no_eligible_model()
     {
         var providerId = (await Row("select id::text from registry.provider where name = 'mock-openai'"))[0];
@@ -97,6 +98,7 @@ public sealed class RoutingEndpointTests(GatewayFixture gateway) : IClassFixture
     }
 
     [Fact]
+    [TriggersError("request_cost_limit_exceeded")]
     public async Task A_request_over_the_policy_cost_limit_answers_402_request_cost_limit_exceeded()
     {
         var providerId = (await Row("select id::text from registry.provider where name = 'mock-openai'"))[0];
@@ -113,6 +115,7 @@ public sealed class RoutingEndpointTests(GatewayFixture gateway) : IClassFixture
     }
 
     [Fact]
+    [TriggersError("deadline_exceeded")]
     public async Task A_timeout_header_shortens_the_deadline()
     {
         await gateway.SetFaultAsync(GatewayFixture.PrimaryModel, "latency=3000");

@@ -45,6 +45,7 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
     }
 
     [Fact]
+    [TriggersError("unsupported_parameter")]
     public async Task Unsupported_parameter_is_a_400_problem_with_errors_and_the_openai_error_member()
     {
         var body = Chat();
@@ -69,6 +70,7 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
     }
 
     [Fact]
+    [TriggersError("invalid_request")]
     public async Task Invalid_field_is_a_400_invalid_request_naming_the_field()
     {
         var body = Chat();
@@ -95,6 +97,7 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
     }
 
     [Fact]
+    [TriggersError("model_not_found")]
     public async Task Unknown_alias_is_a_404_model_not_found()
     {
         var response = await gateway.Client.PostAsync("/v1/chat/completions", Json(Chat("nope")), TestContext.Current.CancellationToken);
@@ -105,6 +108,7 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
     }
 
     [Fact]
+    [TriggersError("invalid_api_key")]
     public async Task Missing_key_is_a_401_problem_with_x_request_id()
     {
         var response = await gateway.Anonymous.PostAsync("/v1/chat/completions", Json(Chat()), TestContext.Current.CancellationToken);
@@ -128,6 +132,32 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
     }
 
     [Fact]
+    [TriggersError("rate_limit_exceeded")]
+    public async Task Repeated_invalid_keys_from_one_client_are_throttled_with_429_on_that_instance_only()
+    {
+        // A host of its own: the throttle is per instance, and the shared host's other tests must not see it.
+        await using var host = gateway.StartHost();
+        using var wrong = host.CreateClient();
+        wrong.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "msk_00000000_" + new string('A', 43));
+        using var valid = gateway.ClientFor(host);
+        var ct = TestContext.Current.CancellationToken;
+
+        for (var i = 0; i < 20; i++)
+        {
+            (await wrong.GetAsync("/v1/models", ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        }
+
+        var throttled = await valid.GetAsync("/v1/models", ct);
+
+        throttled.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        throttled.Headers.RetryAfter!.Delta!.Value.TotalSeconds.ShouldBeInRange(1, 60);
+        var problem = await throttled.Content.ReadFromJsonAsync<JsonElement>(ct);
+        problem.GetProperty("error").GetProperty("code").GetString().ShouldBe("rate_limit_exceeded");
+        (await gateway.Client.GetAsync("/v1/models", ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    [TriggersError("insufficient_scope")]
     public async Task Key_without_the_inference_scope_is_a_403_insufficient_scope()
     {
         var response = await gateway.ModelsOnly.PostAsync("/v1/chat/completions", Json(Chat()), TestContext.Current.CancellationToken);
@@ -138,6 +168,7 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
     }
 
     [Fact]
+    [TriggersError("payload_too_large")]
     public async Task Oversized_body_is_a_413_payload_too_large()
     {
         var body = new StringContent(new string('x', 1024 * 1024 + 1), Encoding.UTF8, "application/json");
@@ -152,6 +183,7 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
     }
 
     [Fact]
+    [TriggersError("unsupported_media_type")]
     public async Task Wrong_content_type_is_a_415()
     {
         var response = await gateway.Client.PostAsync(
@@ -163,6 +195,7 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
     }
 
     [Fact]
+    [TriggersError("provider_unavailable")]
     public async Task Provider_failure_is_a_problem_without_provider_text()
     {
         // The Mock Provider's control endpoint scripts a fault for this model; the gateway never forwards X-Mock-* headers.

@@ -211,6 +211,7 @@ public sealed class UsageLedgerTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    [TriggersError("internal_error")]
     public async Task The_sweeper_abandons_an_expired_request_and_charges_the_held_amount_as_unavailable_usage()
     {
         var id = Guid.CreateVersion7();

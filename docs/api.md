@@ -19,8 +19,9 @@ Authorization: Bearer msk_7f3a9c21_<43 base64url chars>
 | Missing, malformed, unknown, revoked or expired key | 401 | `invalid_api_key` |
 | Tenant suspended | 403 | `tenant_suspended` |
 | Key lacks the required Scope | 403 | `insufficient_scope` |
+| 20 invalid keys from one client address within a minute (per instance; IPv6 grouped by /64) | 429 + `Retry-After` | `rate_limit_exceeded` |
 
-The response never reveals *why* a key is invalid, so revoked and unknown keys look the same.
+The response never reveals *why* a key is invalid, so revoked and unknown keys look the same. While a client address is throttled, no key it presents is looked up, a valid one included, until the window ends.
 
 **Scopes (MVP):** `inference` (chat completions + model list) and `models:read` (model list only).
 

@@ -85,6 +85,19 @@ public sealed class EvaluatorRegistryTests
     }
 
     [Fact]
+    public void Every_evaluator_kind_has_a_scoring_test_class()
+    {
+        // testing.md section 6: kind "reference_similarity" needs ReferenceSimilarityEvaluatorTests, and so on.
+        var testClasses = typeof(EvaluatorRegistryTests).Assembly.GetTypes().Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+
+        var missing = EvaluatorRegistry.Kinds
+            .Select(kind => string.Concat(kind.Split('_').Select(part => char.ToUpperInvariant(part[0]) + part[1..])) + "EvaluatorTests")
+            .Where(name => !testClasses.Contains(name));
+
+        missing.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void Every_evaluator_kind_is_registered()
         => EvaluatorRegistry.Kinds.ShouldBe(["classification", "exact_match", "json_fields", "llm_judge", "reference_similarity"], ignoreOrder: true);
 }

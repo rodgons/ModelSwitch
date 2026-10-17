@@ -95,6 +95,7 @@ public sealed class EvaluationRunTests(GatewayFixture gateway) : IClassFixture<G
     [HappyPath("POST /admin/evaluations")]
     [HappyPath("GET /admin/evaluations/{runId:guid}")]
     [HappyPath("GET /admin/evaluations/{runId:guid}/results")]
+    [TriggersError("template_variable_missing")]
     public async Task A_run_is_created_frozen_and_executed_into_case_results_and_aggregates()
     {
         using var op = await gateway.AdministratorBrowserAsync("operator", gateway.TenantId);
@@ -277,6 +278,7 @@ public sealed class EvaluationRunTests(GatewayFixture gateway) : IClassFixture<G
 
     [Fact]
     [HappyPath("POST /admin/evaluations/{runId:guid}/cancel")]
+    [TriggersError("conflict")]
     public async Task Cancelling_a_queued_run_means_it_never_starts_and_a_finished_run_cannot_be_cancelled()
     {
         using var op = await gateway.AdministratorBrowserAsync("operator", gateway.TenantId);
@@ -329,6 +331,7 @@ public sealed class EvaluationRunTests(GatewayFixture gateway) : IClassFixture<G
     }
 
     [Fact]
+    [TriggersError("run_cost_cap_reached")]
     public async Task The_cost_cap_stops_new_cases_skips_the_rest_and_fails_the_run_with_run_cost_cap_reached()
     {
         using var owner = await gateway.OwnerBrowserAsync();

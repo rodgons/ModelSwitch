@@ -167,6 +167,34 @@ public sealed class OutboundDestinationPolicyTests
     }
 
     [Fact]
+    public async Task A_rebinding_host_accepted_on_save_is_refused_by_the_real_handler_at_connect_time()
+    {
+        // testing.md section 4: the same resolver answers the save-time check (public) and the connection (metadata address).
+        var resolver = new StubResolver().Returns("rebind.example.com", ["8.8.8.8"], ["169.254.169.254"]);
+        var options = new OutboundOptions([]);
+        (await Validate(new OutboundDestinationPolicy(options, resolver), "https://rebind.example.com")).IsSuccess.ShouldBeTrue();
+        using var client = new HttpClient(new OutboundHandlerFactory(options, resolver).CreatePrimaryHandler());
+
+        var ex = await Should.ThrowAsync<HttpRequestException>(
+            () => client.GetAsync("https://rebind.example.com/v1/models", TestContext.Current.CancellationToken));
+
+        ex.HttpRequestError.ShouldBe(HttpRequestError.ConnectionError);
+        resolver.Calls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_hostname_resolving_to_10_x_is_refused_on_save_and_at_connect_time()
+    {
+        var resolver = new StubResolver().Returns("intranet.example.com", ["10.1.2.3"]);
+        var options = new OutboundOptions([]);
+        using var client = new HttpClient(new OutboundHandlerFactory(options, resolver).CreatePrimaryHandler());
+
+        (await Validate(new OutboundDestinationPolicy(options, resolver), "https://intranet.example.com")).IsFailure.ShouldBeTrue();
+        await Should.ThrowAsync<HttpRequestException>(
+            () => client.GetAsync("https://intranet.example.com/v1/models", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Connect_callback_refuses_loopback_literal_unless_allowlisted()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
