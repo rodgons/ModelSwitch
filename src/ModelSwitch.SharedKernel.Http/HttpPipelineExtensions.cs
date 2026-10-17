@@ -28,17 +28,23 @@ public static class HttpPipelineExtensions
     {
         ArgumentNullException.ThrowIfNull(app);
         app.UseMiddleware<RequestIdMiddleware>();
-        app.UseExceptionHandler(handler => handler.Run(context =>
+        app.UseExceptionHandler(new ExceptionHandlerOptions
         {
-            // The exception handler cleared the response, headers included, before running this: put the request id back.
-            if (RequestId.Get(context) is var id && id != Guid.Empty)
+            ExceptionHandler = context =>
             {
-                context.Response.Headers[RequestId.HeaderName] = id.ToString();
-            }
+                // The exception handler cleared the response, headers included, before running this: put the request id back.
+                if (RequestId.Get(context) is var id && id != Guid.Empty)
+                {
+                    context.Response.Headers[RequestId.HeaderName] = id.ToString();
+                }
 
-            var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-            return ProblemResults.From(context, Map(exception)).ExecuteAsync(context);
-        }));
+                var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+                return ProblemResults.From(context, Map(exception)).ExecuteAsync(context);
+            },
+            // A body the client got wrong is a 400, not a server error: no Error log with a stack trace, whose JSON reader
+            // message would also quote the offending character of the body (ADR-0010).
+            SuppressDiagnosticsCallback = context => context.Exception is BadHttpRequestException,
+        });
         return app;
     }
 
