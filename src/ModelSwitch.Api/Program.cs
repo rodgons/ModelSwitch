@@ -35,6 +35,7 @@ return await StartupExit.RunAsync(
 
         builder.AddModelSwitchTelemetry("modelswitch-api");
         builder.Services.AddSharedKernel();
+        builder.Services.AddProxyForwardedHeaders();
         builder.Services.AddIdentityModule();
         builder.Services.AddAdministratorWebSecurity();
         builder.Services.AddRegistryModule();
@@ -72,6 +73,7 @@ return await StartupExit.RunAsync(
 
         var app = builder.Build();
 
+        app.UseForwardedHeaders();
         app.UseRequestIdAndErrorHandling();
         app.UseInferenceRequestGuard();
         app.UseAuthentication();
