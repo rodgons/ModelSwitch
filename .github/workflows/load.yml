@@ -1,0 +1,53 @@
+# Short k6 smoke of the gateway-overhead scenario (docs/testing.md section 5, load/README.md). Manual or nightly.
+# A GitHub runner is a noisy shared VM: the output is uploaded as an artifact to catch regressions and broken scripts, and is
+# never committed as a benchmark. Published numbers come from load/run.sh on a documented machine (docs/benchmarks/).
+name: load
+
+on:
+  workflow_dispatch:
+    inputs:
+      step_duration:
+        description: Duration of each step (e.g. 30s, 2m)
+        default: 30s
+      rates:
+        description: Comma-separated arrival rates (RPS)
+        default: "20,50"
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: load
+  cancel-in-progress: false
+
+jobs:
+  k6-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: grafana/setup-k6-action@v1
+      - name: Run the smoke
+        env:
+          STEP_DURATION: ${{ inputs.step_duration || '30s' }}
+          RATES: ${{ inputs.rates || '20,50' }}
+          WARMUP_DURATION: 15s
+          STEP_GAP_SECONDS: "5"
+          WAIT_FOR_IDLE: "0"
+          OUT_DIR: ${{ github.workspace }}/load/results/smoke
+        run: load/run.sh
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f load/results/smoke/results.md ]; then
+            { echo "### k6 smoke (GitHub runner, not a benchmark)"; echo; cat load/results/smoke/results.md; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: k6-smoke-${{ github.run_id }}
+          path: load/results/
+          if-no-files-found: warn
+          retention-days: 14

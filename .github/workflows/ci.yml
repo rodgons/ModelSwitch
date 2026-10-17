@@ -78,7 +78,7 @@ jobs:
           ./scripts/generate-secrets.sh
           docker compose --profile demo --profile ollama config --quiet
       - name: Lint the scripts
-        run: shellcheck scripts/generate-secrets.sh scripts/seed-demo.sh
+        run: shellcheck scripts/generate-secrets.sh scripts/seed-demo.sh load/run.sh
 
   gitleaks:
     runs-on: ubuntu-latest
