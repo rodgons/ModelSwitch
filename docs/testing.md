@@ -52,7 +52,7 @@ Chromium runs through `channel: 'chromium'` (the full browser in new headless mo
 
 ## 3. Failure-injection scenarios (PRD §10.3)
 
-Each one asserts **bounded attempts**, **a recorded outcome** and **consistent accounting** (`budget_period` totals equal the sum of Usage Records).
+Each one asserts **bounded attempts**, **a recorded outcome** and **consistent accounting** (for a Tenant with a Budget, which the scenarios give it: each `budget_period` row's `spent_amount` equals the Usage Records of its month and `reserved_amount` the held Reservations).
 
 | Scenario | Expected |
 |---|---|

@@ -21,7 +21,10 @@ public sealed class UsageAccountingTests(GatewayFixture gateway) : IClassFixture
     {
         _tenant = Guid.Parse((await Rows("select id::text from identity.tenant where name = 'acme'")).Single()[0]);
         await gateway.SetFaultAsync(null, null);
+        // Removing and setting the Budget again recreates the period row from the ledger, so each test starts from a consistent row.
+        // The Budget is too large to refuse anything; only a Tenant with a Budget has a budget_period row to check.
         await Budgets.SetMonthlyLimitAsync(_tenant, null, CancellationToken.None);
+        await Budgets.SetMonthlyLimitAsync(_tenant, Money.FromUsd(1_000_000m), CancellationToken.None);
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -178,14 +181,18 @@ public sealed class UsageAccountingTests(GatewayFixture gateway) : IClassFixture
         (await Rows($"select usage_status from usage.inference_request where id = '{requestId}'")).Single()[0].ShouldBe("estimated");
     }
 
-    // testing.md section 3: budget_period totals equal the sum of the Usage Records, and nothing is left reserved.
+    // testing.md section 3 and usage-and-budgets.md section 3: the current period row's spent equals the Usage Records of the
+    // requests that started this month, and its reserved equals the held Reservations of the month.
     private async Task AssertAccountingConsistentAsync()
     {
         var totals = (await Rows(
-            $"select (select coalesce(sum(spent_amount),0) from usage.budget_period where tenant_id = '{_tenant}')::text, " +
-            $"(select coalesce(sum(total_cost),0) from usage.usage_record where tenant_id = '{_tenant}')::text, " +
-            $"(select coalesce(sum(reserved_amount),0) from usage.budget_period where tenant_id = '{_tenant}')::text, " +
-            $"(select coalesce(sum(amount),0) from usage.reservation where tenant_id = '{_tenant}' and status = 'held')::text")).Single();
+            "select p.spent_amount::text, " +
+            "(select coalesce(sum(u.total_cost), 0) from usage.usage_record u join usage.inference_request q on q.id = u.inference_request_id " +
+            " where u.tenant_id = p.tenant_id and q.started_at >= p.period_start::timestamp at time zone 'UTC' " +
+            " and q.started_at < (p.period_start + interval '1 month') at time zone 'UTC')::text, " +
+            "p.reserved_amount::text, " +
+            "(select coalesce(sum(r.amount), 0) from usage.reservation r where r.tenant_id = p.tenant_id and r.period_start = p.period_start and r.status = 'held')::text " +
+            $"from usage.budget_period p where p.tenant_id = '{_tenant}' and p.period_start = date_trunc('month', now() at time zone 'UTC')::date")).Single();
         decimal.Parse(totals[0], CultureInfo.InvariantCulture).ShouldBe(decimal.Parse(totals[1], CultureInfo.InvariantCulture));
         decimal.Parse(totals[2], CultureInfo.InvariantCulture).ShouldBe(decimal.Parse(totals[3], CultureInfo.InvariantCulture));
     }
