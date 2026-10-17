@@ -61,6 +61,8 @@ Meter `ModelSwitch` (the circuit and Adapter instruments use `ModelSwitch.Circui
 
 Built-in ASP.NET Core, HttpClient, Npgsql and runtime metrics are also enabled. `provider` and `model` carry ids, not names. `modelswitch.tokens` and `modelswitch.estimated_cost` are recorded by the Usage ledger after a settlement commits, so a rolled-back settlement counts nothing. `modelswitch.outbox.lag` and `modelswitch.jobs.queue_depth` are sampled by the worker every 15 s (`JobsMetricsSampler`), so an exporter callback never queries the database.
 
+`modelswitch.inference.requests` counts every request that reached routing, including one whose step 8 (opening the request and its Reservation) failed with an infrastructure fault, such as PostgreSQL refusing connections. That request has no `inference_request` row; it is counted with `status=failed`, `error_code=internal_error`, and the exception still reaches the last-resort handler, which answers `500` Problem Details with `internal_error` (api.md §2).
+
 ## 4. Logs
 
 - JSON console + OTLP. Every line inside a request has `RequestId`, `TraceId`, `TenantId` (an id, not a name).
@@ -68,6 +70,7 @@ Built-in ASP.NET Core, HttpClient, Npgsql and runtime metrics are also enabled. 
 - `[SecretData]` and `[ContentData]` (`SharedKernel.Telemetry`) classify `[LoggerMessage]` parameters; the hosts register an erasing redactor for both, and for anything else classified.
 - Use `[LoggerMessage]` source-generated methods only, with event ids grouped per module (Identity 1xxx, Registry 2xxx, Routing 3xxx, Inference 4xxx, Usage 5xxx, Evaluation 6xxx, Worker 7xxx).
 - Levels: one `Information` line per completed request (status, alias, model, attempts, duration), `Warning` per failed Attempt, and `Error` only for gateway faults, never for Provider errors that were handled.
+- Framework categories are raised to `Warning` in the hosts' `appsettings.json` (api and worker): `Microsoft.EntityFrameworkCore` (one line per DB command otherwise), `System.Net.Http.HttpClient` (four lines per Provider call), and in the api `Microsoft.AspNetCore` (request start and finish). Everything else, the gateway's own categories and `Microsoft.Hosting.Lifetime` included, stays at `Information`. Without these defaults a request wrote about ten lines (benchmarks/2026-10-17-266c696.md). An operator overrides a level with an environment variable, e.g. `Logging__LogLevel__Microsoft.EntityFrameworkCore=Information`; raising EF Core to `Debug` or enabling sensitive-data logging is never done, because parameter values could then reach the log (ADR-0010).
 
 ## 5. Degradation rules
 

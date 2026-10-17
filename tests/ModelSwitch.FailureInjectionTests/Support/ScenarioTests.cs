@@ -2,7 +2,10 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.DependencyInjection;
 using ModelSwitch.IntegrationTests.Infrastructure;
+using ModelSwitch.SharedKernel;
+using ModelSwitch.Usage.Contracts;
 using Npgsql;
 using Shouldly;
 
@@ -43,10 +46,14 @@ public abstract class ScenarioTests
 
     protected GatewayFixture Gateway { get; set; } = null!;
 
-    /// <summary>Resets the Mock Provider's faults and counters, and the client request count.</summary>
+    /// <summary>
+    /// Resets the Mock Provider's faults and counters, and the client request count. Gives the Tenant a Budget too large to refuse
+    /// anything: only a Tenant with a Budget has a <c>budget_period</c> row, and the accounting assertions check that row.
+    /// </summary>
     protected async Task ResetAsync()
     {
         await Gateway.SetFaultAsync(null, null);
+        await Gateway.Services.GetRequiredService<IBudgets>().SetMonthlyLimitAsync(Gateway.TenantId, Money.FromUsd(1_000_000m), CancellationToken.None);
         _clientRequests = 0;
     }
 
@@ -105,8 +112,8 @@ public abstract class ScenarioTests
 
     /// <summary>
     /// Accounting that must hold for any request (testing.md section 3): <c>inference_request.attempt_count</c> equals its Attempt rows,
-    /// every Attempt that reached a Provider has exactly one <c>usage_record</c>, and for the request's Tenant
-    /// <c>budget_period.spent_amount</c> equals the sum of its Usage Records while <c>reserved_amount</c> equals its held Reservations.
+    /// every Attempt that reached a Provider has exactly one <c>usage_record</c>, and the request's Tenant's <c>budget_period</c>
+    /// rows hold the invariant of usage-and-budgets.md section 3 (see <see cref="AssertConsistentBudgetAsync(Guid)"/>).
     /// </summary>
     protected async Task AssertConsistentAccountingAsync(string requestId)
     {
@@ -123,21 +130,35 @@ public abstract class ScenarioTests
 
     /// <summary>
     /// The Tenant-level half of <see cref="AssertConsistentAccountingAsync"/>, which also holds for a request the sweeper recovered (it
-    /// has a Usage Record but no Attempt rows): <c>budget_period.spent_amount</c> equals the sum of the Usage Records and
-    /// <c>reserved_amount</c> equals the held Reservations.
+    /// has a Usage Record but no Attempt rows). Only a Tenant with a Budget has <c>budget_period</c> rows; it has one for the current
+    /// month, and for every row <c>spent_amount</c> equals the Usage Records of the requests that started in that month while
+    /// <c>reserved_amount</c> equals the Tenant's held Reservations of that month.
     /// </summary>
     protected Task AssertConsistentBudgetAsync(Guid tenantId) => AssertConsistentBudgetAsync($"'{tenantId}'");
 
     private async Task AssertConsistentBudgetAsync(string scope)
     {
         // One statement, so the figures come from one snapshot even while other requests are settling.
-        var budget = (await RowsAsync(
-            $"select (select coalesce(sum(spent_amount), 0) from usage.budget_period where tenant_id = {scope})::text, " +
-            $"(select coalesce(sum(total_cost), 0) from usage.usage_record where tenant_id = {scope})::text, " +
-            $"(select coalesce(sum(reserved_amount), 0) from usage.budget_period where tenant_id = {scope})::text, " +
-            $"(select coalesce(sum(amount), 0) from usage.reservation where tenant_id = {scope} and status = 'held')::text")).Single();
-        decimal.Parse(budget[0], CultureInfo.InvariantCulture).ShouldBe(decimal.Parse(budget[1], CultureInfo.InvariantCulture), "budget_period.spent_amount equals the Usage Records");
-        decimal.Parse(budget[2], CultureInfo.InvariantCulture).ShouldBe(decimal.Parse(budget[3], CultureInfo.InvariantCulture), "reserved_amount equals the held Reservations");
+        var periods = await RowsAsync(
+            "select p.period_start::text, p.spent_amount::text, " +
+            "(select coalesce(sum(u.total_cost), 0) from usage.usage_record u join usage.inference_request q on q.id = u.inference_request_id " +
+            " where u.tenant_id = p.tenant_id and q.started_at >= p.period_start::timestamp at time zone 'UTC' " +
+            " and q.started_at < (p.period_start + interval '1 month') at time zone 'UTC')::text, " +
+            "p.reserved_amount::text, " +
+            "(select coalesce(sum(r.amount), 0) from usage.reservation r where r.tenant_id = p.tenant_id and r.period_start = p.period_start and r.status = 'held')::text, " +
+            "date_trunc('month', now() at time zone 'UTC')::date = p.period_start " +
+            $"from usage.budget_period p where p.tenant_id = {scope}");
+        var hasBudget = await ScalarAsync($"select exists (select 1 from usage.budget where tenant_id = {scope})::text");
+        if (hasBudget == "true")
+        {
+            periods.ShouldContain(p => p[5] == "True", "a Tenant with a Budget has a budget_period row for the current month");
+        }
+
+        foreach (var period in periods)
+        {
+            decimal.Parse(period[1], CultureInfo.InvariantCulture).ShouldBe(decimal.Parse(period[2], CultureInfo.InvariantCulture), $"budget_period.spent_amount of {period[0]} equals the Usage Records");
+            decimal.Parse(period[3], CultureInfo.InvariantCulture).ShouldBe(decimal.Parse(period[4], CultureInfo.InvariantCulture), $"reserved_amount of {period[0]} equals the held Reservations");
+        }
     }
 
     /// <summary>The Attempts of a request as <c>[kind, status, error_class, error_code, http_status, model]</c>, in order.</summary>

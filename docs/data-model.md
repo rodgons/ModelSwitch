@@ -118,6 +118,7 @@ Indexes: `(tenant_id, started_at desc)`, `(started_at desc)`, `(status, started_
 
 **budget_period**: `tenant_id`, `period_start date`, `limit_amount numeric null`, `reserved_amount numeric not null default 0`, `spent_amount numeric not null default 0`, `currency`, pk `(tenant_id, period_start)`
 - `CHECK (reserved_amount >= 0)`
+- Exists only for a month in which the Tenant had a Budget: created from `usage.budget` (with the month's held Reservations and Usage Records) when a Budget is set or by the month's first Reservation, and deleted for the current month when the Budget is removed. Invariant: `reserved_amount` = the Tenant's `held` Reservations of the month, `spent_amount` = the Usage Records of its requests that started in the month ([usage-and-budgets.md §3](usage-and-budgets.md#3-budget-enforcement-reservation-model)). The `BudgetPeriodOnlyWithBudget` migration deleted the rows earlier versions had created without a limit. `limit_amount` is still nullable but no longer written as NULL.
 
 **reservation**: `id`, `inference_request_id unique`, `tenant_id`, `period_start`, `amount numeric`, `status (held|settled|expired)`, `expires_at`, `created_at` (= the request's `started_at`, which locates the partitioned request row), `settled_at null` (set when the Reservation is settled or expired). Index `(status, expires_at) where status = 'held'` (the sweeper) and `(settled_at) where status <> 'held'` (retention).
 

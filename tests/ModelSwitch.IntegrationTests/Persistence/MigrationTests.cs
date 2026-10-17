@@ -35,7 +35,7 @@ public sealed class MigrationTests(PostgresFixture postgres)
         second["identity"].ShouldBeEmpty();
         second["registry"].ShouldBeEmpty();
         second["routing"].ShouldBeEmpty();
-        first["usage"].Count.ShouldBe(7);
+        first["usage"].Count.ShouldBe(8);
         first["usage"][0].ShouldEndWith("_Initial");
         first["usage"][1].ShouldEndWith("_Budgets");
         first["usage"][2].ShouldEndWith("_UsageHourly");
@@ -43,6 +43,7 @@ public sealed class MigrationTests(PostgresFixture postgres)
         first["usage"][4].ShouldEndWith("_UsageHourlyOrigin");
         first["usage"][5].ShouldEndWith("_InferenceRequestEvaluationRunIndex");
         first["usage"][6].ShouldEndWith("_ReservationRetentionIndex");
+        first["usage"][7].ShouldEndWith("_BudgetPeriodOnlyWithBudget");
         first["evaluation"].ShouldHaveSingleItem().ShouldEndWith("_Initial");
         first["jobs"].ShouldBe(["outbox_event", "job", "processed_event"]);
         second["usage"].ShouldBeEmpty();

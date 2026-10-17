@@ -21,7 +21,7 @@ internal sealed class TenantBudgetsAdapter(IBudgets budgets, TimeProvider time) 
             return new TenantBudgetPeriod(current.PeriodStart, current.Limit?.Amount, current.Reserved.Amount, current.Settled.Amount);
         }
 
-        // The period row is created by the first Reservation of the month; until then nothing is held or spent.
+        // EfBudgets always answers (it sums the ledger when there is no period row); any other IBudgets may not.
         var limit = await budgets.GetMonthlyLimitAsync(tenantId, cancellationToken);
         return new TenantBudgetPeriod(BudgetSql.PeriodOf(time.GetUtcNow()), limit?.Amount, 0m, 0m);
     }

@@ -56,12 +56,16 @@ public sealed class UsageLedgerTests(PostgresFixture postgres) : IAsyncLifetime
             source,
             Pricing: new AttemptPricing(Guid.CreateVersion7(), new PriceRates(1m, null, 2m)));
 
+    // A Budget large enough never to refuse: only a Tenant with a Budget has a budget_period row (usage-and-budgets.md section 3).
+    private Task WithBudgetAsync() => Budgets.SetMonthlyLimitAsync(_tenant, Usd(1_000m), CancellationToken.None);
+
     private static SettleInferenceRequest Settle(OpenedRequest opened, params AttemptRecord[] attempts)
         => new(opened.RequestId, opened.StartedAt, RequestOutcome.Succeeded, null, null, null, null, null, attempts, MaxOutputTokens: 1_000_000);
 
     [Fact]
-    public async Task A_reservation_without_a_budget_is_held_and_settling_releases_it_and_books_the_spend()
+    public async Task A_reservation_is_held_against_the_budget_and_settling_releases_it_and_books_the_spend()
     {
+        await WithBudgetAsync();
         var id = Guid.CreateVersion7();
         var opened = (await Ledger.OpenAsync(Open(id, 0.5m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).Value;
 
@@ -94,6 +98,7 @@ public sealed class UsageLedgerTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Settling_twice_neither_duplicates_records_nor_moves_the_budget_again()
     {
+        await WithBudgetAsync();
         var id = Guid.CreateVersion7();
         var opened = (await Ledger.OpenAsync(Open(id, 0.5m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).Value;
         var settlement = Settle(opened, Attempt(1, 1_000_000, 0));
@@ -156,6 +161,7 @@ public sealed class UsageLedgerTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Settling_releases_the_topped_up_amount_in_full()
     {
+        await WithBudgetAsync();
         var id = Guid.CreateVersion7();
         var opened = (await Ledger.OpenAsync(Open(id, 0.4m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).Value;
         await Ledger.TopUpAsync(id, Usd(0.5m), CancellationToken.None);
@@ -168,6 +174,7 @@ public sealed class UsageLedgerTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Every_attempt_gets_a_record_and_an_ambiguous_one_is_charged_its_worst_case()
     {
+        await WithBudgetAsync();
         var id = Guid.CreateVersion7();
         var opened = (await Ledger.OpenAsync(Open(id, 2m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).Value;
         var ambiguous = Attempt(1, 100_000, 0, UsageSource.Unavailable, AttemptStatus.Ambiguous) with { OutputTokens = null };
@@ -214,6 +221,7 @@ public sealed class UsageLedgerTests(PostgresFixture postgres) : IAsyncLifetime
     [TriggersError("internal_error")]
     public async Task The_sweeper_abandons_an_expired_request_and_charges_the_held_amount_as_unavailable_usage()
     {
+        await WithBudgetAsync();
         var id = Guid.CreateVersion7();
         var opened = (await Ledger.OpenAsync(Open(id, 0.75m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).Value;
 
@@ -239,6 +247,7 @@ public sealed class UsageLedgerTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task The_sweeper_leaves_a_settled_request_alone_and_honours_the_batch_size()
     {
+        await WithBudgetAsync();
         var settled = (await Ledger.OpenAsync(Open(Guid.CreateVersion7(), 0.1m, _time.GetUtcNow().AddSeconds(5)), CancellationToken.None)).Value;
         await Ledger.SettleAsync(Settle(settled, Attempt(1, 10, 0)), CancellationToken.None);
         for (var i = 0; i < 3; i++)
@@ -257,6 +266,7 @@ public sealed class UsageLedgerTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task Spent_always_equals_the_sum_of_the_usage_records_after_a_mix_of_settles_and_sweeps()
     {
+        await WithBudgetAsync();
         var swept = Guid.CreateVersion7();
         await Ledger.OpenAsync(Open(swept, 0.3m, _time.GetUtcNow().AddSeconds(5)), CancellationToken.None);
         var opened = (await Ledger.OpenAsync(Open(Guid.CreateVersion7(), 0.3m, _time.GetUtcNow().AddMinutes(10)), CancellationToken.None)).Value;
@@ -268,6 +278,105 @@ public sealed class UsageLedgerTests(PostgresFixture postgres) : IAsyncLifetime
         var records = decimal.Parse(await Scalar($"select sum(total_cost)::text from usage.usage_record where tenant_id = '{_tenant}'") ?? "x", CultureInfo.InvariantCulture);
 
         spent.ShouldBe(records);
+    }
+
+    [Fact]
+    public async Task A_tenant_without_a_budget_takes_no_budget_period_row_and_its_figures_come_from_the_ledger()
+    {
+        var id = Guid.CreateVersion7();
+        var opened = (await Ledger.OpenAsync(Open(id, 0.5m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).Value;
+
+        (await Scalar($"select count(*) from usage.budget_period where tenant_id = '{_tenant}'")).ShouldBe("0");
+        (await Scalar($"select status from usage.reservation where inference_request_id = '{id}'")).ShouldBe("held", "the sweeper still needs the Reservation");
+        var held = (await Budgets.GetCurrentAsync(_tenant, CancellationToken.None))!;
+        (held.Limit, held.Reserved.Amount, held.Settled.Amount).ShouldBe((null, 0.5m, 0m));
+
+        await Ledger.SettleAsync(Settle(opened, Attempt(1, 1_000_000, 250_000)), CancellationToken.None);
+
+        (await Scalar($"select count(*) from usage.budget_period where tenant_id = '{_tenant}'")).ShouldBe("0");
+        (await Scalar($"select status from usage.reservation where inference_request_id = '{id}'")).ShouldBe("settled");
+        var settled = (await Budgets.GetCurrentAsync(_tenant, CancellationToken.None))!;
+        (settled.Reserved.Amount, settled.Settled.Amount).ShouldBe((0m, 1.5m));
+    }
+
+    [Fact]
+    public async Task A_top_up_without_a_budget_raises_the_hold_and_is_never_refused()
+    {
+        var id = Guid.CreateVersion7();
+        await Ledger.OpenAsync(Open(id, 0.4m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None);
+
+        (await Ledger.TopUpAsync(id, Usd(5m), CancellationToken.None)).IsSuccess.ShouldBeTrue();
+
+        (await Scalar($"select amount::text from usage.reservation where inference_request_id = '{id}'")).ShouldBe("5.4000000000");
+        (await Scalar($"select count(*) from usage.budget_period where tenant_id = '{_tenant}'")).ShouldBe("0");
+    }
+
+    [Fact]
+    public async Task Setting_a_budget_mid_month_seeds_the_period_from_the_usage_records_and_the_held_reservations()
+    {
+        var first = (await Ledger.OpenAsync(Open(Guid.CreateVersion7(), 2m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).Value;
+        await Ledger.SettleAsync(Settle(first, Attempt(1, 1_000_000, 250_000)), CancellationToken.None);
+        var inFlight = (await Ledger.OpenAsync(Open(Guid.CreateVersion7(), 0.5m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).Value;
+
+        await Budgets.SetMonthlyLimitAsync(_tenant, Usd(2.5m), CancellationToken.None);
+
+        (await Rows($"select limit_amount::text, reserved_amount::text, spent_amount::text from usage.budget_period where tenant_id = '{_tenant}'")).Single()
+            .ShouldBe(["2.5000000000", "0.5000000000", "1.5000000000"]);
+
+        // 1.5 spent + 0.5 held: another 0.6 would pass 2.5.
+        (await Ledger.OpenAsync(Open(Guid.CreateVersion7(), 0.6m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).IsFailure.ShouldBeTrue();
+
+        // The Reservation opened before the Budget existed is released from the seeded period.
+        await Ledger.SettleAsync(Settle(inFlight, Attempt(1, 100_000, 0)), CancellationToken.None);
+        (await Rows($"select reserved_amount::text, spent_amount::text from usage.budget_period where tenant_id = '{_tenant}'")).Single()
+            .ShouldBe(["0.0000000000", "1.6000000000"]);
+    }
+
+    [Fact]
+    public async Task Removing_the_budget_drops_the_current_period_row_and_in_flight_requests_still_settle()
+    {
+        await Budgets.SetMonthlyLimitAsync(_tenant, Usd(10m), CancellationToken.None);
+        var budgeted = (await Ledger.OpenAsync(Open(Guid.CreateVersion7(), 0.5m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).Value;
+
+        await Budgets.SetMonthlyLimitAsync(_tenant, null, CancellationToken.None);
+
+        (await Scalar($"select count(*) from usage.budget_period where tenant_id = '{_tenant}'")).ShouldBe("0");
+        var unbudgeted = (await Ledger.OpenAsync(Open(Guid.CreateVersion7(), 50m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None)).Value;
+        await Ledger.SettleAsync(Settle(budgeted, Attempt(1, 100_000, 0)), CancellationToken.None);
+
+        // A Budget set again counts the Reservation still held.
+        await Budgets.SetMonthlyLimitAsync(_tenant, Usd(100m), CancellationToken.None);
+        (await Rows($"select reserved_amount::text, spent_amount::text from usage.budget_period where tenant_id = '{_tenant}'")).Single()
+            .ShouldBe(["50.0000000000", "0.1000000000"]);
+        await Ledger.SettleAsync(Settle(unbudgeted, Attempt(1, 200_000, 0)), CancellationToken.None);
+        (await Rows($"select reserved_amount::text, spent_amount::text from usage.budget_period where tenant_id = '{_tenant}'")).Single()
+            .ShouldBe(["0.0000000000", "0.3000000000"]);
+    }
+
+    [Fact]
+    public async Task Concurrent_reservations_settles_and_budget_changes_keep_the_period_equal_to_the_ledger()
+    {
+        // Requests race with the Budget being set and removed; whatever interleaving happens, an existing period row must still
+        // equal the Usage Records and the held Reservations of its month.
+        var requests = Enumerable.Range(0, 40).Select(async i =>
+        {
+            var opened = await Ledger.OpenAsync(Open(Guid.CreateVersion7(), 0.01m, _time.GetUtcNow().AddMinutes(1)), CancellationToken.None);
+            if (opened.IsSuccess && i % 4 != 0)
+            {
+                await Ledger.SettleAsync(Settle(opened.Value, Attempt(1, 1_000 * (i + 1), 0)), CancellationToken.None);
+            }
+        });
+        var changes = Enumerable.Range(0, 10).Select(i => Budgets.SetMonthlyLimitAsync(_tenant, i % 3 == 2 ? null : Usd(1_000m), CancellationToken.None));
+        await Task.WhenAll(requests.Concat(changes));
+        await WithBudgetAsync();
+
+        var period = (await Rows(
+            $"select reserved_amount::text, spent_amount::text, " +
+            $"(select coalesce(sum(amount), 0) from usage.reservation where tenant_id = '{_tenant}' and status = 'held')::text, " +
+            $"(select coalesce(sum(total_cost), 0) from usage.usage_record where tenant_id = '{_tenant}')::text " +
+            $"from usage.budget_period where tenant_id = '{_tenant}'")).Single();
+        decimal.Parse(period[0], CultureInfo.InvariantCulture).ShouldBe(decimal.Parse(period[2], CultureInfo.InvariantCulture), "reserved equals the held Reservations");
+        decimal.Parse(period[1], CultureInfo.InvariantCulture).ShouldBe(decimal.Parse(period[3], CultureInfo.InvariantCulture), "spent equals the Usage Records");
     }
 
     private async Task<string?> Scalar(string sql) => (await Rows(sql)).SingleOrDefault()?[0];

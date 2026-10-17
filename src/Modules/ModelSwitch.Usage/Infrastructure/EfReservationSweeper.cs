@@ -113,8 +113,6 @@ internal sealed class EfReservationSweeper(IDbContextFactory<UsageDbContext> con
         });
         await db.SaveChangesAsync(cancellationToken);
 
-        await BudgetSql.SettleAsync(db, identity.TenantId, period, amount, amount, cancellationToken);
-
         var payload = new RequestCompletedEvent(
             reservation.RequestId,
             identity.TenantId,
@@ -142,6 +140,21 @@ internal sealed class EfReservationSweeper(IDbContextFactory<UsageDbContext> con
             payload,
             at,
             cancellationToken);
+
+        // Last, under the shared Budget lock, as at settlement: the held amount moves from reserved to spent. Without a period row
+        // (no Budget) there is nothing to move.
+        await using (var move = BudgetSql.Batch(
+            db,
+            (BudgetSql.SharedLockSql, BudgetSql.LockParameters(identity.TenantId)),
+            (
+                """
+                UPDATE usage.budget_period SET reserved_amount = reserved_amount - @amount, spent_amount = spent_amount + @amount
+                 WHERE tenant_id = @tenant AND period_start = @period
+                """,
+                [("amount", amount), ("tenant", identity.TenantId), ("period", period)])))
+        {
+            await move.ExecuteNonQueryAsync(cancellationToken);
+        }
 
         await transaction.CommitAsync(cancellationToken);
         metrics.Abandoned(identity.RequestedAlias, amount);

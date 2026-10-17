@@ -82,11 +82,12 @@ In Compose, `.env` is the only place values are set. `deploy/docker-compose.yml`
 | `POSTGRES_APP_PASSWORD` | ✔ | migrator | Password the migrator gives `modelswitch_app` when it creates the role |
 | `POSTGRES_RETENTION_PASSWORD` | | migrator | Password for `modelswitch_retention` when the migrator creates it. Unset: the role is created `NOLOGIN`. `.env.example` sets it and `generate-secrets.sh` fills it |
 | `POSTGRES_DB` | | postgres container | `modelswitch` |
+| `POSTGRES_MAX_CONNECTIONS` | | postgres container | `200`. PostgreSQL's `max_connections`. Keep it above the connection budget below |
 | `MODELSWITCH_HTTP_PORT` | | Compose (`proxy`) | `8080`. The published port. Change `PublicBaseUrl` with it |
-| `MODELSWITCH__ConnectionStrings__Postgres` | ✔ | api, worker | `modelswitch_app` role |
-| `MODELSWITCH__ConnectionStrings__PostgresMigrator` | ✔ | migrator | `modelswitch_migrator` role |
+| `MODELSWITCH__ConnectionStrings__Postgres` | ✔ | api, worker | `modelswitch_app` role. `.env.example` sets `Maximum Pool Size=40` (see the connection budget below) |
+| `MODELSWITCH__ConnectionStrings__PostgresMigrator` | ✔ | migrator | `modelswitch_migrator` role. `Maximum Pool Size=5` |
 | `MODELSWITCH__ConnectionStrings__Valkey` | ✔ | api | |
-| `MODELSWITCH__ConnectionStrings__PostgresRetention` | | worker | `modelswitch_retention` role (needs `POSTGRES_RETENTION_PASSWORD`). Unset: retention runs as the app role and keeps Audit Records |
+| `MODELSWITCH__ConnectionStrings__PostgresRetention` | | worker | `modelswitch_retention` role (needs `POSTGRES_RETENTION_PASSWORD`). Unset: retention runs as the app role and keeps Audit Records. `Maximum Pool Size=5` |
 | `MODELSWITCH__Security__MasterKey` | ✔ if any `db:` credential | api, worker | 32 bytes base64 |
 | `MODELSWITCH__Security__MasterKeyVersion` | | api, worker | `1`. Version id of the master key, stored with each secret. Raise it when rotating |
 | `MODELSWITCH__Security__PreviousMasterKey` / `PreviousMasterKeyVersion` | during rotation | api, worker | The old key and its version, so secrets written under it still decrypt until re-encrypted |
@@ -110,6 +111,18 @@ In Compose, `.env` is the only place values are set. `deploy/docker-compose.yml`
 | `MODELSWITCH__Telemetry__TraceUrlTemplate` | | api | e.g. `http://localhost:3000/explore?…{traceId}` |
 | Provider env credentials (e.g. `OPENAI_API_KEY`) | | api, worker | referenced as `env:OPENAI_API_KEY`. Compose passes `OPENAI_API_KEY` only; add others to the `x-gateway-environment` block |
 | `MODELSWITCH_URL`, `MODELSWITCH_DEMO_OLLAMA_MODEL`, `MODELSWITCH_DEMO_TENANT` | | `seed-demo.sh` | The gateway URL (default `http://localhost:$MODELSWITCH_HTTP_PORT`), the Ollama model tag (default `qwen2.5:1.5b-instruct-q4_K_M`), and the name of the Tenant to create or reuse (default `demo`; `load/run.sh` seeds several) |
+
+**Connection budget.** Every Npgsql pool opens up to its `Maximum Pool Size` connections (Npgsql's default is 100), and PostgreSQL refuses a client beyond `max_connections` ("sorry, too many clients already") instead of queueing it, which reaches the client as a `500`. A pool at its maximum makes its callers wait for a free connection instead, so the pools must add up to less than `max_connections`. With the `.env.example` values:
+
+| Process | Pools | At most |
+|---|---|---|
+| api | app string: EF Core modules (one shared pool) and the job enqueuer, 40 each; the configuration `LISTEN` connection (unpooled) | 81 |
+| worker | app string: EF Core modules and the jobs data source, 40 each; retention string, 5; `LISTEN` | 86 |
+| migrator | migrator string, 5 (runs and exits before the others start) | 5 |
+| PostgreSQL | `superuser_reserved_connections` | 3 |
+| **Total** | | **175 of 200** |
+
+The headroom is for `psql` sessions and a second api or worker replica during a rolling restart. Each extra api or worker replica adds its own pools, so raise `POSTGRES_MAX_CONNECTIONS` (or lower `Maximum Pool Size`) with it. An `.env` made before these settings has no `Maximum Pool Size`, so its pools default to 100: add the values from `.env.example`. A pool rarely needs many connections: with the per-request database work of [usage-and-budgets.md §3](usage-and-budgets.md#3-budget-enforcement-reservation-model), the 16-Tenant load run at 100 RPS used at most 8 ([benchmarks/2026-10-17-266c696.md](benchmarks/2026-10-17-266c696.md)).
 
 ## 4. Database initialization
 

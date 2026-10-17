@@ -177,8 +177,8 @@ HTTP POST /v1/chat/completions
  6. Acquire Rate Limit token and Concurrency lease (Valkey)    → 429
  7. Routing: resolve alias → Policy Version → eligibility → ranking
     → RoutingDecision (ordered Candidates)                     → 404 / 403 / 422 / 503 (see api.md §2)
- 8. Reserve Budget for the worst-case cost of the first Candidate,
-    and INSERT inference_request(status=running) in one tx     → 402 budget_exceeded
+ 8. INSERT inference_request(status=running) and its Reservation, and
+    (Tenants with a Budget) hold the worst case on the period row, in one tx → 402 budget_exceeded
  9. AttemptExecutor loop (Deadline-bound, cancellation-aware):
       for each Candidate in order:
         skip if circuit open
