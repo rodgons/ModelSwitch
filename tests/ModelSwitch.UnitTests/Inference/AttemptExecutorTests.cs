@@ -25,7 +25,10 @@ public sealed class AttemptExecutorTests : IDisposable
 
     public AttemptExecutorTests()
     {
-        _health = new ProviderHealth(new CircuitOptions(), _time, NullLogger<ProviderHealth>.Instance);
+        // RunAsync advances the fake clock until the executor finishes, so under load it can overshoot by seconds. Windows far
+        // longer than any overshoot keep the circuit's verdict about the Attempts, not about how fast the thread pool ran.
+        var circuit = new CircuitOptions { SamplingWindow = TimeSpan.FromHours(1), BreakDuration = TimeSpan.FromHours(1), MaxBreakDuration = TimeSpan.FromHours(2) };
+        _health = new ProviderHealth(circuit, _time, NullLogger<ProviderHealth>.Instance);
         _executor = new AttemptExecutor(_fleet, _health, new InputTokenEstimator(), _jitter, _time, NullLogger<AttemptExecutor>.Instance);
     }
 
