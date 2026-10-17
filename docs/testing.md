@@ -105,10 +105,14 @@ Each security item of §2 and §4 and the test that proves it. `IT` is `ModelSwi
 
 ## 5. Load tests and benchmark report
 
-- `load/scenarios/overhead.js`: the Mock Provider with a fixed 200 ms latency. Constant arrival rate in steps of 50, 100, 200 and 400 RPS for 5 min each. Non-streaming and streaming variants.
-- Primary result: `modelswitch.inference.gateway_overhead` p50/p95/p99 (target p95 < 100 ms, NFR-01), together with k6 end-to-end latency minus the mock latency as a cross-check.
-- Also captured: throughput, error rate, process RSS, GC pauses, Npgsql pool wait time, Valkey latency, outbox lag.
-- `docs/benchmarks/<date>-<git-sha>.md` uses the template in `load/REPORT_TEMPLATE.md`: hardware, OS, Docker resources, image digests, dataset size, concurrency, duration, raw numbers, **limitations**. Results are only published when they were actually measured (DoD #10).
+How to run: [load/README.md](../load/README.md).
+
+- `load/scenarios/overhead.js` (k6): constant arrival rate in steps of 50, 100, 200 and 400 RPS for 5 min each (`RATES`, `STEP_DURATION`; `30s` steps make a smoke run), non-streaming and streaming variants (`STREAM=false|true|both`), against the alias `balanced` of `scripts/seed-demo.sh`. Every step is a separate k6 scenario, so the summary reports each one.
+- `load/run.sh` runs the whole measurement: it waits until no `modelswitch-e2e` container runs, starts the stack as its own Compose project `modelswitch-load` (Release images, profiles `demo` and `observability`, overlay `load/compose.load.yaml` that exports telemetry to `otel-lgtm` every 5 s), seeds a Tenant with no limits, makes the Mock Provider answer `mock-echo` after a fixed 200 ms (`POST /__scenarios` `latency=200`), warms up, runs one k6 step per (variant, rate), collects after each step, and tears the stack down.
+- Primary result: `modelswitch.inference.gateway_overhead` p50/p95/p99 (target p95 < 100 ms, NFR-01) from the Prometheus inside `otel-lgtm` (`histogram_quantile` over the step, interpolated within the 1–250 ms buckets, plus the exact share ≤ 100 ms), the same overhead recomputed exactly per request from `inference_request` and `provider_attempt`, and k6 end-to-end latency minus the mock latency as a cross-check.
+- Also captured: throughput, error rate, dropped iterations, api working set (RSS), GC pause time and collections, CPU, thread-pool queue, Npgsql pool usage against its maximum and operation latency (Npgsql exports no pool wait-time instrument), Valkey server-side time per command (`INFO commandstats`), outbox lag, and a `docker stats` sample per step.
+- `docs/benchmarks/<date>-<git-sha>.md` uses the template in `load/REPORT_TEMPLATE.md`: hardware, OS, Docker resources, image digests, dataset size, concurrency, duration, raw numbers, **limitations**. Results are only published when they were actually measured (DoD #10). Raw output stays in the gitignored `load/results/`.
+- `.github/workflows/load.yml` runs a short smoke (manual and nightly) on a GitHub runner and uploads the output as an artifact; runner numbers are not a benchmark and are never committed.
 
 ## 6. Coverage expectations
 
