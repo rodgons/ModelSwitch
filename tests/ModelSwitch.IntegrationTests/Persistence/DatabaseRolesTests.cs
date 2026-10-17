@@ -65,6 +65,9 @@ public sealed class DatabaseRolesTests(PostgresFixture postgres)
         (await ScalarAsync(admin, $"select has_table_privilege('{DatabaseRoles.RetentionRole}', 'identity.audit_record', 'DELETE')")).ShouldBe("True");
         (await ScalarAsync(admin, $"select has_table_privilege('{DatabaseRoles.RetentionRole}', 'identity.audit_record', 'UPDATE')")).ShouldBe("False");
         (await ScalarAsync(admin, $"select has_table_privilege('{DatabaseRoles.RetentionRole}', 'identity.tenant', 'DELETE')")).ShouldBe("False");
+        (await ScalarAsync(admin, $"select has_table_privilege('{DatabaseRoles.RetentionRole}', 'identity.administrator_session', 'DELETE')")).ShouldBe("True");
+        (await ScalarAsync(admin, $"select has_table_privilege('{DatabaseRoles.RetentionRole}', 'usage.reservation', 'DELETE')")).ShouldBe("True");
+        (await ScalarAsync(admin, $"select has_table_privilege('{DatabaseRoles.RetentionRole}', 'usage.reservation', 'UPDATE')")).ShouldBe("False");
     }
 
     [Fact]
@@ -120,7 +123,7 @@ public sealed class DatabaseRolesTests(PostgresFixture postgres)
 
     private static Task ApplyAsync(string admin)
         => new DatabaseRoles(NullLogger<DatabaseRoles>.Instance)
-            .ApplyAsync(admin, ["identity", "registry"], _appPassword, retentionPassword: null, CancellationToken.None);
+            .ApplyAsync(admin, ["identity", "registry", "usage"], _appPassword, retentionPassword: null, CancellationToken.None);
 
     private static string AsRole(string admin, string role, string password)
         => new NpgsqlConnectionStringBuilder(admin) { Username = role, Password = password }.ConnectionString;

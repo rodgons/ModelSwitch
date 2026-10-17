@@ -37,7 +37,7 @@ The PostgreSQL schema, module by module. Every module owns one schema and is the
 
 **administrator_tenant_grant**: `administrator_id`, `tenant_id`, pk both.
 
-**administrator_session**: `id` (SHA-256 of the cookie's session key, base64url), `administrator_id fk`, `created_at`, `expires_at` (sliding 8 h), `absolute_expires_at` (24 h). Deleted on sign-out, expiry and deactivation.
+**administrator_session**: `id` (SHA-256 of the cookie's session key, base64url), `administrator_id fk`, `created_at`, `expires_at` (sliding 8 h), `absolute_expires_at` (24 h). Deleted on sign-out and deactivation; an expired session is deleted when its Administrator next signs in, and by the daily retention run otherwise (see Retention).
 
 **data_protection_key**: `id`, `friendly_name`, `xml`, `created_at`. The ASP.NET Core Data Protection key ring, shared by all api instances (cookie and antiforgery protection).
 
@@ -119,7 +119,7 @@ Indexes: `(tenant_id, started_at desc)`, `(started_at desc)`, `(status, started_
 **budget_period**: `tenant_id`, `period_start date`, `limit_amount numeric null`, `reserved_amount numeric not null default 0`, `spent_amount numeric not null default 0`, `currency`, pk `(tenant_id, period_start)`
 - `CHECK (reserved_amount >= 0)`
 
-**reservation**: `id`, `inference_request_id unique`, `tenant_id`, `period_start`, `amount numeric`, `status (held|settled|expired)`, `expires_at`, `created_at` (= the request's `started_at`, which locates the partitioned request row), `settled_at null`. Index `(status, expires_at) where status = 'held'`.
+**reservation**: `id`, `inference_request_id unique`, `tenant_id`, `period_start`, `amount numeric`, `status (held|settled|expired)`, `expires_at`, `created_at` (= the request's `started_at`, which locates the partitioned request row), `settled_at null` (set when the Reservation is settled or expired). Index `(status, expires_at) where status = 'held'` (the sweeper) and `(settled_at) where status <> 'held'` (retention).
 
 **usage_hourly** (rollup, written by the worker's `UsageRollupConsumer`): `tenant_id`, `provider_model_id`, `requested_alias`, `origin text check (api|evaluation)` (Request Origin), `hour timestamptz`, `requests`, `failed_requests`, `fallback_requests`, `attempts`, `input_tokens bigint`, `cached_input_tokens bigint` (null counted as 0), `output_tokens bigint`, `estimated_cost numeric`, `duration_ms_sum bigint`, `latency_histogram int[]` (fixed bucket bounds, so percentiles can be merged approximately), `ttft_histogram int[]`. pk `(tenant_id, provider_model_id, requested_alias, origin, hour)`, index `(hour)`. The `UsageHourlyOrigin` migration added `origin` to the key and backfilled existing rows as `api` (no Evaluation Run existed before it); the column has no default, because the rollup always writes it.
 - A request lands in the UTC hour it **started** in, under the Provider Model that succeeded, else the last one called. A request that reached no Provider (routing failure, budget refusal, abandoned) uses the all-zero uuid as its `provider_model_id`.
@@ -177,11 +177,13 @@ All three tables are created by plain idempotent DDL in the Migrator (`SharedKer
 | `audit_record` | 400 days | Daily batched delete by a dedicated DB role |
 | `outbox_event` (published), `processed_event` | 7 days | Daily |
 | `job` (terminal) | 14 days | Daily |
+| `reservation` (`settled` or `expired`) | `Retention:RequestDays` after `settled_at` (30 days) | Daily batched delete. `held` Reservations are never touched; the sweeper expires them |
+| `administrator_session` | Until its sliding or absolute expiry | Daily batched delete (also on that Administrator's next sign-in) |
 | Evaluation data | Until the Administrator deletes the Dataset/Run | Cascade delete |
 
 `usage_record` outlives the request rows it references, so its FK to `inference_request` is a soft reference: there is no DB-level FK, and the column is kept for correlation.
 
-**The retention run** is the recurring worker job `retention.run`, once a day (`SharedKernel.Retention`). Each module contributes an `IRetentionTask` for its own tables (`usage`, `audit`, and `jobs` from the shared kernel); a task that fails is logged and the others still run. Every delete is batched (5 000 rows per statement, selected by primary key, so it is correct on partitioned tables). `usage` first calls `maintain_request_partitions(Retention:RequestDays, 12)`, then deletes the rows of the boundary partition older than the cutoff (`running` requests are kept). The job connects with `ConnectionStrings:PostgresRetention` (the `modelswitch_retention` role) when it is set; otherwise it runs as the app role, which cannot delete Audit Records, so `audit` removes nothing and a warning says which variable to set. Reservations are not retention-managed in the MVP.
+**The retention run** is the recurring worker job `retention.run`, once a day (`SharedKernel.Retention`). Each module contributes an `IRetentionTask` for its own tables (`usage`, `audit` and `sessions` from Identity, and `jobs` from the shared kernel); a task that fails is logged and the others still run. Every delete is batched (5 000 rows per statement, selected by primary key, so it is correct on partitioned tables). `usage` first calls `maintain_request_partitions(Retention:RequestDays, 12)`, then deletes the rows of the boundary partition older than the cutoff (`running` requests are kept). The job connects with `ConnectionStrings:PostgresRetention` (the `modelswitch_retention` role) when it is set; otherwise it runs as the app role, which cannot delete Audit Records, so `audit` removes nothing and a warning says which variable to set. `usage` also deletes `settled` and `expired` Reservations whose `settled_at` is older than the request cutoff, so a Reservation never outlives the request row it points to by more than a day; a `held` one is the sweeper's business and is never deleted. `sessions` deletes every `administrator_session` past its sliding or absolute expiry (such a session can never be used again).
 
 ## Database roles (least privilege, NFR-03)
 

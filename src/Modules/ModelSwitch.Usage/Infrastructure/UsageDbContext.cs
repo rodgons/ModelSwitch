@@ -69,6 +69,9 @@ internal sealed class UsageDbContext(DbContextOptions<UsageDbContext> options) :
             reservation.Property(x => x.SettledAt).HasColumnName("settled_at");
             reservation.HasIndex(x => x.InferenceRequestId).IsUnique().HasDatabaseName("ux_reservation_inference_request_id");
             reservation.HasIndex(x => new { x.Status, x.ExpiresAt }).HasFilter("status = 'held'").HasDatabaseName("ix_reservation_status_expires_at");
+
+            // Retention deletes finished Reservations by settled_at in batches (data-model.md, "Retention").
+            reservation.HasIndex(x => x.SettledAt).HasFilter("status <> 'held'").HasDatabaseName("ix_reservation_settled_at");
         });
 
         modelBuilder.Entity<UsageRecordRow>(record =>

@@ -26,8 +26,8 @@ internal sealed partial class DatabaseRoles(ILogger<DatabaseRoles> logger)
     // Tables the worker's retention job deletes from (data-model.md "Retention").
     private static readonly string[] _retentionTables =
     [
-        "inference_request", "provider_attempt", "usage_record", "usage_hourly", "audit_record",
-        "outbox_event", "processed_event", "job",
+        "inference_request", "provider_attempt", "usage_record", "usage_hourly", "reservation", "audit_record",
+        "administrator_session", "outbox_event", "processed_event", "job",
     ];
 
     /// <summary>

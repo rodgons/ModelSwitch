@@ -39,6 +39,24 @@ public sealed class RetentionOptionsTests
 
         var cutoffs = With("10").CutoffsAt(now);
 
-        cutoffs.ShouldBe(new RetentionCutoffs(now.AddDays(-10), now.AddDays(-400), now.AddDays(-400), now.AddDays(-7), now.AddDays(-14)));
+        cutoffs.ShouldBe(new RetentionCutoffs(now.AddDays(-10), now.AddDays(-400), now.AddDays(-400), now.AddDays(-7), now.AddDays(-14), now, now.AddDays(-10)));
+    }
+
+    [Fact]
+    public void An_administrator_session_goes_as_soon_as_it_has_expired()
+    {
+        var now = new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero);
+
+        With(null).CutoffsAt(now).Sessions.ShouldBe(now);
+    }
+
+    [Fact]
+    public void A_finished_reservation_is_kept_as_long_as_the_request_rows_it_points_to()
+    {
+        var now = new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero);
+
+        var cutoffs = With("12").CutoffsAt(now);
+
+        cutoffs.Reservations.ShouldBe(cutoffs.Requests);
     }
 }

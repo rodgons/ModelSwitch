@@ -384,6 +384,10 @@ namespace ModelSwitch.Usage.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ux_reservation_inference_request_id");
 
+                    b.HasIndex("SettledAt")
+                        .HasDatabaseName("ix_reservation_settled_at")
+                        .HasFilter("status <> 'held'");
+
                     b.HasIndex("Status", "ExpiresAt")
                         .HasDatabaseName("ix_reservation_status_expires_at")
                         .HasFilter("status = 'held'");

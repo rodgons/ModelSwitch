@@ -59,6 +59,7 @@ public static class IdentityModule
         services.TryAddSingleton<TenantService>();
         services.TryAddSingleton<ApiKeyAdminService>();
         services.AddRetentionTask<AuditRetentionTask>();
+        services.AddRetentionTask<SessionRetentionTask>();
         return services;
     }
 

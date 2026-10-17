@@ -35,6 +35,8 @@ public sealed class RetentionTests(PostgresFixture postgres)
         (await RemainingAsync(admin, "jobs.outbox_event", "type")).ShouldBe(["fresh", "unpublished"], ignoreOrder: true);
         (await RemainingAsync(admin, "jobs.processed_event", "consumer")).ShouldBe(["fresh"]);
         (await RemainingAsync(admin, "jobs.job", "kind")).ShouldBe(["fresh", "pending"], ignoreOrder: true);
+        (await RemainingAsync(admin, "identity.administrator_session")).ShouldBe(["live"], "a session past its sliding or absolute expiry is never valid again");
+        (await RemainingAsync(admin, "usage.reservation", "amount::int::text")).ShouldBe(["3", "4"], ignoreOrder: true, "finished reservations go with their request rows; held ones never do");
 
         // A second run finds nothing more to remove.
         await RunAsync(admin, new RetentionDataSource(NpgsqlDataSource.Create(asRetention), IsRetentionRole: true));
@@ -51,6 +53,8 @@ public sealed class RetentionTests(PostgresFixture postgres)
 
         (await RemainingAsync(admin, "identity.audit_record", "action")).ShouldBe(["fresh", "old"], ignoreOrder: true);
         (await RemainingAsync(admin, "usage.usage_hourly", "requested_alias")).ShouldBe(["fresh"]);
+        (await RemainingAsync(admin, "identity.administrator_session")).ShouldBe(["live"]);
+        (await RemainingAsync(admin, "usage.reservation", "amount::int::text")).ShouldBe(["3", "4"], ignoreOrder: true);
     }
 
     [Fact]
@@ -83,6 +87,7 @@ public sealed class RetentionTests(PostgresFixture postgres)
         var now = DateTimeOffset.UtcNow;
         var oldMonth = now.AddMonths(-3);
         var fresh = Guid.CreateVersion7();
+        var administrator = Guid.CreateVersion7();
         await ExecuteAsync(admin, "select usage.ensure_request_partitions(4, 0)");
         await ExecuteAsync(
             admin,
@@ -112,6 +117,17 @@ public sealed class RetentionTests(PostgresFixture postgres)
               (gen_random_uuid(), 'old', '{}', 'succeeded', 1, 5, '{{Iso(now.AddDays(-20))}}', '{{Iso(now.AddDays(-20))}}', '{{Iso(now.AddDays(-15))}}'),
               (gen_random_uuid(), 'pending', '{}', 'pending', 0, 5, '{{Iso(now.AddDays(-20))}}', '{{Iso(now.AddDays(-20))}}', '{{Iso(now.AddDays(-20))}}'),
               (gen_random_uuid(), 'fresh', '{}', 'dead', 5, 5, '{{Iso(now.AddDays(-2))}}', '{{Iso(now.AddDays(-2))}}', '{{Iso(now.AddDays(-1))}}');
+            insert into identity.administrator (id, email, password_hash, role, all_tenants, active, failed_sign_in_count, created_at, updated_at) values
+              ('{{administrator}}', 'retention-{{administrator}}@example.com', 'x', 'viewer', true, true, 0, '{{Iso(now)}}', '{{Iso(now)}}');
+            insert into identity.administrator_session (id, administrator_id, created_at, expires_at, absolute_expires_at) values
+              ('sliding-expired', '{{administrator}}', '{{Iso(now.AddHours(-12))}}', '{{Iso(now.AddHours(-1))}}', '{{Iso(now.AddHours(12))}}'),
+              ('absolute-expired', '{{administrator}}', '{{Iso(now.AddHours(-25))}}', '{{Iso(now.AddHours(1))}}', '{{Iso(now.AddMinutes(-1))}}'),
+              ('live', '{{administrator}}', '{{Iso(now)}}', '{{Iso(now.AddHours(8))}}', '{{Iso(now.AddHours(24))}}');
+            insert into usage.reservation (id, inference_request_id, tenant_id, period_start, amount, status, expires_at, created_at, settled_at) values
+              (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), '{{Month(now.AddDays(-32))}}', 1, 'settled', '{{Iso(now.AddDays(-32))}}', '{{Iso(now.AddDays(-32))}}', '{{Iso(now.AddDays(-31))}}'),
+              (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), '{{Month(now.AddDays(-32))}}', 2, 'expired', '{{Iso(now.AddDays(-32))}}', '{{Iso(now.AddDays(-32))}}', '{{Iso(now.AddDays(-31))}}'),
+              (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), '{{Month(now)}}', 3, 'settled', '{{Iso(now.AddDays(-2))}}', '{{Iso(now.AddDays(-2))}}', '{{Iso(now.AddDays(-1))}}'),
+              (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), '{{Month(now.AddDays(-60))}}', 4, 'held', '{{Iso(now.AddDays(-60))}}', '{{Iso(now.AddDays(-60))}}', null);
             """);
         return new Planted(fresh, $"inference_request_{Suffix(oldMonth)}");
     }
@@ -129,6 +145,8 @@ public sealed class RetentionTests(PostgresFixture postgres)
     }
 
     private static string Iso(DateTimeOffset at) => at.ToString("O", CultureInfo.InvariantCulture);
+
+    private static string Month(DateTimeOffset at) => at.ToString("yyyy-MM-01", CultureInfo.InvariantCulture);
 
     private static async Task<List<string>> RemainingAsync(string connectionString, string table, string column = "id::text")
     {

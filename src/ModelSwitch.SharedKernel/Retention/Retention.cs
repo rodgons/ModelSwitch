@@ -48,11 +48,27 @@ public sealed class RetentionOptions
         now.AddDays(-UsageDays),
         now.AddDays(-AuditDays),
         now.AddDays(-OutboxDays),
-        now.AddDays(-JobDays));
+        now.AddDays(-JobDays),
+        now,
+        now.AddDays(-RequestDays));
 }
 
 /// <summary>Rows older than these instants are deleted.</summary>
-public sealed record RetentionCutoffs(DateTimeOffset Requests, DateTimeOffset Usage, DateTimeOffset Audit, DateTimeOffset Outbox, DateTimeOffset Jobs);
+/// <param name="Requests"><c>inference_request</c> and <c>provider_attempt</c>.</param>
+/// <param name="Usage"><c>usage_record</c> and <c>usage_hourly</c>.</param>
+/// <param name="Audit">Audit Records.</param>
+/// <param name="Outbox">Published outbox events and their idempotency rows.</param>
+/// <param name="Jobs">Jobs that ended.</param>
+/// <param name="Sessions">Administrator sessions whose sliding or absolute expiry is before this instant (now: an expired session is never valid again).</param>
+/// <param name="Reservations">Settled or expired Reservations finished before this instant; kept as long as the request rows they point to.</param>
+public sealed record RetentionCutoffs(
+    DateTimeOffset Requests,
+    DateTimeOffset Usage,
+    DateTimeOffset Audit,
+    DateTimeOffset Outbox,
+    DateTimeOffset Jobs,
+    DateTimeOffset Sessions,
+    DateTimeOffset Reservations);
 
 /// <summary>
 /// Where retention runs: the <c>modelswitch_retention</c> role when <c>ConnectionStrings:PostgresRetention</c> is set, otherwise the
