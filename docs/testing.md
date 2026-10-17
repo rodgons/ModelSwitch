@@ -74,6 +74,35 @@ These are covered in the catalogue above, plus:
 - Admin: Viewer → POST is 403. Missing antiforgery token → 400. Operator outside their grant → 404.
 - Rate-limit abuse: parallel bursts across two hosts → not exceeded. Concurrency leases from a crashed host expire.
 
+### Evidence (Phase 6 security pass, DoD #5, #11, #13)
+
+Each security item of §2 and §4 and the test that proves it. `IT` is `ModelSwitch.IntegrationTests`, `UT` is `ModelSwitch.UnitTests`.
+
+| Item | Test(s) |
+|---|---|
+| Invalid key → 401 | IT `ChatCompletionsEndpointTests.Wrong_key_is_a_401`, `.Missing_key_is_a_401_problem_with_x_request_id`; IT `ApiKeyAuthenticationTests.Altered_key_is_invalid`; UT `ApiKeyAuthenticatorTests` (unknown prefix, wrong secret, malformed) |
+| Revoked key → 401 | IT `TenantAdminEndpointTests.A_revoked_key_gets_401_on_v1_at_once_and_revoking_twice_audits_once`; UT `ApiKeyAuthenticatorTests.Revoked_key_is_invalid` |
+| Expired key → 401 | IT `AdminCrossCuttingTests.A_key_that_reaches_its_expiry_gets_401_on_v1_even_while_it_is_cached` (fake clock); IT `ApiKeyAuthenticationTests.Expired_key_is_invalid`; UT `ApiKeyAuthenticatorTests.Expired_key_is_invalid`, `.Key_expiring_exactly_now_is_invalid`, `.Cached_key_is_not_served_past_its_own_expiry` |
+| Revocation within the 30 s cap (fake clock) | IT `AdminCrossCuttingTests.A_revoked_key_stops_at_once_on_the_revoking_host_and_within_the_cache_bound_on_the_other`; IT `ApiKeyAuthenticationTests.Revoked_key_is_invalid_once_the_cache_has_expired`; UT `ApiKeyAuthenticatorTests.Revocation_takes_effect_no_later_than_30_seconds_after_the_key_was_cached` |
+| Missing scope → 403 | IT `ChatCompletionsEndpointTests.Key_without_the_inference_scope_is_a_403_insufficient_scope`; UT `ApiKeyAuthenticationHandlerTests.Forbidden_is_insufficient_scope_403` |
+| Suspended tenant → 403 | IT `TenantAdminEndpointTests.A_suspended_tenant_gets_403_on_v1_and_is_served_again_when_reactivated`; IT `ApiKeyAuthenticationTests.Suspended_tenant_is_tenant_suspended`; UT `ApiKeyAuthenticatorTests.Suspended_tenant_is_tenant_suspended_not_invalid_key` |
+| Repeated invalid keys throttled (security.md §2) | IT `ChatCompletionsEndpointTests.Repeated_invalid_keys_from_one_client_are_throttled_with_429_on_that_instance_only`; UT `ApiKeyFailureThrottleTests`, `ApiKeyAuthenticationHandlerTests.A_client_over_the_invalid_key_limit_gets_429_with_retry_after_and_the_key_is_not_checked` |
+| Tenant isolation matrix (foreign id → 404) | IT `TenantIsolationTests.Every_tenant_scoped_route_is_in_the_isolation_matrix`, `.An_operator_granted_only_tenant_a_gets_404_for_every_tenant_scoped_route_of_tenant_b`, `.A_viewer_granted_only_tenant_a_gets_404_for_the_read_routes_of_tenant_b`, `.A_foreign_child_id_under_the_callers_own_tenant_is_404_for_an_operator_and_for_the_owner` |
+| `/v1` never shows another tenant's aliases or usage | IT `TenantIsolationTests.Models_lists_only_the_aliases_the_tenants_model_access_allows`, `.An_alias_only_another_tenant_may_use_is_403_model_not_allowed_and_leaks_nothing`, `.Responses_carry_only_the_callers_own_request_ids_limits_and_usage` |
+| Log/trace canary (DoD #11) | IT `TelemetryCanaryTests.No_span_metric_or_log_line_contains_the_prompt_or_a_secret`; IT `RequestRecordsTests.Prompt_and_completion_content_is_never_persisted`; UT `LogRedactionTests.Secret_and_content_parameters_are_erased_and_ordinary_ones_kept` |
+| SSRF `http://169.254.169.254`, `http://127.0.0.x`, `localhost`, `10.x` literal → rejected on save | IT `CatalogAdminEndpointTests.A_provider_endpoint_that_reaches_the_gateways_own_network_is_rejected_on_create_and_on_patch`; UT `OutboundDestinationPolicyTests.Non_public_ip_literals_are_rejected`, `IpAddressClassifierTests` |
+| SSRF hostname resolving to 10.x → rejected on save and at connect | UT `OutboundDestinationPolicyTests.A_hostname_resolving_to_10_x_is_refused_on_save_and_at_connect_time`, `.Hostname_resolving_to_a_private_address_is_rejected` |
+| SSRF DNS rebinding (stub resolver) → accepted on save, refused at connect | UT `OutboundDestinationPolicyTests.A_rebinding_host_accepted_on_save_is_refused_by_the_real_handler_at_connect_time`, `.Dns_rebinding_is_caught_at_connect_time`, `.Connect_callback_refuses_a_rebound_host_and_never_opens_a_socket` |
+| No redirects or proxies on Adapter clients | UT `OutboundDestinationPolicyTests.Handler_disables_redirects_and_proxies` |
+| Viewer → POST is 403 | IT `AdminSecurityTests.A_viewer_or_operator_posting_to_an_owner_endpoint_is_403_forbidden`; IT `TenantAdminEndpointTests.A_viewer_can_read_but_every_write_is_403` |
+| Missing antiforgery token → 400 | IT `AdminSecurityTests.A_missing_antiforgery_token_on_sign_in_is_a_400_validation_problem`, `.A_missing_antiforgery_token_on_an_unsafe_request_with_a_valid_session_is_a_400`, `.A_garbage_antiforgery_token_is_rejected_and_a_token_from_another_session_does_not_transfer` |
+| Operator outside their grant → 404 | IT `AdminSecurityTests.An_operator_outside_their_grant_gets_404_and_inside_it_gets_200` |
+| Rate-limit abuse: parallel bursts across two hosts | IT `LimitsTests.Two_hosts_sharing_one_valkey_admit_exactly_the_rate_limit_burst`, `.Two_hosts_sharing_one_valkey_admit_exactly_the_concurrency_limit` |
+| Leases from a crashed host expire | IT `LimitsTests.A_lease_nobody_released_expires_by_itself` |
+| Provider secrets encrypted at rest, bound to their Provider | IT `ProviderSecretTests`; UT `SecretCipherTests` |
+| Secrets in the repository | `gitleaks` job in `ci.yml` (full history). Local run on 2026-10-16, gitleaks 8.30.1: `gitleaks git` over the whole history and `gitleaks dir` over the tree, no leaks, no allowlist needed |
+| Static analysis | `codeql.yml` (C# + JS/TS, `security-extended`). Local run on 2026-10-16, CodeQL 2.27.2 (C# extracted with `build-mode: none`): 0 results for C# and for JS/TS. The broader `security-and-quality` suite reports only maintainability notes (no security query fires). .NET analyzers: `AnalysisLevel` `latest-recommended`, `TreatWarningsAsErrors`, `EnforceCodeStyleInBuild` in `Directory.Build.props` |
+
 ## 5. Load tests and benchmark report
 
 - `load/scenarios/overhead.js`: the Mock Provider with a fixed 200 ms latency. Constant arrival rate in steps of 50, 100, 200 and 400 RPS for 5 min each. Non-streaming and streaming variants.
@@ -84,6 +113,14 @@ These are covered in the catalogue above, plus:
 ## 6. Coverage expectations
 
 Coverage percentage is not a gate. Instead, CI fails if any of these are missing tests: each row of the failure-classification table, each eligibility reason code, each error code in [api.md §2](api.md#2-error-codes) (there is a test that triggers it), and each Evaluator kind.
+
+| Gate | Test |
+|---|---|
+| Failure-classification rows | UT `FailureClassificationTableTests.Every_documented_row_is_covered` (parses [routing-and-resilience.md §3](routing-and-resilience.md#3-failure-classification)), `.Every_adapter_failure_code_has_a_row`, `.Each_row_of_the_table_is_retried_fallen_back_from_and_counted_as_documented` |
+| Eligibility reason codes | UT `RouterTests.Every_reason_code_has_an_exclusion_case` over `RouterTests.Each_reason_code_excludes_the_candidate_and_is_recorded` |
+| Error codes | IT `ErrorCodeGateTests.Every_error_code_is_triggered_by_a_tagged_test`: each code in the closed set needs an integration test tagged `[TriggersError("<code>")]` that produces and asserts it. UT `ErrorCodeTests` keeps the set equal to the api.md table |
+| Evaluator kinds | UT `EvaluatorRegistryTests.Every_evaluator_kind_has_a_scoring_test_class` (kind `json_fields` needs `JsonFieldsEvaluatorTests`) |
+| Endpoints | IT `EndpointHappyPathGateTests.Every_route_has_a_happy_path_test` |
 
 **Endpoint gate:** a test in `ModelSwitch.IntegrationTests` lists every route from the app's `EndpointDataSource` and fails if one has no test tagged `[HappyPath("<METHOD> <route>")]`.
 
