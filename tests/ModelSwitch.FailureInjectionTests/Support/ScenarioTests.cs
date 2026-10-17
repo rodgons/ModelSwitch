@@ -25,6 +25,11 @@ public abstract class ScenarioTests(GatewayFixture gateway)
     /// Execution settings tuned for tests: a 5 s Deadline, 1 s Attempt timeout and a few milliseconds of backoff, so only a
     /// scenario that must wait (Retry-After) spends real time.
     /// </summary>
+    /// <summary><see cref="FastPolicy"/>'s <c>maxAttempts</c>: no request may cost more Provider calls than this.</summary>
+    protected const int FastPolicyMaxAttempts = 4;
+
+    protected const string MaxAttemptsBound = "maxAttempts = 4";
+
     protected const string FastPolicy = """{"deadlineMs":5000,"attemptTimeoutMs":1000,"maxAttempts":4,"maxRetriesPerCandidate":1,"backoff":{"baseMs":5,"maxMs":10,"jitter":"full"}}""";
 
     private int _clientRequests;
@@ -82,15 +87,13 @@ public abstract class ScenarioTests(GatewayFixture gateway)
     protected async Task<IReadOnlyDictionary<string, int>> ProviderCallsAsync() => (await Gateway.MockStatsAsync()).Started;
 
     /// <summary>
-    /// Computes this scenario's retry amplification from the Mock Provider's counters and publishes it to the test output and
-    /// <see cref="AmplificationReport"/>.
+    /// Computes this scenario's retry amplification from the Mock Provider's counters, publishes it to the test output and
+    /// <see cref="AmplificationReport"/>, and asserts it stays within <paramref name="bound"/>.
     /// </summary>
-    protected async Task<RetryAmplification> MeasureAmplificationAsync(string scenario)
+    protected async Task<RetryAmplification> MeasureAmplificationAsync(string scenario, double bound, string boundReason)
     {
         var calls = (await ProviderCallsAsync()).Values.Sum();
-        var row = new RetryAmplification(scenario, _clientRequests, calls);
-        AmplificationReport.Record(row);
-        return row;
+        return AmplificationReport.Measure(scenario, _clientRequests, calls, bound, boundReason);
     }
 
     /// <summary>
