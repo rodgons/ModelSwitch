@@ -361,21 +361,20 @@ internal sealed partial class InferenceService(
         }
 
         using var span = GatewayTelemetry.StartSpan(GatewayTelemetry.Spans.Reserve);
-        var opened = await ledger.OpenAsync(
-            new OpenInferenceRequest(
-                request.RequestId,
-                request.TenantId,
-                request.Origin,
-                request.ApiKeyId,
-                request.EvaluationRunId,
-                request.ClientRequestId,
-                routed.RequestedAlias,
-                request.TaskType,
-                streaming,
-                request.InputBytes,
-                Activity.Current?.TraceId.ToString() ?? string.Empty,
-                new ReservationRequest(hold, expiresAt)),
-            cancellationToken);
+        Result<OpenedRequest> opened;
+        try
+        {
+            opened = await OpenLedgerAsync(request, routed, streaming, hold, expiresAt, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // An infrastructure fault (e.g. PostgreSQL refusing connections) still propagates, and the last-resort handler answers
+            // internal_error. Nothing was recorded, so the request is counted here or it would be in no modelswitch.* metric.
+            span?.SetTag(GatewayTelemetry.Attributes.Result, ErrorCode.InternalError.Value);
+            Completed(request, routed, "failed", ErrorCode.InternalError.Value, received, ttftMs: null, attempts: []);
+            throw;
+        }
+
         span?.SetTag(GatewayTelemetry.Attributes.Result, opened.IsSuccess ? "reserved" : opened.Error.Code.Value);
         if (opened.IsFailure)
         {
@@ -392,6 +391,23 @@ internal sealed partial class InferenceService(
 
         return (opened.Value, routed);
     }
+
+    private Task<Result<OpenedRequest>> OpenLedgerAsync(InferenceRequest request, Routed routed, bool streaming, Money hold, DateTimeOffset expiresAt, CancellationToken cancellationToken)
+        => ledger.OpenAsync(
+            new OpenInferenceRequest(
+                request.RequestId,
+                request.TenantId,
+                request.Origin,
+                request.ApiKeyId,
+                request.EvaluationRunId,
+                request.ClientRequestId,
+                routed.RequestedAlias,
+                request.TaskType,
+                streaming,
+                request.InputBytes,
+                Activity.Current?.TraceId.ToString() ?? string.Empty,
+                new ReservationRequest(hold, expiresAt)),
+            cancellationToken);
 
     private static List<AttemptRecord> Priced(Routed routed, List<AttemptRecord> attempts)
         => [.. attempts.Select(a => a with { Pricing = PricingOf(routed, a.ProviderModelId) })];

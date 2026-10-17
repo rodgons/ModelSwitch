@@ -101,6 +101,48 @@ public sealed class InferenceServiceTests : IDisposable
     private static InferenceRequest Request(string alias = "balanced")
         => new(Guid.CreateVersion7(), Guid.CreateVersion7(), alias, new NeutralChatRequest([new NeutralMessage(MessageRole.User, "hi")]));
 
+    // Regression (benchmarks/2026-10-17-266c696.md, finding 3): a database fault while opening the request became a 500 counted in
+    // no modelswitch.* metric. It still propagates (the last-resort handler answers internal_error), but it is counted first.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_fault_while_opening_the_request_is_counted_as_a_failed_request_with_internal_error(bool streaming)
+    {
+        _ledger.OpenThrows = new InvalidOperationException("too many clients");
+        var counted = new List<(string? Status, string? ErrorCode, string? Streaming)>();
+        using var listener = new System.Diagnostics.Metrics.MeterListener
+        {
+            InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Scope == _meters && instrument.Name == "modelswitch.inference.requests")
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            var byName = tags.ToArray().ToDictionary(t => t.Key, t => t.Value?.ToString());
+            counted.Add((byName.GetValueOrDefault("status"), byName.GetValueOrDefault("error_code"), byName.GetValueOrDefault("streaming")));
+        });
+        listener.Start();
+
+        await Should.ThrowAsync<InvalidOperationException>(async () =>
+        {
+            if (streaming)
+            {
+                await Service().StreamAsync(Request(), CancellationToken.None);
+            }
+            else
+            {
+                await Service().CompleteAsync(Request(), CancellationToken.None);
+            }
+        });
+
+        counted.ShouldBe([("failed", "internal_error", streaming ? "true" : "false")]);
+        _ledger.Settled.ShouldBeEmpty("nothing was opened, so there is nothing to settle");
+    }
+
     [Fact]
     public async Task Unknown_alias_is_model_not_found()
     {
@@ -977,6 +1019,8 @@ public sealed class InferenceServiceTests : IDisposable
 
         public bool RefuseOpen { get; set; }
 
+        public Exception? OpenThrows { get; set; }
+
         public bool RefuseTopUp { get; set; }
 
         public List<Money> TopUps { get; } = [];
@@ -988,6 +1032,11 @@ public sealed class InferenceServiceTests : IDisposable
 
         public Task<Result<OpenedRequest>> OpenAsync(OpenInferenceRequest request, CancellationToken cancellationToken)
         {
+            if (OpenThrows is { } exception)
+            {
+                return Task.FromException<Result<OpenedRequest>>(exception);
+            }
+
             if (RefuseOpen)
             {
                 return Task.FromResult<Result<OpenedRequest>>(new Error(ErrorCode.BudgetExceeded, "no budget"));

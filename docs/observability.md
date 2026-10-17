@@ -61,6 +61,8 @@ Meter `ModelSwitch` (the circuit and Adapter instruments use `ModelSwitch.Circui
 
 Built-in ASP.NET Core, HttpClient, Npgsql and runtime metrics are also enabled. `provider` and `model` carry ids, not names. `modelswitch.tokens` and `modelswitch.estimated_cost` are recorded by the Usage ledger after a settlement commits, so a rolled-back settlement counts nothing. `modelswitch.outbox.lag` and `modelswitch.jobs.queue_depth` are sampled by the worker every 15 s (`JobsMetricsSampler`), so an exporter callback never queries the database.
 
+`modelswitch.inference.requests` counts every request that reached routing, including one whose step 8 (opening the request and its Reservation) failed with an infrastructure fault, such as PostgreSQL refusing connections. That request has no `inference_request` row; it is counted with `status=failed`, `error_code=internal_error`, and the exception still reaches the last-resort handler, which answers `500` Problem Details with `internal_error` (api.md §2).
+
 ## 4. Logs
 
 - JSON console + OTLP. Every line inside a request has `RequestId`, `TraceId`, `TenantId` (an id, not a name).

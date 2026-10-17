@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using ModelSwitch.FailureInjectionTests.Support;
 using ModelSwitch.IntegrationTests.Infrastructure;
@@ -84,6 +85,11 @@ public sealed class PostgresStoppedMidLoadScenario(ValkeyFixture valkey) : Scena
             outcome.Response.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
             outcome.RequestId.ShouldNotBeNullOrWhiteSpace();
             outcome.Elapsed.ShouldBeLessThan(_clean, "a request fails fast rather than waiting on the database");
+            if (outcome.StatusCode == 500)
+            {
+                var problem = JsonDocument.Parse(await outcome.Response.Content.ReadAsStringAsync(token)).RootElement;
+                problem.GetProperty("error").GetProperty("code").GetString().ShouldBe("internal_error", "a database fault maps into the closed error-code set");
+            }
         }
 
         // The requests already at the Provider still answer the client: settlement failing is never the client's problem.
