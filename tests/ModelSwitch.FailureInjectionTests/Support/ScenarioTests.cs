@@ -19,7 +19,7 @@ public sealed record Outcome(string RequestId, int StatusCode, TimeSpan Elapsed,
 /// (its own database, Mock Provider and api host), so circuits and fault scripts never leak between scenarios. A scenario installs
 /// a Routing Policy with small timeouts (<see cref="FastPolicy"/>) instead of waiting on the production defaults.
 /// </summary>
-public abstract class ScenarioTests(GatewayFixture gateway)
+public abstract class ScenarioTests
 {
     /// <summary>
     /// Execution settings tuned for tests: a 5 s Deadline, 1 s Attempt timeout and a few milliseconds of backoff, so only a
@@ -34,7 +34,14 @@ public abstract class ScenarioTests(GatewayFixture gateway)
 
     private int _clientRequests;
 
-    protected GatewayFixture Gateway { get; } = gateway;
+    protected ScenarioTests(GatewayFixture gateway) => Gateway = gateway;
+
+    /// <summary>For a scenario that builds its own <see cref="GatewayFixture"/> (for example on a dedicated database) and sets <see cref="Gateway"/>.</summary>
+    protected ScenarioTests()
+    {
+    }
+
+    protected GatewayFixture Gateway { get; set; } = null!;
 
     /// <summary>Resets the Mock Provider's faults and counters, and the client request count.</summary>
     protected async Task ResetAsync()
@@ -111,9 +118,19 @@ public abstract class ScenarioTests(GatewayFixture gateway)
         var records = await ScalarAsync($"select count(*)::text from usage.usage_record where inference_request_id = '{requestId}'");
         records.ShouldBe(called, "one usage_record per Attempt that reached a Provider");
 
+        await AssertConsistentBudgetAsync(string.Format(CultureInfo.InvariantCulture, "(select tenant_id from usage.inference_request where id = '{0}')", requestId));
+    }
+
+    /// <summary>
+    /// The Tenant-level half of <see cref="AssertConsistentAccountingAsync"/>, which also holds for a request the sweeper recovered (it
+    /// has a Usage Record but no Attempt rows): <c>budget_period.spent_amount</c> equals the sum of the Usage Records and
+    /// <c>reserved_amount</c> equals the held Reservations.
+    /// </summary>
+    protected Task AssertConsistentBudgetAsync(Guid tenantId) => AssertConsistentBudgetAsync($"'{tenantId}'");
+
+    private async Task AssertConsistentBudgetAsync(string scope)
+    {
         // One statement, so the figures come from one snapshot even while other requests are settling.
-        const string tenant = "(select tenant_id from usage.inference_request where id = '{0}')";
-        var scope = string.Format(CultureInfo.InvariantCulture, tenant, requestId);
         var budget = (await RowsAsync(
             $"select (select coalesce(sum(spent_amount), 0) from usage.budget_period where tenant_id = {scope})::text, " +
             $"(select coalesce(sum(total_cost), 0) from usage.usage_record where tenant_id = {scope})::text, " +
