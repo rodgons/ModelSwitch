@@ -85,6 +85,10 @@ public abstract class TelemetryDegradationScenario(PostgresFixture postgres, Val
         return results;
     }
 
+    /// <summary>Records the amplification of the whole class: the Provider is healthy, so telemetry trouble must not add calls.</summary>
+    protected async Task MeasureAmplificationAsync(string scenario, int clientRequests)
+        => AmplificationReport.Measure(scenario, clientRequests, (await Gateway.MockStatsAsync()).Started.Values.Sum(), 1, "healthy Provider: no retry");
+
     protected static double SuccessRate(List<(HttpStatusCode Status, TimeSpan Elapsed)> phase)
         => phase.Count(r => r.Status == HttpStatusCode.OK) / (double)phase.Count;
 
@@ -121,6 +125,7 @@ public sealed class TelemetryBackendStoppedMidLoad(PostgresFixture postgres, Val
         SuccessRate(before).ShouldBe(1.0);
         SuccessRate(after).ShouldBe(SuccessRate(before));
         (await Gateway.Anonymous.GetAsync("/ready", TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await MeasureAmplificationAsync("otlp backend stopped mid-load", before.Count + after.Count);
     }
 }
 
@@ -140,6 +145,7 @@ public sealed class TelemetryBackendHangs(PostgresFixture postgres, ValkeyFixtur
 
         // The exporter's own timeout is 10 s: a request that waited on it would take at least that long.
         P95(second).ShouldBeLessThan(TimeSpan.FromSeconds(3));
+        await MeasureAmplificationAsync("otlp backend hangs", phase.Count + second.Count);
     }
 }
 
@@ -155,5 +161,6 @@ public sealed class TelemetryBackendDownAtStartup(PostgresFixture postgres, Valk
 
         SuccessRate(phase).ShouldBe(1.0);
         P95(phase).ShouldBeLessThan(TimeSpan.FromSeconds(3));
+        await MeasureAmplificationAsync("otlp backend down at startup", phase.Count);
     }
 }

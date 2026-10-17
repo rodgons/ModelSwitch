@@ -433,9 +433,17 @@ internal sealed partial class InferenceService(
                 return;
             }
 #pragma warning disable CA1031 // Any storage fault is retried, then reported; settlement must never fail the response.
-            catch (Exception exception) when (!timeout.IsCancellationRequested)
+            catch (Exception exception)
 #pragma warning restore CA1031
             {
+                // Once the window has closed, whatever the storage threw (a cancellation, or a storage error that surfaced after the
+                // token fired) means the same thing: give up and leave the request to the sweeper. It must never reach the client.
+                if (timeout.IsCancellationRequested)
+                {
+                    GaveUp(span, request.RequestId);
+                    return;
+                }
+
                 LogSettleFailed(logger, exception, request.RequestId, attempt + 1);
                 if (attempt >= _settleBackoff.Length)
                 {
@@ -452,11 +460,6 @@ internal sealed partial class InferenceService(
                     GaveUp(span, request.RequestId);
                     return;
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                GaveUp(span, request.RequestId);
-                return;
             }
         }
     }

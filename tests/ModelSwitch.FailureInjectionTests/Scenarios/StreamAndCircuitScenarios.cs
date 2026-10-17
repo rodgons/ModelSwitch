@@ -30,7 +30,7 @@ public sealed class StreamCutScenario(GatewayFixture gateway) : ScenarioTests(ga
         calls[GatewayFixture.PrimaryModel].ShouldBe(1, "the stream is never replayed");
         calls.ContainsKey(GatewayFixture.FallbackModel).ShouldBeFalse("and the Fallback is not tried after the First Token");
         await AssertConsistentAccountingAsync(requestId);
-        (await MeasureAmplificationAsync("stream cut after 5 chunks")).Ratio.ShouldBe(1.0);
+        (await MeasureAmplificationAsync("stream cut after 5 chunks", 1, "no replay after the First Token")).Ratio.ShouldBe(1.0);
     }
 }
 
@@ -87,7 +87,8 @@ public sealed class CircuitOpensScenario(GatewayFixture gateway) : ScenarioTests
             await AssertConsistentAccountingAsync(outcome.RequestId);
         }
 
-        var amplification = await MeasureAmplificationAsync("all candidates failing x20 (circuit opens)");
+        // maxRetriesPerCandidate + 1 = 2 calls per request without a breaker; the open circuit keeps it below that.
+        var amplification = await MeasureAmplificationAsync("all candidates failing x20 (circuit opens)", 2, "maxRetriesPerCandidate + 1 on the one Candidate");
         amplification.Ratio.ShouldBeLessThan(2.0, "the circuit caps amplification below the two calls per request a retry would cost");
     }
 }

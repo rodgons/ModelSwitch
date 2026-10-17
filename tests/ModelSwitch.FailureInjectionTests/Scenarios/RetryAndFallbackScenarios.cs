@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using ModelSwitch.FailureInjectionTests.Support;
 using ModelSwitch.IntegrationTests.Infrastructure;
@@ -31,7 +32,7 @@ public sealed class Provider503ThenOkScenario(GatewayFixture gateway) : Scenario
         calls[GatewayFixture.PrimaryModel].ShouldBe(2);
         calls[GatewayFixture.FallbackModel].ShouldBe(1);
         await AssertConsistentAccountingAsync(outcome.RequestId);
-        (await MeasureAmplificationAsync("503 x2 then ok")).Ratio.ShouldBe(3.0);
+        (await MeasureAmplificationAsync("503 x2 then ok", FastPolicyMaxAttempts, MaxAttemptsBound)).Ratio.ShouldBe(3.0);
     }
 }
 
@@ -58,7 +59,7 @@ public sealed class Provider429Scenario(GatewayFixture gateway) : ScenarioTests(
         ]);
         (await RequestAsync(outcome.RequestId)).ShouldBe(["succeeded", "", "2", "false"]);
         await AssertConsistentAccountingAsync(outcome.RequestId);
-        (await MeasureAmplificationAsync("429 Retry-After 1")).Ratio.ShouldBe(2.0);
+        (await MeasureAmplificationAsync("429 Retry-After 1", FastPolicyMaxAttempts, MaxAttemptsBound)).Ratio.ShouldBe(2.0);
     }
 
     [Fact]
@@ -84,7 +85,7 @@ public sealed class Provider429Scenario(GatewayFixture gateway) : ScenarioTests(
         var calls = await ProviderCallsAsync();
         calls[GatewayFixture.PrimaryModel].ShouldBe(1, "no same-model retry");
         await AssertConsistentAccountingAsync(outcome.RequestId);
-        (await MeasureAmplificationAsync("429 Retry-After 120")).Ratio.ShouldBe(2.0);
+        (await MeasureAmplificationAsync("429 Retry-After 120", FastPolicyMaxAttempts, MaxAttemptsBound)).Ratio.ShouldBe(2.0);
     }
 }
 
@@ -120,9 +121,20 @@ public sealed class ProviderHangScenario(GatewayFixture gateway) : ScenarioTests
         calls[GatewayFixture.PrimaryModel].ShouldBe(1, "an ambiguous Attempt may have been billed, so it is never retried on the same model");
         await AssertConsistentAccountingAsync(outcome.RequestId);
 
-        // TODO(Phase 3, CostCalculator and Usage Records): assert the ambiguous Attempt is charged at its worst-case estimate
-        // (usage-and-budgets.md section 4). Attempts carry no estimated_cost yet.
-        (await MeasureAmplificationAsync("provider hang")).Ratio.ShouldBe(2.0);
+        // usage-and-budgets.md section 4: the ambiguous Attempt may have been billed, so it is charged its worst case. The request sets
+        // no max_tokens and the policy no defaultMaxOutputTokens, so the output ceiling is 1024; the fixture prices input at 1 and
+        // output at 2 per million tokens.
+        var charged = (await RowsAsync(
+            "select r.usage_source, coalesce(r.estimate_method,''), r.input_tokens::text, coalesce(r.output_tokens::text,''), r.total_cost::text, a.estimated_cost::text " +
+            "from usage.usage_record r join usage.provider_attempt a on a.id = r.provider_attempt_id " +
+            $"where r.inference_request_id = '{outcome.RequestId}' and a.status = 'ambiguous'")).Single();
+        charged[..4].ShouldBe(["unavailable", "reservation_upper_bound", charged[2], ""]);
+        var inputTokens = int.Parse(charged[2], CultureInfo.InvariantCulture);
+        inputTokens.ShouldBeGreaterThan(0, "the input is the gateway's estimate");
+        var worstCase = ((inputTokens * 1m) + (1024 * 2m)) / 1_000_000m;
+        decimal.Parse(charged[4], CultureInfo.InvariantCulture).ShouldBe(worstCase);
+        decimal.Parse(charged[5], CultureInfo.InvariantCulture).ShouldBe(worstCase, "the Attempt's estimated_cost is its Usage Record's cost");
+        (await MeasureAmplificationAsync("provider hang", FastPolicyMaxAttempts, MaxAttemptsBound)).Ratio.ShouldBe(2.0);
     }
 }
 
@@ -151,7 +163,7 @@ public sealed class Provider401Scenario(GatewayFixture gateway) : ScenarioTests(
         health.WindowCalls.ShouldBe(1);
         health.WindowFailureRate.ShouldBe(1.0, "an operator problem (401) counts toward the circuit");
         await AssertConsistentAccountingAsync(outcome.RequestId);
-        (await MeasureAmplificationAsync("provider 401")).Ratio.ShouldBe(2.0);
+        (await MeasureAmplificationAsync("provider 401", FastPolicyMaxAttempts, MaxAttemptsBound)).Ratio.ShouldBe(2.0);
     }
 }
 
@@ -176,6 +188,6 @@ public sealed class InvalidJsonScenario(GatewayFixture gateway) : ScenarioTests(
         ]);
         (await RequestAsync(outcome.RequestId)).ShouldBe(["succeeded", "", "2", "false"]);
         await AssertConsistentAccountingAsync(outcome.RequestId);
-        (await MeasureAmplificationAsync("invalid json")).Ratio.ShouldBe(2.0);
+        (await MeasureAmplificationAsync("invalid json", FastPolicyMaxAttempts, MaxAttemptsBound)).Ratio.ShouldBe(2.0);
     }
 }

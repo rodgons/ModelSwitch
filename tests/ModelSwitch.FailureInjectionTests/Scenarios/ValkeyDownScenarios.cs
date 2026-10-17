@@ -54,6 +54,9 @@ public abstract class ValkeyDownScenario(PostgresFixture postgres, ValkeyFixture
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>Requests the Mock Provider has received so far, over every model.</summary>
+    protected async Task<int> ProviderCallsAsync() => (await Gateway.MockStatsAsync()).Started.Values.Sum();
+
     protected static Task<HttpResponseMessage> ChatAsync(HttpClient client)
         => client.PostAsync(
             "/v1/chat/completions",
@@ -79,6 +82,7 @@ public sealed class ValkeyStoppedFailClosedScenario(PostgresFixture postgres, Va
         (await Client.GetAsync("/ready", TestContext.Current.CancellationToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
         await StopValkeyAsync();
+        var callsBefore = await ProviderCallsAsync();
 
         var response = await ChatAsync(LimitedClient);
         response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
@@ -92,6 +96,7 @@ public sealed class ValkeyStoppedFailClosedScenario(PostgresFixture postgres, Va
         var ready = await Client.GetAsync("/ready", TestContext.Current.CancellationToken);
         ready.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
         (await ready.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("checks").GetProperty("valkey").GetString().ShouldBe("unavailable");
+        AmplificationReport.Measure("valkey stopped (fail-closed)", 1, await ProviderCallsAsync() - callsBefore, 0, "refused before routing");
     }
 }
 
@@ -118,6 +123,7 @@ public sealed class ValkeyStoppedFailOpenScenario(PostgresFixture postgres, Valk
         Interlocked.Read(ref degraded).ShouldBe(0);
 
         await StopValkeyAsync();
+        var callsBefore = await ProviderCallsAsync();
 
         for (var i = 0; i < 3; i++)
         {
@@ -127,5 +133,6 @@ public sealed class ValkeyStoppedFailOpenScenario(PostgresFixture postgres, Valk
         Interlocked.Read(ref degraded).ShouldBe(3);
         var ready = await Client.GetAsync("/ready", TestContext.Current.CancellationToken);
         ready.StatusCode.ShouldBe(HttpStatusCode.OK);
+        AmplificationReport.Measure("valkey stopped (fail-open)", 3, await ProviderCallsAsync() - callsBefore, 1, "healthy Provider: no retry");
     }
 }
