@@ -99,7 +99,7 @@ Every task follows the [constitution](constitution.md): unit tests for each busi
 - [x] Demo script: deploy → connect app → inject Provider failure → watch Fallback → inspect usage → run a Comparison (PRD §15)
 - [x] Playwright smoke + axe in nightly CI
 
-Follow-ups found during Phase 6, not part of the MVP: the outbox relay publishes one event per transaction and falls behind above about 200 RPS sustained (benchmark report); a single Evaluation Run cannot be deleted on its own, only its Comparison.
+Follow-ups found during Phase 6, not part of the MVP: the outbox relay publishes one event per transaction and falls behind above about 200 RPS sustained (benchmark report); a single Evaluation Run cannot be deleted on its own, only its Comparison; dashboard query latency is measured only on about 81 000 request rows, not on a full day of traffic or the whole-hour rollup path.
 
 **Exit:** all 14 DoD items are checked, each with a link to its evidence.
 
@@ -116,7 +116,7 @@ Follow-ups found during Phase 6, not part of the MVP: the outbox relay publishes
 | 7 | Token usage and cost recorded with provenance | [UsageAccountingTests](../tests/ModelSwitch.IntegrationTests/Api/UsageAccountingTests.cs); price preservation in [CatalogAdminEndpointTests](../tests/ModelSwitch.IntegrationTests/Api/CatalogAdminEndpointTests.cs) |
 | 8 | Dashboard shows request, cost, latency and failure information | [smoke.spec.ts](../web/e2e/smoke.spec.ts) asserts the request detail's duration and Estimated Cost and the Overview's cost, success, latency and recent failure; [DashboardEndpointTests](../tests/ModelSwitch.IntegrationTests/Api/DashboardEndpointTests.cs) asserts the figures behind them; every screen passes axe in [screens.spec.ts](../web/e2e/screens.spec.ts) |
 | 9 | Evaluation Runs compare models on the same versioned Dataset | [EvaluationRunTests](../tests/ModelSwitch.IntegrationTests/Api/EvaluationRunTests.cs), [evaluation.spec.ts](../web/e2e/evaluation.spec.ts), [demo.md §6](demo.md#6-run-a-comparison) |
-| 10 | A benchmark report with actual, reproducible measurements | [benchmarks/2026-10-17-ec9c440.md](benchmarks/2026-10-17-ec9c440.md) (and the earlier [266c696](benchmarks/2026-10-17-266c696.md) run), produced by [load/run.sh](../load/run.sh) |
+| 10 | A benchmark report with actual, reproducible measurements | [benchmarks/2026-10-17-ec9c440.md](benchmarks/2026-10-17-ec9c440.md) (and the earlier [266c696](benchmarks/2026-10-17-266c696.md) run), plus dashboard query latency and the Valkey limits path in the supplementary [ef934dd](benchmarks/2026-10-17-ef934dd.md) run, all produced by [load/run.sh](../load/run.sh) |
 | 11 | Logs and traces expose no API keys or content by default | [TelemetryCanaryTests](../tests/ModelSwitch.IntegrationTests/Api/TelemetryCanaryTests.cs), [LogRedactionTests](../tests/ModelSwitch.UnitTests/Telemetry/LogRedactionTests.cs), [ADR-0010](adr/0010-no-prompt-or-completion-content-retained.md) |
 | 12 | The README covers architecture, deployment, API usage, testing and limitations | [README.md](../README.md) |
 | 13 | CI runs formatting checks, automated tests and static analysis | [ci.yml](../.github/workflows/ci.yml) (format, analyzers as errors, tests, gitleaks), [codeql.yml](../.github/workflows/codeql.yml), [nightly.yml](../.github/workflows/nightly.yml) |
