@@ -11,10 +11,13 @@ internal static class EvaluationAuditActions
 {
     public const string DatasetCreated = "dataset.created";
     public const string DatasetVersioned = "dataset.versioned";
+    public const string DatasetDeleted = "dataset.deleted";
     public const string PromptCreated = "prompt.created";
     public const string PromptVersioned = "prompt.versioned";
+    public const string PromptDeleted = "prompt.deleted";
     public const string EvaluationCreated = "evaluation.created";
     public const string EvaluationCancelled = "evaluation.cancelled";
+    public const string EvaluationDeleted = "evaluation.deleted";
 }
 
 /// <summary>

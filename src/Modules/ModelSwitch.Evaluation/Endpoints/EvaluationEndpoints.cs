@@ -1,7 +1,7 @@
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using System.Text.Json.Nodes;
 using ModelSwitch.Evaluation.Application;
 using ModelSwitch.Evaluation.Domain.Runs;
 using ModelSwitch.Identity.Contracts;
@@ -26,6 +26,7 @@ internal static class EvaluationEndpoints
         admin.MapGet("/datasets", ListDatasetsAsync).Produces<PagedResult<DatasetView>>().RequireAuthorization(AdminPolicies.Viewer);
         admin.MapPost("/datasets", CreateDatasetAsync).Produces<DatasetView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Operator);
         admin.MapGet("/datasets/{datasetId:guid}", GetDatasetAsync).Produces<DatasetView>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapDelete("/datasets/{datasetId:guid}", DeleteDatasetAsync).Produces(StatusCodes.Status204NoContent).RequireAuthorization(AdminPolicies.Operator);
         admin.MapGet("/datasets/{datasetId:guid}/versions", ListDatasetVersionsAsync).Produces<PagedResult<DatasetVersionView>>().RequireAuthorization(AdminPolicies.Viewer);
 
         // The body is raw JSONL (application/x-ndjson), read by the service with a 10 MiB bound; it is not bound as JSON.
@@ -36,6 +37,7 @@ internal static class EvaluationEndpoints
         admin.MapGet("/prompts", ListPromptsAsync).Produces<PagedResult<PromptView>>().RequireAuthorization(AdminPolicies.Viewer);
         admin.MapPost("/prompts", CreatePromptAsync).Produces<PromptView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Operator);
         admin.MapGet("/prompts/{promptId:guid}", GetPromptAsync).Produces<PromptView>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapDelete("/prompts/{promptId:guid}", DeletePromptAsync).Produces(StatusCodes.Status204NoContent).RequireAuthorization(AdminPolicies.Operator);
         admin.MapGet("/prompts/{promptId:guid}/versions", ListPromptVersionsAsync).Produces<PagedResult<PromptVersionView>>().RequireAuthorization(AdminPolicies.Viewer);
         admin.MapPost("/prompts/{promptId:guid}/versions", CreatePromptVersionAsync).Produces<PromptVersionView>(StatusCodes.Status201Created).RequireAuthorization(AdminPolicies.Operator);
         admin.MapGet("/prompts/{promptId:guid}/versions/{version:int}", GetPromptVersionAsync).Produces<PromptVersionView>().RequireAuthorization(AdminPolicies.Viewer);
@@ -50,6 +52,7 @@ internal static class EvaluationEndpoints
         admin.MapPost("/evaluations/{runId:guid}/aggregates/recompute", RecomputeAggregatesAsync).Produces<JsonNode>().RequireAuthorization(AdminPolicies.Operator);
         admin.MapGet("/evaluations/{runId:guid}/export", ExportRunAsync).Produces(StatusCodes.Status200OK, contentType: "text/csv").RequireAuthorization(AdminPolicies.Viewer);
         admin.MapGet("/comparisons/{comparisonId:guid}", GetComparisonAsync).Produces<ComparisonDetailView>().RequireAuthorization(AdminPolicies.Viewer);
+        admin.MapDelete("/comparisons/{comparisonId:guid}", DeleteComparisonAsync).Produces(StatusCodes.Status204NoContent).RequireAuthorization(AdminPolicies.Operator);
         return app;
     }
 
@@ -91,6 +94,15 @@ internal static class EvaluationEndpoints
 
     private static async Task<IResult> GetComparisonAsync(HttpContext http, Guid comparisonId, EvaluationRunQueries queries)
         => Json(http, await queries.ComparisonAsync(comparisonId, http.RequestAborted));
+
+    private static async Task<IResult> DeleteComparisonAsync(HttpContext http, Guid comparisonId, EvaluationRunService runs)
+        => NoContent(http, await runs.DeleteComparisonAsync(comparisonId, http.RequestAborted));
+
+    private static async Task<IResult> DeleteDatasetAsync(HttpContext http, Guid datasetId, DatasetService datasets)
+        => NoContent(http, await datasets.DeleteAsync(datasetId, http.RequestAborted));
+
+    private static async Task<IResult> DeletePromptAsync(HttpContext http, Guid promptId, PromptService prompts)
+        => NoContent(http, await prompts.DeleteAsync(promptId, http.RequestAborted));
 
     private static CreateEvaluationRequest Empty => new(null, null, null, null, null, null, null);
 
@@ -144,6 +156,9 @@ internal static class EvaluationEndpoints
 
     private static async Task<IResult> GetPromptVersionAsync(HttpContext http, Guid promptId, int version, PromptService prompts)
         => Json(http, await prompts.GetVersionAsync(promptId, version, http.RequestAborted));
+
+    private static IResult NoContent(HttpContext http, Result result)
+        => result.IsFailure ? ProblemResults.From(http, result.Error) : Results.NoContent();
 
     private static IResult Json<T>(HttpContext http, Result<T> result)
         => result.IsFailure ? ProblemResults.From(http, result.Error) : Results.Json(result.Value);

@@ -1458,7 +1458,26 @@ export interface paths {
     }
     put?: never
     post?: never
-    delete?: never
+    delete: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          datasetId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description No Content */
+        204: {
+          headers: {
+            [name: string]: unknown
+          }
+          content?: never
+        }
+      }
+    }
     options?: never
     head?: never
     patch?: never
@@ -1697,7 +1716,26 @@ export interface paths {
     }
     put?: never
     post?: never
-    delete?: never
+    delete: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          promptId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description No Content */
+        204: {
+          headers: {
+            [name: string]: unknown
+          }
+          content?: never
+        }
+      }
+    }
     options?: never
     head?: never
     patch?: never
@@ -2167,7 +2205,26 @@ export interface paths {
     }
     put?: never
     post?: never
-    delete?: never
+    delete: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          comparisonId: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description No Content */
+        204: {
+          headers: {
+            [name: string]: unknown
+          }
+          content?: never
+        }
+      }
+    }
     options?: never
     head?: never
     patch?: never

@@ -334,6 +334,54 @@ internal sealed class DatasetService(
         return Pagination.Page(views, page.Value.Limit, v => v.Ordinal.ToString(CultureInfo.InvariantCulture));
     }
 
+    /// <summary>
+    /// Deletes a Dataset with its Dataset Versions and Cases (evaluation.md section 8): 404 outside the grant, 409 <c>conflict</c>
+    /// while a Comparison uses it. The Dataset row is locked first, so a Comparison created meanwhile (which locks it too) is either
+    /// seen here or refused for a missing Dataset. The Audit Record keeps the name and counts, never Case content.
+    /// </summary>
+    public async Task<Result> DeleteAsync(Guid datasetId, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var dataset = await FindAsync(db, datasetId, cancellationToken);
+        if (dataset.IsFailure)
+        {
+            return dataset.Error;
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var locked = await db.Database
+            .SqlQuery<Guid>($"SELECT id AS \"Value\" FROM evaluation.dataset WHERE id = {datasetId} FOR UPDATE")
+            .ToListAsync(cancellationToken);
+        if (locked.Count == 0)
+        {
+            return DatasetNotFound();
+        }
+
+        var comparisons = await db.Comparisons.CountAsync(c => c.DatasetId == datasetId, cancellationToken);
+        if (!DeletionRules.CanDeleteSource(comparisons))
+        {
+            return new Error(ErrorCode.Conflict, $"The dataset is used by {comparisons} comparison(s); delete them first.");
+        }
+
+        var caseCounts = await db.DatasetVersions.Where(v => v.DatasetId == datasetId).Select(v => v.CaseCount).ToListAsync(cancellationToken);
+        await db.Database.ExecuteSqlAsync($"DELETE FROM evaluation.dataset WHERE id = {datasetId}", cancellationToken);
+
+        var entry = new AuditEntry(EvaluationAuditActions.DatasetDeleted, "dataset", datasetId.ToString("D", CultureInfo.InvariantCulture))
+        {
+            TenantId = dataset.Value.TenantId,
+            Before = new Dictionary<string, object?>
+            {
+                ["name"] = dataset.Value.Name,
+                ["taskKind"] = dataset.Value.TaskKind,
+                ["versions"] = caseCounts.Count,
+                ["cases"] = caseCounts.Sum(),
+            },
+        };
+        await audit.WriteAsync(entry, transaction.GetDbTransaction(), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return Result.Success();
+    }
+
     /// <summary>The Dataset when it exists and its Tenant is in the caller's grant; otherwise the same 404 either way.</summary>
     private async Task<Result<Dataset>> FindAsync(EvaluationDbContext db, Guid datasetId, CancellationToken cancellationToken)
     {

@@ -204,6 +204,59 @@ internal sealed class EvaluationRunService(
         return JsonNode.Parse(json);
     }
 
+    /// <summary>
+    /// Deletes a Comparison with its Evaluation Runs and their Case Results, model outputs and copied templates included (evaluation.md
+    /// section 8): 404 outside the grant, 409 <c>conflict</c> while any run is queued or running, or cancelled but still finishing its
+    /// in-flight Cases. The runs are locked first, so the worker cannot start one between the check and the delete. The Audit Record
+    /// keeps the name, Dataset Version, run ids and counts, never content.
+    /// </summary>
+    public async Task<Result> DeleteComparisonAsync(Guid comparisonId, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var comparison = await db.Comparisons.AsNoTracking().FirstOrDefaultAsync(c => c.Id == comparisonId, cancellationToken);
+        if (comparison is null || access.CheckTenant(comparison.TenantId).IsFailure)
+        {
+            return ComparisonNotFound();
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var locked = await db.Database
+            .SqlQuery<Guid>($"SELECT id AS \"Value\" FROM evaluation.comparison WHERE id = {comparisonId} FOR UPDATE")
+            .ToListAsync(cancellationToken);
+        if (locked.Count == 0)
+        {
+            return ComparisonNotFound();
+        }
+
+        var runs = await db.Database
+            .SqlQuery<LockedRun>($"SELECT id AS \"Id\", status AS \"Status\", completed_at IS NOT NULL AS \"HasCompletedAt\" FROM evaluation.evaluation_run WHERE comparison_id = {comparisonId} ORDER BY id FOR UPDATE")
+            .ToListAsync(cancellationToken);
+        if (!DeletionRules.CanDeleteComparison(runs.Select(r => new RunState(r.Status, r.HasCompletedAt))))
+        {
+            return new Error(ErrorCode.Conflict, "A run of this comparison has not finished; cancel it and wait for it to stop first.");
+        }
+
+        var runIds = runs.Select(r => r.Id).ToArray();
+        var caseResults = await db.CaseResults.CountAsync(r => runIds.Contains(r.RunId), cancellationToken);
+        await db.Database.ExecuteSqlAsync($"DELETE FROM evaluation.comparison WHERE id = {comparisonId}", cancellationToken);
+
+        var entry = new AuditEntry(EvaluationAuditActions.EvaluationDeleted, "comparison", comparisonId.ToString("D", CultureInfo.InvariantCulture))
+        {
+            TenantId = comparison.TenantId,
+            Before = new Dictionary<string, object?>
+            {
+                ["name"] = comparison.Name,
+                ["datasetId"] = comparison.DatasetId,
+                ["datasetVersion"] = comparison.DatasetVersion,
+                ["runIds"] = runIds,
+                ["caseResults"] = caseResults,
+            },
+        };
+        await audit.WriteAsync(entry, transaction.GetDbTransaction(), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return Result.Success();
+    }
+
     /// <summary>The run when it exists and its Tenant is in the caller's grant; otherwise the same 404 either way.</summary>
     internal async Task<Result<EvaluationRun>> FindRunAsync(EvaluationDbContext db, Guid runId, CancellationToken cancellationToken)
     {
@@ -243,6 +296,28 @@ internal sealed class EvaluationRunService(
 
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        // Holds the Dataset and Prompts against a concurrent delete (which locks them FOR UPDATE) until this Comparison is committed,
+        // so a delete either sees the Comparison or happened first, and then the Comparison is refused here.
+        var dataset = await db.Database
+            .SqlQuery<Guid>($"SELECT id AS \"Value\" FROM evaluation.dataset WHERE id = {plan.DatasetId} FOR KEY SHARE")
+            .ToListAsync(cancellationToken);
+        if (dataset.Count == 0)
+        {
+            return new Error(ErrorCode.NotFound, "The dataset was not found.");
+        }
+
+        foreach (var promptId in plan.Configurations.Select(c => c.Prompt.Id).Distinct().Order())
+        {
+            var prompt = await db.Database
+                .SqlQuery<Guid>($"SELECT id AS \"Value\" FROM evaluation.prompt WHERE id = {promptId} FOR KEY SHARE")
+                .ToListAsync(cancellationToken);
+            if (prompt.Count == 0)
+            {
+                return new Error(ErrorCode.NotFound, "The prompt was not found.");
+            }
+        }
+
         db.Comparisons.Add(comparison);
         db.Runs.AddRange(runs);
         await db.SaveChangesAsync(cancellationToken);
@@ -277,9 +352,14 @@ internal sealed class EvaluationRunService(
 
     private static Error AlreadyFinished(string status) => new(ErrorCode.Conflict, $"The run is already {status}.");
 
+    private static Error ComparisonNotFound() => new(ErrorCode.NotFound, "The comparison was not found.");
+
     private static JsonElement Parse(string json)
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
     }
 }
+
+/// <summary>A run row locked by <see cref="EvaluationRunService.DeleteComparisonAsync"/>.</summary>
+internal sealed record LockedRun(Guid Id, string Status, bool HasCompletedAt);

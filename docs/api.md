@@ -167,7 +167,7 @@ Every error has one code from this closed set. The `type` groups codes and maps 
 | `unauthenticated` | 401 | `authentication_error` | Unauthenticated | No. Admin API only (no session, or wrong email or password; the same answer for an unknown account, a deactivated one and a lockout) |
 | `forbidden` | 403 | `permission_error` | Forbidden | No. Admin API only |
 | `not_found` | 404 | `invalid_request_error` | Not found | No. Admin API only |
-| `conflict` | 409 | `invalid_request_error` | Conflict | No. Admin API only (stale `expectedVersion`) |
+| `conflict` | 409 | `invalid_request_error` | Conflict | No. Admin API only (stale `expectedVersion`, a duplicate name, a run that has already finished, or deleting evaluation content that is still in use or still running) |
 
 `budget_exceeded` uses **402, not 429**, because OpenAI SDKs automatically retry 429, and retrying cannot help when the budget is exhausted.
 
@@ -264,18 +264,20 @@ Every Administrator may read these (Viewer). Results are narrowed to the caller'
 
 ### Evaluation
 
-Datasets and Prompts belong to one Tenant. Viewers read and Operators write inside their Tenant Grant; a Dataset or Prompt of a Tenant outside it is **404** `not_found`, like one that does not exist. Lists are newest first (`limit` 1-200, default 50, `cursor`) and take an optional `tenantId` filter (outside the grant → 404); without it they show every Tenant in the grant. Creating a Dataset or Prompt, and each new version of either, writes an Audit Record (`dataset.created`, `dataset.versioned`, `prompt.created`, `prompt.versioned`) with names, numbers and the content hash, never Case or template content. Names are trimmed, 1-128 characters, no control characters, unique per Tenant (duplicate → 409 `conflict`); an unknown `tenantId` → 404.
+Datasets and Prompts belong to one Tenant. Viewers read and Operators write inside their Tenant Grant; a Dataset or Prompt of a Tenant outside it is **404** `not_found`, like one that does not exist. Lists are newest first (`limit` 1-200, default 50, `cursor`) and take an optional `tenantId` filter (outside the grant → 404); without it they show every Tenant in the grant. Creating a Dataset or Prompt, each new version of either, and deleting one writes an Audit Record (`dataset.created`, `dataset.versioned`, `dataset.deleted`, `prompt.created`, `prompt.versioned`, `prompt.deleted`) with names, numbers and the content hash, never Case or template content. Names are trimmed, 1-128 characters, no control characters, unique per Tenant (duplicate → 409 `conflict`); an unknown `tenantId` → 404.
 
 | Method | Path | Notes |
 |---|---|---|
 | GET/POST | `/admin/datasets` | POST `{tenantId, name, taskKind: "extraction"\|"classification"\|"free_text"}` → 201 `DatasetView {id, tenantId, name, taskKind, latestVersion, createdAt}` (`latestVersion` is 0 until the first upload) |
 | GET | `/admin/datasets/{datasetId}` | `DatasetView` |
+| DELETE | `/admin/datasets/{datasetId}` | Operator. Deletes the Dataset with every Dataset Version and Case → 204. 409 `conflict` while a Comparison uses it (delete those first). Audit `dataset.deleted` (name, task kind, version and Case counts). See evaluation.md section 8 |
 | GET | `/admin/datasets/{datasetId}/versions` | Dataset Versions, newest first: `DatasetVersionView {datasetId, version, caseCount, contentSha256, scoringSchema, createdAt, createdByAdminId}` |
 | POST | `/admin/datasets/{datasetId}/versions` | Upload JSONL as the **raw request body** with `Content-Type: application/x-ndjson` (also `application/jsonl`, `application/x-jsonlines`; any other → 415 `unsupported_media_type`). The size and Case limits answer differently: a body over 10 MiB is 413 `payload_too_large` (not a validation error), while no Cases or more than 5 000 is 400 `validation_failed` (key `body`). → 201 `DatasetVersionView`, the next version number (concurrent uploads each get their own). Invalid upload → 400 `validation_failed`, see below |
 | GET | `/admin/datasets/{datasetId}/versions/{version}` | `DatasetVersionView` |
 | GET | `/admin/datasets/{datasetId}/versions/{version}/cases` | Cases in upload order, paginated: `CaseView {id, externalId, ordinal, input, expected, metadata}` (`externalId` is the JSONL `id`, `ordinal` counts from 0) |
 | GET/POST | `/admin/prompts` | POST `{tenantId, name}` → 201 `PromptView {id, tenantId, name, latestVersion, createdAt}` |
 | GET | `/admin/prompts/{promptId}` | `PromptView` |
+| DELETE | `/admin/prompts/{promptId}` | Operator. Deletes the Prompt with every Prompt Version → 204. 409 `conflict` while a Comparison has a run built from it. Audit `prompt.deleted` (name, version count) |
 | GET/POST | `/admin/prompts/{promptId}/versions` | GET newest first. POST `{messages: [{role, content}], responseFormat?}` appends the next immutable Prompt Version → 201 `PromptVersionView {promptId, version, template: {messages, responseFormat}, createdAt, createdByAdminId}` |
 | GET | `/admin/prompts/{promptId}/versions/{version}` | `PromptVersionView` |
 
@@ -289,7 +291,7 @@ Datasets and Prompts belong to one Tenant. Viewers read and Operators write insi
 |---|---|---|
 #### Evaluation Runs and Comparisons
 
-Viewers read and Operators write inside their Tenant Grant; a run or Comparison of a Tenant outside it is **404** `not_found`. Creating a Comparison (directly or with "Run again") writes an Audit Record `evaluation.created` (target the Comparison: name, Dataset and version, run ids, `configSha256`s, `maxEstimatedCost`, `rerunOf`); cancelling writes `evaluation.cancelled` (target the run). Money is USD Estimated Cost, never a Provider's charge. Times are ISO-8601 UTC.
+Viewers read and Operators write inside their Tenant Grant; a run or Comparison of a Tenant outside it is **404** `not_found`. Creating a Comparison (directly or with "Run again") writes an Audit Record `evaluation.created` (target the Comparison: name, Dataset and version, run ids, `configSha256`s, `maxEstimatedCost`, `rerunOf`); cancelling writes `evaluation.cancelled` (target the run); deleting writes `evaluation.deleted` (target the Comparison: name, Dataset and version, run ids, Case Result count). Money is USD Estimated Cost, never a Provider's charge. Times are ISO-8601 UTC.
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
@@ -303,6 +305,7 @@ Viewers read and Operators write inside their Tenant Grant; a run or Comparison 
 | POST | `/admin/evaluations/{runId}/aggregates/recompute` | Operator | Recomputes a finished run's aggregates from its stored Case Results, stores and returns them (the aggregates object); 409 `conflict` while queued or running |
 | GET | `/admin/evaluations/{runId}/export?format=csv\|jsonl` | Viewer | Streams the export (evaluation.md section 7); `format` is required, anything else → 400 `validation_failed` (`errors.format`). `Content-Disposition: attachment; filename=evaluation-run-<runId>.<format>` |
 | GET | `/admin/comparisons/{comparisonId}` | Viewer | `ComparisonDetailView` |
+| DELETE | `/admin/comparisons/{comparisonId}` | Operator | Deletes the Comparison, its Evaluation Runs and their Case Results (outputs and the copied Prompt template included) → 204. 409 `conflict` while a run is queued or running, or cancelled but still finishing its in-flight Cases (`completedAt` null): cancel it and wait. Inference Requests the runs made keep their metadata until request retention removes them (evaluation.md section 8) |
 
 **`CreateEvaluationRequest`**: `{tenantId, datasetId, datasetVersion, name, configurations: [1..6 × {target: {alias} | {providerModelId}, prompt: {id, version}, params?: {temperature? 0-2, topP? 0-1, seed? int64, maxOutputTokens? ≥ 1}, evaluator: {kind, version: "1", config?}}], concurrency? 1-16 (default 4), maxEstimatedCost? (USD, ≥ 0, ≤ 10 decimals)}`. Order of checks: a `tenantId` outside the grant or unknown → 404; then every problem at once → 400 `validation_failed`. Shape keys: `tenantId`, `datasetId`, `datasetVersion`, `name` (the Dataset name rule), `concurrency`, `maxEstimatedCost`, `configurations`, `configurations[i]`, `configurations[i].target` (exactly one of the two), `.target.alias` (`[a-z0-9][a-z0-9._-]{0,63}`), `.target.providerModelId`, `.prompt`, `.prompt.id`, `.prompt.version`, `.params.<name>`, `.evaluator`, and the Evaluator's own keys under `configurations[i].evaluator.` (`kind`, `version`, `config.labels[1]`, …). Reference keys: `datasetId` (not the Tenant's), `datasetVersion` (no such version), `.prompt.id` (not the Tenant's), `.prompt.version`, `.target.alias` (no such Model Alias), `.target.providerModelId` (not an enabled Provider Model), `.evaluator.config.judgeAlias` (no such alias), `.evaluator.kind` (does not fit the Dataset's task kind), `.evaluator.config.labels` (classification labels miss an expected label of the version), `.evaluator.config.fields.<name>` (`json_fields` field the version's expected results do not have).
 

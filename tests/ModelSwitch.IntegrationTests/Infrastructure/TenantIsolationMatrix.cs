@@ -68,6 +68,11 @@ public static class TenantIsolationMatrix
         new("/admin/evaluations/{runId:guid}/aggregates/recompute", HttpMethod.Post, ids => $"/admin/evaluations/{ids.RunId}/aggregates/recompute"),
         new("/admin/evaluations/{runId:guid}/export", HttpMethod.Get, ids => $"/admin/evaluations/{ids.RunId}/export?format=jsonl"),
         new("/admin/comparisons/{comparisonId:guid}", HttpMethod.Get, ids => $"/admin/comparisons/{ids.ComparisonId}"),
+
+        // Deletes come last: a broken grant check would otherwise remove what the routes above aim at.
+        new("/admin/comparisons/{comparisonId:guid}", HttpMethod.Delete, ids => $"/admin/comparisons/{ids.ComparisonId}"),
+        new("/admin/datasets/{datasetId:guid}", HttpMethod.Delete, ids => $"/admin/datasets/{ids.DatasetId}"),
+        new("/admin/prompts/{promptId:guid}", HttpMethod.Delete, ids => $"/admin/prompts/{ids.PromptId}"),
     ];
 
     /// <summary>The route parameters that carry a tenant-scoped id; a route with one must be in <see cref="Routes"/> (the coverage gate).</summary>

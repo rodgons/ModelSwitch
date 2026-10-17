@@ -233,6 +233,56 @@ internal sealed class PromptService(
         return ToView(row);
     }
 
+    /// <summary>
+    /// Deletes a Prompt with its Prompt Versions (evaluation.md section 8): 404 outside the grant, 409 <c>conflict</c> while a
+    /// Comparison has a run built from it. Runs keep their own copy of the template, which goes with their Comparison. The Prompt row
+    /// is locked first, so a Comparison created meanwhile (which locks it too) is either seen here or refused for a missing Prompt.
+    /// The Audit Record keeps the name and counts, never template content.
+    /// </summary>
+    public async Task<Result> DeleteAsync(Guid promptId, CancellationToken cancellationToken)
+    {
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var prompt = await FindAsync(db, promptId, cancellationToken);
+        if (prompt.IsFailure)
+        {
+            return prompt.Error;
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var locked = await db.Database
+            .SqlQuery<Guid>($"SELECT id AS \"Value\" FROM evaluation.prompt WHERE id = {promptId} FOR UPDATE")
+            .ToListAsync(cancellationToken);
+        if (locked.Count == 0)
+        {
+            return PromptNotFound();
+        }
+
+        var tenantId = prompt.Value.TenantId;
+        var comparisons = await db.Database
+            .SqlQuery<int>(
+                $"""
+                SELECT count(DISTINCT comparison_id)::int AS "Value" FROM evaluation.evaluation_run
+                WHERE tenant_id = {tenantId} AND (run_configuration->'prompt'->>'id')::uuid = {promptId}
+                """)
+            .SingleAsync(cancellationToken);
+        if (!DeletionRules.CanDeleteSource(comparisons))
+        {
+            return new Error(ErrorCode.Conflict, $"The prompt is used by {comparisons} comparison(s); delete them first.");
+        }
+
+        var versions = await db.PromptVersions.CountAsync(v => v.PromptId == promptId, cancellationToken);
+        await db.Database.ExecuteSqlAsync($"DELETE FROM evaluation.prompt WHERE id = {promptId}", cancellationToken);
+
+        var entry = new AuditEntry(EvaluationAuditActions.PromptDeleted, "prompt", promptId.ToString("D", CultureInfo.InvariantCulture))
+        {
+            TenantId = tenantId,
+            Before = new Dictionary<string, object?> { ["name"] = prompt.Value.Name, ["versions"] = versions },
+        };
+        await audit.WriteAsync(entry, transaction.GetDbTransaction(), cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return Result.Success();
+    }
+
     private async Task<Result<Prompt>> FindAsync(EvaluationDbContext db, Guid promptId, CancellationToken cancellationToken)
     {
         var prompt = await db.Prompts.AsNoTracking().FirstOrDefaultAsync(p => p.Id == promptId, cancellationToken);
