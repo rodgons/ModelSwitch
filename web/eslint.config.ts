@@ -5,7 +5,7 @@ import pluginVue from 'eslint-plugin-vue'
 import { globalIgnores } from 'eslint/config'
 
 export default defineConfigWithVueTs(
-  globalIgnores(['dist/**', 'coverage/**']),
+  globalIgnores(['dist/**', 'coverage/**', 'test-results/**', 'playwright-report/**']),
   { files: ['**/*.{ts,mts,vue}'], extends: [js.configs.recommended] },
   pluginVue.configs['flat/recommended'],
   vueTsConfigs.recommended,

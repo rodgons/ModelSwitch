@@ -1,0 +1,14 @@
+# Merged over deploy/docker-compose.yml by scripts/e2e.sh (docs/testing.md section 1, Playwright row). The E2E stack runs as
+# its own Compose project (`modelswitch-e2e`), and its images get their own names, so building it never retags the images a
+# stack started from the repository root runs.
+services:
+  migrator:
+    image: modelswitch-e2e/migrator
+  api:
+    image: modelswitch-e2e/api
+  worker:
+    image: modelswitch-e2e/worker
+  web:
+    image: modelswitch-e2e/web
+  mock-provider:
+    image: modelswitch-e2e/mock-provider

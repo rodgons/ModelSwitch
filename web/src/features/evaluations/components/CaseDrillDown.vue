@@ -117,9 +117,12 @@ const s = {
                   ><Money :amount="entry.result.judgeEstimatedCost" estimated
                 /></template>
               </Facts>
-              <pre v-bind="s.block" :aria-label="`Output of ${labelOf(entry.runId)}`">{{
-                entry.result.outputText ?? '—'
-              }}</pre>
+              <pre
+                v-bind="s.block"
+                role="region"
+                tabindex="0"
+                :aria-label="`Output of ${labelOf(entry.runId)}`"
+                >{{ entry.result.outputText ?? '—' }}</pre>
               <Inline :gap="12">
                 <RouterLink
                   v-if="entry.result.inferenceRequestId"
@@ -149,6 +152,8 @@ const s = {
           <pre
             v-if="diff"
             v-bind="s.block"
+            role="region"
+            tabindex="0"
             aria-label="Output diff"
           ><span v-for="(part, index) in diff.parts" :key="index" v-bind="s.line(part.kind)">{{ diff.mode === 'lines' ? `${diffLinePrefix(part.kind)} ${part.text}` : part.text }}</span></pre>
           <span v-bind="s.caption"

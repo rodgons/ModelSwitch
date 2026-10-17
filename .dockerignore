@@ -5,6 +5,8 @@
 **/TestResults/
 web/dist/
 web/coverage/
+web/test-results/
+web/playwright-report/
 **/*.tsbuildinfo
 .git/
 .github/

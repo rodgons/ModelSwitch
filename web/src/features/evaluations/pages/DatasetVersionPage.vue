@@ -106,7 +106,7 @@ const s = {
                   >Derived from the Cases' expected values: the labels or fields Evaluators score
                   against.</span
                 >
-                <pre v-bind="s.wrapBlock" aria-label="Scoring schema">{{
+                <pre v-bind="s.wrapBlock" role="region" tabindex="0" aria-label="Scoring schema">{{
                   prettyJson(v.scoringSchema)
                 }}</pre>
               </Stack>
