@@ -639,6 +639,21 @@ public sealed class InferenceServiceTests : IDisposable
         _ledger.Settled.Count.ShouldBe(1);
     }
 
+    [Fact]
+    public async Task A_settlement_failure_that_surfaces_after_the_settle_window_closed_still_never_fails_the_response()
+    {
+        // Regression (failure-injection "PostgreSQL stopped mid-load"): a storage call that fails only once the 10 s window has
+        // passed (a connect that ends after its token fired, with a storage exception rather than a cancellation) matched neither
+        // catch, so a request the Provider had answered became a 500. It gives up instead and leaves the request to the sweeper.
+        _ledger.FailSettleTimes = 1;
+        _ledger.BeforeSettleFails = () => _time.Advance(InferenceService.SettleTimeout + TimeSpan.FromSeconds(1));
+
+        var result = await Service().CompleteAsync(Request(), CancellationToken.None);
+
+        result.IsSuccess.ShouldBeTrue();
+        _ledger.Settled.ShouldBeEmpty("settlement gave up; the sweeper reconciles the request");
+    }
+
     // ---- streaming -------------------------------------------------------------------------------------------------
 
     private void StreamScript(params StreamEvent[] events)
@@ -968,6 +983,9 @@ public sealed class InferenceServiceTests : IDisposable
 
         public bool SettleTokenWasCancelled { get; private set; }
 
+        /// <summary>Runs before a scripted settlement failure is thrown, e.g. to let the settle window pass first.</summary>
+        public Action? BeforeSettleFails { get; set; }
+
         public Task<Result<OpenedRequest>> OpenAsync(OpenInferenceRequest request, CancellationToken cancellationToken)
         {
             if (RefuseOpen)
@@ -995,6 +1013,7 @@ public sealed class InferenceServiceTests : IDisposable
             SettleTokenWasCancelled = cancellationToken.IsCancellationRequested;
             if (FailSettleTimes-- > 0)
             {
+                BeforeSettleFails?.Invoke();
                 throw new InvalidOperationException("db down");
             }
 
