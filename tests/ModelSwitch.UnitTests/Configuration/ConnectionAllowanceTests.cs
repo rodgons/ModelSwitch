@@ -7,9 +7,9 @@ namespace ModelSwitch.UnitTests.Configuration;
 /// <summary>
 /// Regression (benchmarks/2026-10-17-266c696.md, finding 2): the api's pool (Npgsql's default of 100) was not below PostgreSQL's
 /// max_connections (also 100), so under load PostgreSQL refused clients and requests failed with 500. The reference configuration
-/// must keep every pool the processes can open below max_connections (docs/deployment.md section 3, "Connection budget").
+/// must keep every pool the processes can open below max_connections (docs/deployment.md section 3, "Connection allowance").
 /// </summary>
-public sealed partial class ConnectionBudgetTests
+public sealed partial class ConnectionAllowanceTests
 {
     private const int _superuserReserved = 3;
 

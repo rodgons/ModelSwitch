@@ -34,7 +34,7 @@ services:
   postgres:
     image: postgres:17
     restart: unless-stopped
-    # Above the sum of the api, worker, migrator and retention pools (docs/deployment.md section 3, "Connection budget"), so a
+    # Above the sum of the api, worker, migrator and retention pools (docs/deployment.md section 3, "Connection allowance"), so a
     # busy pool queues its callers instead of PostgreSQL refusing them with "too many clients".
     command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-200}"]
     environment:

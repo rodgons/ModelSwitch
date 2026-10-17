@@ -77,7 +77,7 @@ public sealed class ApiKeyFailureThrottleTests
     }
 
     [Fact]
-    public void Ipv6_clients_in_the_same_64_bit_prefix_share_one_budget()
+    public void Ipv6_clients_in_the_same_64_bit_prefix_share_one_failure_count()
     {
         var throttle = Throttle();
 
@@ -98,7 +98,7 @@ public sealed class ApiKeyFailureThrottleTests
     }
 
     [Fact]
-    public void Clients_without_a_known_address_share_one_budget()
+    public void Clients_without_a_known_address_share_one_failure_count()
     {
         var throttle = Throttle();
 

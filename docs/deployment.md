@@ -82,9 +82,9 @@ In Compose, `.env` is the only place values are set. `deploy/docker-compose.yml`
 | `POSTGRES_APP_PASSWORD` | ✔ | migrator | Password the migrator gives `modelswitch_app` when it creates the role |
 | `POSTGRES_RETENTION_PASSWORD` | | migrator | Password for `modelswitch_retention` when the migrator creates it. Unset: the role is created `NOLOGIN`. `.env.example` sets it and `generate-secrets.sh` fills it |
 | `POSTGRES_DB` | | postgres container | `modelswitch` |
-| `POSTGRES_MAX_CONNECTIONS` | | postgres container | `200`. PostgreSQL's `max_connections`. Keep it above the connection budget below |
+| `POSTGRES_MAX_CONNECTIONS` | | postgres container | `200`. PostgreSQL's `max_connections`. Keep it above the connection allowance below |
 | `MODELSWITCH_HTTP_PORT` | | Compose (`proxy`) | `8080`. The published port. Change `PublicBaseUrl` with it |
-| `MODELSWITCH__ConnectionStrings__Postgres` | ✔ | api, worker | `modelswitch_app` role. `.env.example` sets `Maximum Pool Size=40` (see the connection budget below) |
+| `MODELSWITCH__ConnectionStrings__Postgres` | ✔ | api, worker | `modelswitch_app` role. `.env.example` sets `Maximum Pool Size=40` (see the connection allowance below) |
 | `MODELSWITCH__ConnectionStrings__PostgresMigrator` | ✔ | migrator | `modelswitch_migrator` role. `Maximum Pool Size=5` |
 | `MODELSWITCH__ConnectionStrings__Valkey` | ✔ | api | |
 | `MODELSWITCH__ConnectionStrings__PostgresRetention` | | worker | `modelswitch_retention` role (needs `POSTGRES_RETENTION_PASSWORD`). Unset: retention runs as the app role and keeps Audit Records. `Maximum Pool Size=5` |
@@ -112,7 +112,7 @@ In Compose, `.env` is the only place values are set. `deploy/docker-compose.yml`
 | Provider env credentials (e.g. `OPENAI_API_KEY`) | | api, worker | referenced as `env:OPENAI_API_KEY`. Compose passes `OPENAI_API_KEY` only; add others to the `x-gateway-environment` block |
 | `MODELSWITCH_URL`, `MODELSWITCH_DEMO_OLLAMA_MODEL`, `MODELSWITCH_DEMO_TENANT` | | `seed-demo.sh` | The gateway URL (default `http://localhost:$MODELSWITCH_HTTP_PORT`), the Ollama model tag (default `qwen2.5:1.5b-instruct-q4_K_M`), and the name of the Tenant to create or reuse (default `demo`; `load/run.sh` seeds several) |
 
-**Connection budget.** Every Npgsql pool opens up to its `Maximum Pool Size` connections (Npgsql's default is 100), and PostgreSQL refuses a client beyond `max_connections` ("sorry, too many clients already") instead of queueing it, which reaches the client as a `500`. A pool at its maximum makes its callers wait for a free connection instead, so the pools must add up to less than `max_connections`. With the `.env.example` values:
+**Connection allowance.** Every Npgsql pool opens up to its `Maximum Pool Size` connections (Npgsql's default is 100), and PostgreSQL refuses a client beyond `max_connections` ("sorry, too many clients already") instead of queueing it, which reaches the client as a `500`. A pool at its maximum makes its callers wait for a free connection instead, so the pools must add up to less than `max_connections`. With the `.env.example` values:
 
 | Process | Pools | At most |
 |---|---|---|
