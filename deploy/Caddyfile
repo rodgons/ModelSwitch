@@ -2,8 +2,8 @@
 # dashboard (ADR-0011), and the security headers (docs/security.md section 6).
 {
 	admin off
-	# Plain HTTP on :8080 for the local stack. For a real domain, replace `:8080` with the domain name and publish 80/443:
-	# Caddy then obtains certificates itself (docs/deployment.md section 5).
+	# Plain HTTP on :8080 for the local stack. For a real domain, replace `:8080` with the domain name, delete this line and
+	# publish 80/443: Caddy then obtains certificates itself (docs/deployment.md section 5).
 	auto_https off
 }
 

@@ -66,6 +66,7 @@ Provider endpoints are entered by Owners, but are still validated as untrusted i
 ## 7. HTTP hardening
 
 - Kestrel: `MaxRequestBodySize` 1 MiB on `/v1`, 10 MiB on dataset upload. Header and request timeouts are set.
+- Forwarded headers: the api honours `X-Forwarded-Proto` and `X-Forwarded-For` only from loopback and private-network peers (the proxy on the Compose network), so the Secure cookies work behind a TLS-terminating proxy and Audit Records and lockout see the client address ([deployment.md §1](deployment.md#1-compose-services)).
 - Security headers come from the proxy and the app: `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and HSTS when TLS is enabled.
 - JSON parsing: `System.Text.Json` source-generated contexts, max depth 32, unknown properties rejected on `/v1`.
 
