@@ -361,9 +361,12 @@ const s = {
                   </Stack>
                 </Section>
                 <Section title="Run Configuration">
-                  <pre v-bind="s.block" aria-label="Frozen Run Configuration">{{
-                    prettyJson(detail.configuration)
-                  }}</pre>
+                  <pre
+                    v-bind="s.block"
+                    role="region"
+                    tabindex="0"
+                    aria-label="Frozen Run Configuration"
+                    >{{ prettyJson(detail.configuration) }}</pre>
                 </Section>
               </Stack>
             </template>

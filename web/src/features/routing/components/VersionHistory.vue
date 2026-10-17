@@ -55,6 +55,8 @@ const marker = { same: ' ', added: '+', removed: '-' }
         <pre
           v-if="shown !== null"
           v-bind="block"
+          role="region"
+          tabindex="0"
           :aria-label="`Changes in version ${shown}`"
         ><span v-for="(line, index) in lines" :key="index" v-bind="lineAttrs(line.kind)">{{ marker[line.kind] }} {{ line.text }}</span></pre>
       </Stack>
