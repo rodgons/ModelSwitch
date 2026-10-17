@@ -30,11 +30,11 @@ The **invariant**, for every `budget_period` row (Tenant, month):
 - `reserved_amount` = the sum of the Tenant's `held` Reservations with that `period_start`;
 - `spent_amount` = the sum of `usage_record.total_cost` of the Tenant's requests that **started** in that month.
 
-A row exists for the current month exactly while the Tenant has a Budget: setting a Budget creates it, removing the Budget deletes it, and the first Reservation of a new month creates that month's row if the Tenant still has a Budget. A past month keeps its row. Without a row, the month's figures (`IBudgets.GetCurrentAsync`, the Tenant detail page) are summed from the Reservations and Usage Records in the same way.
+A row for the current month exists only while the Tenant has a Budget: setting a Budget creates it, removing the Budget deletes it, and the first Reservation of a new month creates that month's row if the Tenant still has a Budget. A past month keeps its row. Without a row, the month's figures (`IBudgets.GetCurrentAsync`, the Tenant detail page) are summed from the Reservations and Usage Records in the same way.
 
 **Creating a row** (`BudgetSql.SeedPeriodSql`) sums the held Reservations and Usage Records that already exist, so it must not interleave with a request that is writing either. Each Tenant has a PostgreSQL advisory lock (`pg_advisory_xact_lock(0x4D534250, <key from the tenant id>)`):
 
-- every transaction that moves a period row (reserve, top-up, settle, sweep) first takes it in **shared** mode, in a statement of its own, so the statement that reads the row takes its snapshot after the lock. Shared holders never wait for each other.
+- every transaction that moves a period row (reserve, top-up, settle, sweep) first takes it in **shared** mode, in a statement of its own, so the statement that reads the row takes its snapshot after the lock. Shared holders never wait for each other, so this costs a Tenant without a Budget one cheap lock call and no waiting.
 - setting or removing a Budget, and creating a month's row, take it in **exclusive** mode. They wait for the requests in flight to commit and hold new ones back until they commit, so the row they create counts every Reservation and Usage Record exactly once.
 
 **Reserve** (request step 8, one transaction, three round trips):
