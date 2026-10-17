@@ -60,6 +60,29 @@ public sealed class AdminCrossCuttingTests(AdminFixture admin) : IClassFixture<A
         (await clientB.GetAsync("/v1/models", ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    [Fact]
+    public async Task A_key_that_reaches_its_expiry_gets_401_on_v1_even_while_it_is_cached()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        await using var host = admin.StartHost(services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(time)));
+        using var owner = AdminFixture.NewBrowser(host);
+        await owner.SignInAsync(AdminFixture.OwnerEmail, AdminFixture.OwnerPassword);
+        var expiresAt = time.GetUtcNow().AddMinutes(1);
+        var created = await AdminBrowser.JsonAsync(await owner.SendJsonAsync(HttpMethod.Post, $"/admin/tenants/{admin.TenantA}/api-keys", new { name = "expiring", expiresAt }));
+        using var client = Bearer(host, created.GetProperty("key").GetString()!);
+        var ct = TestContext.Current.CancellationToken;
+        (await client.GetAsync("/v1/models", ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        time.Advance(TimeSpan.FromSeconds(59));
+        var before = await client.GetAsync("/v1/models", ct);
+        time.Advance(TimeSpan.FromSeconds(1));
+        var at = await client.GetAsync("/v1/models", ct);
+
+        before.StatusCode.ShouldBe(HttpStatusCode.OK);
+        at.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await AdminBrowser.ErrorCodeAsync(at)).ShouldBe("invalid_api_key");
+    }
+
     private static HttpClient Bearer(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<ModelSwitch.Api.ApiHost> host, string key)
     {
         var client = host.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false });
