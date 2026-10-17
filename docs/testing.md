@@ -108,8 +108,8 @@ Each security item of §2 and §4 and the test that proves it. `IT` is `ModelSwi
 | Rate-limit abuse: parallel bursts across two hosts | IT `LimitsTests.Two_hosts_sharing_one_valkey_admit_exactly_the_rate_limit_burst`, `.Two_hosts_sharing_one_valkey_admit_exactly_the_concurrency_limit` |
 | Leases from a crashed host expire | IT `LimitsTests.A_lease_nobody_released_expires_by_itself` |
 | Provider secrets encrypted at rest, bound to their Provider | IT `ProviderSecretTests`; UT `SecretCipherTests` |
-| Secrets in the repository | `gitleaks` job in `ci.yml` (full history). Local run on 2026-10-16, gitleaks 8.30.1: `gitleaks git` over the whole history and `gitleaks dir` over the tree, no leaks, no allowlist needed |
-| Static analysis | `codeql.yml` (C# + JS/TS, `security-extended`). Local run on 2026-10-16, CodeQL 2.27.2 (C# extracted with `build-mode: none`): 0 results for C# and for JS/TS. The broader `security-and-quality` suite reports only maintainability notes (no security query fires). .NET analyzers: `AnalysisLevel` `latest-recommended`, `TreatWarningsAsErrors`, `EnforceCodeStyleInBuild` in `Directory.Build.props` |
+| Secrets in the repository | `gitleaks` job in `ci.yml` (full history). Last local run on 2026-10-17 at `8d43d21`, gitleaks 8.30.1: `gitleaks git` over the whole history (164 commits), no leaks, no allowlist needed. `gitleaks dir` also flags gitignored local files (`.env.e2e`, image digests under `load/results/`), which are never committed |
+| Static analysis | `codeql.yml` (C# + JS/TS, `security-extended`). Last local run on 2026-10-17 at `8d43d21`, CodeQL 2.27.2 (C# extracted with `build-mode: none`): 0 results for C# and for JS/TS. The broader `security-and-quality` suite reports only maintainability notes (no security query fires). .NET analyzers: `AnalysisLevel` `latest-recommended`, `TreatWarningsAsErrors`, `EnforceCodeStyleInBuild` in `Directory.Build.props` |
 
 ## 5. Load tests and benchmark report
 
