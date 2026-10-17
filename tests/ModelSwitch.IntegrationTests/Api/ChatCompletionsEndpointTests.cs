@@ -128,6 +128,30 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
     }
 
     [Fact]
+    public async Task Repeated_invalid_keys_from_one_client_are_throttled_with_429_on_that_instance_only()
+    {
+        // A host of its own: the throttle is per instance, and the shared host's other tests must not see it.
+        await using var host = gateway.StartHost();
+        using var wrong = host.CreateClient();
+        wrong.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "msk_00000000_" + new string('A', 43));
+        using var valid = gateway.ClientFor(host);
+        var ct = TestContext.Current.CancellationToken;
+
+        for (var i = 0; i < 20; i++)
+        {
+            (await wrong.GetAsync("/v1/models", ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        }
+
+        var throttled = await valid.GetAsync("/v1/models", ct);
+
+        throttled.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        throttled.Headers.RetryAfter!.Delta!.Value.TotalSeconds.ShouldBeInRange(1, 60);
+        var problem = await throttled.Content.ReadFromJsonAsync<JsonElement>(ct);
+        problem.GetProperty("error").GetProperty("code").GetString().ShouldBe("rate_limit_exceeded");
+        (await gateway.Client.GetAsync("/v1/models", ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task Key_without_the_inference_scope_is_a_403_insufficient_scope()
     {
         var response = await gateway.ModelsOnly.PostAsync("/v1/chat/completions", Json(Chat()), TestContext.Current.CancellationToken);

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using ModelSwitch.Api.Authentication;
 using ModelSwitch.Identity.Contracts;
 using ModelSwitch.SharedKernel;
@@ -17,9 +18,17 @@ namespace ModelSwitch.UnitTests.Api;
 public sealed class ApiKeyAuthenticationHandlerTests
 {
     private static readonly Guid _tenantId = Guid.Parse("0192f0c8-0000-7000-8000-000000000001");
+    private static readonly System.Net.IPAddress _clientAddress = System.Net.IPAddress.Parse("203.0.113.7");
+
     private static readonly Guid _keyId = Guid.Parse("0192f0c8-0000-7000-8000-000000000002");
 
     private readonly FakeAuthenticator _authenticator = new();
+
+    private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.Zero));
+
+    private readonly ApiKeyFailureThrottle _throttle;
+
+    public ApiKeyAuthenticationHandlerTests() => _throttle = new ApiKeyFailureThrottle(_time);
 
     [Fact]
     public async Task No_authorization_header_is_no_result_and_the_authenticator_is_not_called()
@@ -107,6 +116,41 @@ public sealed class ApiKeyAuthenticationHandlerTests
     }
 
     [Fact]
+    public async Task A_client_over_the_invalid_key_limit_gets_429_with_retry_after_and_the_key_is_not_checked()
+    {
+        for (var i = 0; i < ApiKeyFailureThrottle.MaxFailuresPerWindow; i++)
+        {
+            var (failing, _) = await CreateAsync("Bearer msk_bad");
+            (await failing.AuthenticateAsync()).Succeeded.ShouldBeFalse();
+        }
+
+        _authenticator.Result = new AuthenticatedApiKey(_keyId, _tenantId, "7f3a9c21", ["inference"]);
+        var (handler, context) = await CreateAsync("Bearer msk_good");
+
+        var result = await handler.AuthenticateAsync();
+        await handler.ChallengeAsync(null);
+
+        result.Succeeded.ShouldBeFalse();
+        _authenticator.Calls.ShouldBe(ApiKeyFailureThrottle.MaxFailuresPerWindow);
+        context.Response.StatusCode.ShouldBe(429);
+        context.Response.Headers.RetryAfter.ToString().ShouldBe("60");
+        ReadBody(context).GetProperty("error").GetProperty("code").GetString().ShouldBe("rate_limit_exceeded");
+    }
+
+    [Fact]
+    public async Task A_suspended_tenant_does_not_count_toward_the_invalid_key_limit()
+    {
+        _authenticator.Result = new Error(ErrorCode.TenantSuspended, "The tenant is suspended.");
+        for (var i = 0; i < ApiKeyFailureThrottle.MaxFailuresPerWindow; i++)
+        {
+            var (handler, _) = await CreateAsync("Bearer msk_ok");
+            await handler.AuthenticateAsync();
+        }
+
+        _throttle.RetryAfter(_clientAddress).ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Forbidden_is_insufficient_scope_403()
     {
         var (handler, context) = await CreateAsync("Bearer msk_ok");
@@ -123,6 +167,7 @@ public sealed class ApiKeyAuthenticationHandlerTests
         var context = new DefaultHttpContext { RequestServices = services };
         context.Response.Body = new MemoryStream();
         context.Request.Path = "/v1/chat/completions";
+        context.Connection.RemoteIpAddress = _clientAddress;
         if (authorization is not null)
         {
             context.Request.Headers.Authorization = authorization;
@@ -132,7 +177,8 @@ public sealed class ApiKeyAuthenticationHandlerTests
             new StaticOptionsMonitor<AuthenticationSchemeOptions>(new AuthenticationSchemeOptions()),
             NullLoggerFactory.Instance,
             UrlEncoder.Default,
-            _authenticator);
+            _authenticator,
+            _throttle);
         await handler.InitializeAsync(new AuthenticationScheme(ApiKeyDefaults.Scheme, null, typeof(ApiKeyAuthenticationHandler)), context);
         return (handler, context);
     }

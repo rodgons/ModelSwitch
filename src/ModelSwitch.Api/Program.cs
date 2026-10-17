@@ -50,6 +50,7 @@ return await StartupExit.RunAsync(
         // GET /openapi/v1.json: the dashboard's TypeScript client is generated from it (frontend.md section 1).
         builder.Services.AddOpenApi(options => options.AddSchemaTransformer(OpenApiNumbers.NumbersOnly));
 
+        builder.Services.AddSingleton<ApiKeyFailureThrottle>();
         builder.Services
             .AddAuthentication(ApiKeyDefaults.Scheme)
             .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyDefaults.Scheme, configureOptions: null)
