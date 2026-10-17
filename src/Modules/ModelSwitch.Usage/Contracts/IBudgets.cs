@@ -15,7 +15,8 @@ public interface IBudgets
 {
     /// <summary>
     /// Sets the Tenant's monthly limit, or removes the Budget when <paramref name="limit"/> is null. The current period's limit
-    /// changes immediately; requests already holding a Reservation complete under it.
+    /// changes immediately; requests already holding a Reservation complete under it. A new Budget creates the current period row
+    /// from the month's Usage Records and held Reservations; removing it deletes that row (usage-and-budgets.md section 3).
     /// </summary>
     Task SetMonthlyLimitAsync(Guid tenantId, Money? limit, CancellationToken cancellationToken);
 
@@ -28,7 +29,10 @@ public interface IBudgets
     /// <summary>The Tenant's standing monthly limit, or null when it has no Budget.</summary>
     Task<Money?> GetMonthlyLimitAsync(Guid tenantId, CancellationToken cancellationToken);
 
-    /// <summary>The Tenant's current-month figures, or null when no request has touched the period.</summary>
+    /// <summary>
+    /// The Tenant's current-month figures. With a Budget they are the <c>budget_period</c> row; without one (no row) they are summed
+    /// from the month's held Reservations and Usage Records. Null is not returned by the PostgreSQL implementation.
+    /// </summary>
     Task<BudgetStatus?> GetCurrentAsync(Guid tenantId, CancellationToken cancellationToken);
 }
 

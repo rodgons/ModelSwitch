@@ -23,37 +23,59 @@ The request-level `usage_status` is the worst of its Attempts' values (`reported
 
 Budgets are monthly (calendar month, UTC; daily and weekly periods are post-MVP) and checked against **reserved + spent** (FR-07: "account for pending and completed requests"). Evaluation Runs reserve and settle against the same Budget as API traffic. Their protection against draining it is a per-run cost cap ([evaluation.md §4](evaluation.md#4-runs-and-comparisons)), not a separate Budget.
 
-**Reserve** (request step 8, one transaction):
+**Only a Tenant with a Budget has `budget_period` rows.** A Tenant without one takes no lock on a shared row anywhere on the request path: its Reservation row is still written (the sweeper needs it), but nothing else. The 2026-10-17 load run ([benchmarks/2026-10-17-266c696.md](benchmarks/2026-10-17-266c696.md)) showed why: every request of a Tenant updated one row twice, so all of them queued on its lock.
+
+The **invariant**, for every `budget_period` row (Tenant, month):
+
+- `reserved_amount` = the sum of the Tenant's `held` Reservations with that `period_start`;
+- `spent_amount` = the sum of `usage_record.total_cost` of the Tenant's requests that **started** in that month.
+
+A row exists for the current month exactly while the Tenant has a Budget: setting a Budget creates it, removing the Budget deletes it, and the first Reservation of a new month creates that month's row if the Tenant still has a Budget. A past month keeps its row. Without a row, the month's figures (`IBudgets.GetCurrentAsync`, the Tenant detail page) are summed from the Reservations and Usage Records in the same way.
+
+**Creating a row** (`BudgetSql.SeedPeriodSql`) sums the held Reservations and Usage Records that already exist, so it must not interleave with a request that is writing either. Each Tenant has a PostgreSQL advisory lock (`pg_advisory_xact_lock(0x4D534250, <key from the tenant id>)`):
+
+- every transaction that moves a period row (reserve, top-up, settle, sweep) first takes it in **shared** mode, in a statement of its own, so the statement that reads the row takes its snapshot after the lock. Shared holders never wait for each other.
+- setting or removing a Budget, and creating a month's row, take it in **exclusive** mode. They wait for the requests in flight to commit and hold new ones back until they commit, so the row they create counts every Reservation and Usage Record exactly once.
+
+**Reserve** (request step 8, one transaction, three round trips):
 
 ```sql
-INSERT INTO usage.budget_period (tenant_id, period_start, limit_amount, …)
-  VALUES (…) ON CONFLICT DO NOTHING;                -- lazily create the period row
-
-UPDATE usage.budget_period
-   SET reserved_amount = reserved_amount + @hold
- WHERE tenant_id = @t AND period_start = @p
-   AND (limit_amount IS NULL OR spent_amount + reserved_amount + @hold <= limit_amount)
-RETURNING …;                                        -- 0 rows → 402 budget_exceeded
-
-INSERT INTO usage.reservation (…, amount = @hold, status = 'held', expires_at = deadline + grace);
 INSERT INTO usage.inference_request (…, status = 'running');
+INSERT INTO usage.reservation (…, amount = @hold, status = 'held', expires_at = deadline + grace);   -- one round trip (EF)
+
+SELECT pg_advisory_xact_lock_shared(…);                                   -- one batch, one round trip:
+WITH hold AS (
+  UPDATE usage.budget_period SET reserved_amount = reserved_amount + @hold
+   WHERE tenant_id = @t AND period_start = @p AND @hold > 0
+     AND (limit_amount IS NULL OR spent_amount + reserved_amount + @hold <= limit_amount)
+  RETURNING 1)
+SELECT EXISTS (SELECT 1 FROM hold), <period row exists>, <Tenant has a Budget>;
+
+COMMIT;
 ```
 
+- The conditional `UPDATE` is the last statement before `COMMIT`, so a Tenant with a Budget holds its period row lock for one round trip. Concurrent requests at the boundary still serialize on that row, so the check is never stale.
+- Held → commit. The row exists but the hold does not fit → roll back, `402 budget_exceeded`. No row and no Budget → commit: nothing to check. No row but a Budget (the first request of a month) → roll back, create the row under the exclusive lock, and reserve again once.
 - `@hold` is the worst-case cost of the **most expensive** Candidate in the Routing Decision, multiplied by `min(maxAttempts, 2)`. A Fallback can then normally proceed without a second reservation round-trip. If an Attempt sequence would exceed the hold, for example many ambiguous Attempts, the executor tops up the Reservation with the same conditional `UPDATE` before the next Attempt. If the top-up fails, the request stops with `budget_exceeded`.
 - The limit comes from `usage.budget` (set by `IBudgets.SetMonthlyLimitAsync`) when the period row is created, and setting it also updates the current period's `limit_amount`. A refused reservation rolls the transaction back, and the request is then recorded on its own as `failed` with `error_code = budget_exceeded` and no Reservation, so refusals stay visible.
 - `expires_at` is the Deadline plus 1 minute. A stream is bounded only by the Provider once it has started, so its Reservation expires 15 minutes after the Deadline.
-- Top-up: each Attempt commits its Candidate's worst case before it starts. While the commitments stay within the hold nothing happens. Beyond it, `IUsageLedger.TopUpAsync` raises the hold by the excess with the same conditional `UPDATE`.
+- Top-up: each Attempt commits its Candidate's worst case before it starts. While the commitments stay within the hold nothing happens. Beyond it, `IUsageLedger.TopUpAsync` raises the Reservation's amount by the excess, then runs the same shared lock and conditional `UPDATE` (refused only if a row exists and the excess does not fit).
 - A Tenant without a Budget still gets a Reservation row of the same amount, so the logic has one path and the sweeper can recover abandoned requests.
+- A Budget set while requests are in flight: the row it creates counts their held Reservations, and they are released from it when they settle. A Budget removed while requests are in flight: their settlement finds no row and moves nothing.
 
 **Settle** (request step 11, one transaction):
 
 ```
 UPDATE inference_request SET status, totals, routing_decision, …
 INSERT provider_attempt × n, usage_record × n
-UPDATE budget_period SET reserved_amount -= @hold, spent_amount += @actualTotal
-UPDATE reservation SET status = 'settled'
 INSERT outbox_event('usage.request_completed', {requestId, tenantId, …})
+SELECT pg_advisory_xact_lock_shared(…)                                          -- one batch:
+WITH released AS (UPDATE reservation SET status = 'settled' … RETURNING amount)
+UPDATE budget_period SET reserved_amount -= released.amount, spent_amount += @actualTotal   -- no row: no-op
+COMMIT
 ```
+
+The `budget_period` statement is again the last before `COMMIT`.
 
 If settlement fails (e.g. the database is briefly unavailable), it is retried in-process with backoff for up to 10 s, then handed to the sweeper. The client response is **not** delayed past that. For non-streaming responses settlement happens after the response is written, and for streaming responses after `[DONE]`.
 
@@ -61,8 +83,8 @@ If settlement fails (e.g. the database is briefly unavailable), it is retried in
 - marks the request `abandoned`, `error_code = internal_error`, `usage_status = unavailable`
 - writes one `usage_record` with `usage_source = unavailable` and cost = the held amount (pessimistic: treated as possibly billed), and the `usage.request_completed` outbox event
 - locks the request row before the Reservation, as settlement does, and does nothing if the request is no longer `running`
-- moves the held amount from `reserved_amount` to `spent_amount`
 - marks the Reservation `expired`
+- last, under the shared Budget lock, moves the held amount from `reserved_amount` to `spent_amount` (no row: nothing to move)
 
 **Spend precision.** Because Reservations use the worst case, a Tenant can be refused a little *before* reaching the limit. They are never allowed meaningfully past it. The overshoot is bounded by the difference between estimated and Provider-reported tokens, and the integration tests measure it. This is the strict-financial-guarantee caveat from FR-07.
 
@@ -108,4 +130,4 @@ Dashboard reads (`IUsageQueries`, `Usage.Domain.UsageRange`): a range of 24 h or
 - Estimated Cost is not the Provider's bill. Cache *reads* are priced (§5), but other Provider-side discounts and rounding are not modelled in the MVP.
 - **Cache writes are not priced.** Some Provider Models (OpenAI GPT-5.6+, Anthropic via OpenRouter) charge 1.25×–2× the input rate for tokens written to the prompt cache. The MVP prices them at the input rate, so the first request of a cached conversation is *under*estimated. The error is bounded by the write surcharge, and later cache reads usually offset it.
 - Reserving with the worst case can refuse requests slightly before the budget is fully used.
-- A request in flight when its Tenant's budget is lowered completes under the old reservation.
+- A request in flight when its Tenant's budget is lowered completes under the old reservation. A request opened before its Tenant had a Budget was never checked against it, though the new period row counts its hold and its cost.

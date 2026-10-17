@@ -16,27 +16,63 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
 {
     private const int _providerErrorTypeMaxLength = 64;
 
+    // The hold is the last statement before commit, so the period row (Tenants with a Budget only) is locked for one round trip.
+    // It also reports whether the period row exists and whether the Tenant has a Budget, which tells a refusal from "no Budget".
+    private const string _holdSql =
+        """
+        WITH hold AS (
+            UPDATE usage.budget_period
+               SET reserved_amount = reserved_amount + @amount
+             WHERE tenant_id = @tenant AND period_start = @period AND @amount > 0
+               AND (limit_amount IS NULL OR spent_amount + reserved_amount + @amount <= limit_amount)
+            RETURNING 1)
+        SELECT EXISTS (SELECT 1 FROM hold),
+               EXISTS (SELECT 1 FROM usage.budget_period WHERE tenant_id = @tenant AND period_start = @period),
+               EXISTS (SELECT 1 FROM usage.budget WHERE tenant_id = @tenant)
+        """;
+
+    // Releases the Reservation and books the settled cost in one statement; it runs after the Budget lock, so it sees a period row
+    // created before the lock was granted. Without a row (no Budget) it changes nothing on budget_period.
+    private const string _releaseSql =
+        """
+        WITH released AS (
+            UPDATE usage.reservation SET status = 'settled', settled_at = @now
+             WHERE inference_request_id = @id AND status = 'held'
+            RETURNING amount)
+        UPDATE usage.budget_period
+           SET reserved_amount = reserved_amount - coalesce((SELECT amount FROM released), 0),
+               spent_amount = spent_amount + @settled
+         WHERE tenant_id = @tenant AND period_start = @period
+        """;
+
+    private enum HoldOutcome
+    {
+        Held,
+        NoBudget,
+        Refused,
+        PeriodMissing,
+    }
+
     public async Task<Result<OpenedRequest>> OpenAsync(OpenInferenceRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         // timestamptz keeps microseconds; the value is also the WHERE key at settlement, so it must survive the round trip.
         var startedAt = TruncateToMicroseconds(time.GetUtcNow());
+        var period = BudgetSql.PeriodOf(startedAt);
 
-        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-
-        if (request.Reservation is { } hold)
+        // At most two passes: the first Reservation of a month for a Tenant with a Budget creates the period row, then reserves again.
+        for (var pass = 0; ; pass++)
         {
-            // Reserve and INSERT inference_request in one transaction: the period row is created lazily, the hold is a single
-            // conditional UPDATE, and a refusal rolls everything back.
-            var period = BudgetSql.PeriodOf(startedAt);
-            await BudgetSql.EnsurePeriodAsync(db, request.TenantId, period, cancellationToken);
-            if (hold.Amount.Amount > 0 && !await BudgetSql.TryHoldAsync(db, request.TenantId, period, hold.Amount.Amount, cancellationToken))
+            await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+            db.InferenceRequests.Add(NewRow(request, startedAt, "running"));
+            if (request.Reservation is not { } hold)
             {
-                await transaction.RollbackAsync(cancellationToken);
-                await RecordRefusedAsync(request, startedAt, cancellationToken);
-                return new Error(ErrorCode.BudgetExceeded, "The Tenant's budget for this period does not cover this request.");
+                await db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return new OpenedRequest(request.RequestId, startedAt);
             }
 
             db.Reservations.Add(new ReservationRow
@@ -50,12 +86,40 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
                 ExpiresAt = TruncateToMicroseconds(hold.ExpiresAt),
                 CreatedAt = startedAt,
             });
-        }
+            await db.SaveChangesAsync(cancellationToken);
 
-        db.InferenceRequests.Add(NewRow(request, startedAt, "running"));
-        await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return new OpenedRequest(request.RequestId, startedAt);
+            var outcome = await HoldAsync(db, request.TenantId, period, hold.Amount.Amount, cancellationToken);
+            if (outcome is HoldOutcome.Held or HoldOutcome.NoBudget || (outcome is HoldOutcome.PeriodMissing && pass > 0))
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return new OpenedRequest(request.RequestId, startedAt);
+            }
+
+            await transaction.RollbackAsync(cancellationToken);
+            if (outcome is HoldOutcome.Refused)
+            {
+                await RecordRefusedAsync(request, startedAt, cancellationToken);
+                return new Error(ErrorCode.BudgetExceeded, "The Tenant's budget for this period does not cover this request.");
+            }
+
+            await BudgetSql.SeedPeriodAsync(db, request.TenantId, period, cancellationToken);
+        }
+    }
+
+    private static async Task<HoldOutcome> HoldAsync(UsageDbContext db, Guid tenantId, DateOnly period, decimal amount, CancellationToken cancellationToken)
+    {
+        await using var batch = BudgetSql.Batch(
+            db,
+            (BudgetSql.SharedLockSql, BudgetSql.LockParameters(tenantId)),
+            (_holdSql, [("tenant", tenantId), ("period", period), ("amount", amount)]));
+        await using var reader = await batch.ExecuteReaderAsync(cancellationToken);
+        await reader.NextResultAsync(cancellationToken);
+        await reader.ReadAsync(cancellationToken);
+        var (held, periodExists, hasBudget) = (reader.GetBoolean(0), reader.GetBoolean(1), reader.GetBoolean(2));
+        return held ? HoldOutcome.Held
+            : periodExists ? (amount > 0 ? HoldOutcome.Refused : HoldOutcome.Held)
+            : hasBudget ? HoldOutcome.PeriodMissing
+            : HoldOutcome.NoBudget;
     }
 
     public async Task<Result> TopUpAsync(Guid requestId, Money additional, CancellationToken cancellationToken)
@@ -68,7 +132,7 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        // Lock the Reservation first; the period update below is the same conditional UPDATE as the reservation.
+        // Raise the Reservation first; the period update below is the same conditional UPDATE as the reservation.
         await using var raise = BudgetSql.Command(
             db,
             "UPDATE usage.reservation SET amount = amount + @amount WHERE inference_request_id = @id AND status = 'held' RETURNING tenant_id, period_start",
@@ -88,7 +152,9 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
             period = reader.GetFieldValue<DateOnly>(1);
         }
 
-        if (!await BudgetSql.TryHoldAsync(db, tenantId, period, additional.Amount, cancellationToken))
+        // With a period row the top-up is checked like the Reservation (a row seeded after this request opened counts its hold
+        // already). Without one the Tenant has no Budget for the month and nothing is checked; a row seeded later counts the new amount.
+        if (await HoldAsync(db, tenantId, period, additional.Amount, cancellationToken) is HoldOutcome.Refused)
         {
             await transaction.RollbackAsync(cancellationToken);
             return new Error(ErrorCode.BudgetExceeded, "The Tenant's budget for this period does not cover another Attempt.");
@@ -207,28 +273,6 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
 
         await db.SaveChangesAsync(cancellationToken);
 
-        // Release the Reservation and book the settled Estimated Cost. A request opened without a Reservation settles in the period it started in.
-        await using (var release = BudgetSql.Command(
-            db,
-            "UPDATE usage.reservation SET status = 'settled', settled_at = @now WHERE inference_request_id = @id AND status = 'held' RETURNING amount, period_start",
-            ("now", completedAt),
-            ("id", settlement.RequestId)))
-        {
-            decimal held = 0;
-            var period = BudgetSql.PeriodOf(settlement.StartedAt);
-            await using (var reader = await release.ExecuteReaderAsync(cancellationToken))
-            {
-                if (await reader.ReadAsync(cancellationToken))
-                {
-                    held = reader.GetDecimal(0);
-                    period = reader.GetFieldValue<DateOnly>(1);
-                }
-            }
-
-            await BudgetSql.EnsurePeriodAsync(db, identity.TenantId, period, cancellationToken);
-            await BudgetSql.SettleAsync(db, identity.TenantId, period, held, total, cancellationToken);
-        }
-
         var attributedModel = summary.SelectedProviderModelId
             ?? settlement.Attempts.LastOrDefault(a => a.Status != AttemptStatus.SkippedCircuitOpen)?.ProviderModelId;
         var cached = drafts.Sum(d => (long?)d?.CachedInputTokens ?? 0);
@@ -259,6 +303,15 @@ internal sealed class EfUsageLedger(IDbContextFactory<UsageDbContext> contexts, 
             payload,
             completedAt,
             cancellationToken);
+
+        // Last, so the period row of a Tenant with a Budget stays locked only until the commit.
+        await using (var release = BudgetSql.Batch(
+            db,
+            (BudgetSql.SharedLockSql, BudgetSql.LockParameters(identity.TenantId)),
+            (_releaseSql, [("now", completedAt), ("id", settlement.RequestId), ("settled", total), ("tenant", identity.TenantId), ("period", BudgetSql.PeriodOf(settlement.StartedAt))])))
+        {
+            await release.ExecuteNonQueryAsync(cancellationToken);
+        }
 
         await transaction.CommitAsync(cancellationToken);
         for (var i = 0; i < drafts.Count; i++)
