@@ -22,6 +22,12 @@
 # WARMUP_DURATION (60s), STEP_GAP_SECONDS (20), LOAD_HTTP_PORT (8090), OUT_DIR (load/results/<UTC timestamp>),
 # WAIT_FOR_IDLE (1), IDLE_TIMEOUT_MINUTES (45), KEEP_STACK (0), SKIP_BUILD (0), TENANTS (1: every request from Tenant `demo`;
 # N > 1 seeds `load-1`…`load-N` instead and spreads requests over their keys).
+# Supplementary steps, after the rate steps (TENANTS=1 only):
+#   LIMITS_STEP=1      gives Tenant `demo` a Rate Limit and a Concurrency Limit that never refuse (LIMITS_RPM, LIMITS_CONCURRENT),
+#                      so every request goes through Valkey, and runs one non-streaming step at LIMITS_RATE (100) for STEP_DURATION;
+#   DASHBOARD=1        records the dataset size and runs load/scenarios/dashboard.js (DASHBOARD_RATE queries/s, default 9, for
+#                      DASHBOARD_DURATION, default 3m) on the otherwise idle stack, then again during non-streaming inference at
+#                      DASHBOARD_LOAD_RATE (100; 0 skips that part).
 # Needs: docker compose v2, k6, curl, jq.
 set -euo pipefail
 
@@ -136,10 +142,13 @@ sleep "$step_gap"
 
 results="$out_dir/steps.jsonl"
 : > "$results"
-for variant in ${variants//,/ }; do
-  streaming=$([ "$variant" = stream ] && echo true || echo false)
-  for rate in ${rates//,/ }; do
-    step="${variant}_${rate}rps"
+
+# measure_step VARIANT RATE LABEL: one k6 step, then every server-side number for its window, appended to steps.jsonl.
+measure_step() {
+    local variant="$1" rate="$2" step="$3"
+    local scenario="${variant}_${rate}rps"
+    local streaming
+    streaming=$([ "$variant" = stream ] && echo true || echo false)
     log "Step $step for $step_duration"
     valkey_before="$(valkey_stats)"
     start=$(date +%s)
@@ -183,6 +192,19 @@ for variant in ${variants//,/ }; do
       where started_at >= '$start_iso' and started_at < '$end_iso' and streaming = $streaming group by status) s;")"
 
     valkey_after="$(valkey_stats)"
+    # The `modelswitch.limits` span wraps the limits decision, including the Valkey call when the Tenant has a Rate or Concurrency
+    # Limit. No metric records it, so its durations are sampled from Tempo (inside otel-lgtm): up to 5 000 traces, kept only when
+    # they started inside the step (Tempo's own time filter works per block and lets older traces through).
+    limits_json="$(compose exec -T otel-lgtm curl -fsS -G http://localhost:3200/api/search \
+        --data-urlencode 'q={ name = "modelswitch.limits" }' --data-urlencode "start=$start" --data-urlencode "end=$end" \
+        --data-urlencode limit=5000 --data-urlencode spss=1 2>/dev/null \
+      | jq -c --argjson from "$start" --argjson to "$end" '[.traces[]?
+          | select((.startTimeUnixNano | tonumber) / 1e9 >= $from and (.startTimeUnixNano | tonumber) / 1e9 < $to)
+          | .spanSets[]?.spans[]? | (.durationNanos | tonumber) / 1000] | sort
+          | if length == 0 then null else . as $d | (length) as $n
+            | {sampled: $n, p50: $d[(($n - 1) * 0.5 | floor)], p95: $d[(($n - 1) * 0.95 | floor)], p99: $d[(($n - 1) * 0.99 | floor)],
+               max: $d[-1]} end' || echo null)"
+    [ -n "$limits_json" ] || limits_json=null
     valkey_json="$(jq -n --arg before "$valkey_before" --arg after "$valkey_after" '
       def parse: split("\n") | map(select(length > 0) | capture("^cmdstat_(?<cmd>[^:]+):calls=(?<calls>[0-9]+),usec=(?<usec>[0-9]+)"))
         | map({key: .cmd, value: {calls: (.calls | tonumber), usec: (.usec | tonumber)}}) | from_entries;
@@ -220,8 +242,8 @@ for variant in ${variants//,/ }; do
       --argjson outbox_lag_max "$(q "max(max_over_time(modelswitch_outbox_lag_seconds[$window]))")" \
       --argjson db_n "$(num "$db_n")" --argjson db_p50 "$(num "$db_p50")" --argjson db_p95 "$(num "$db_p95")" \
       --argjson db_p99 "$(num "$db_p99")" --argjson db_max "$(num "$db_max")" --argjson db_avg "$(num "$db_avg")" \
-      --argjson db_status "$db_status" --argjson valkey "$valkey_json" \
-      '($k6[0].metrics) as $m | ("{scenario:" + $step + "}") as $s | {
+      --argjson db_status "$db_status" --argjson valkey "$valkey_json" --argjson limits "$limits_json" --arg scenario "$scenario" \
+      '($k6[0].metrics) as $m | ("{scenario:" + $scenario + "}") as $s | {
         step: $step, variant: $variant, target_rps: $rate, start: $start, end: $end,
         k6: {
           requests: ($m["requests" + $s].values.count // 0),
@@ -243,12 +265,92 @@ for variant in ${variants//,/ }; do
         npgsql: {pool_used_max: $pool_used_max, pool_max: $pool_max, operation_p95_ms: ($db_op_p95 | if . == null then null else . * 1000 end),
           operation_p99_ms: ($db_op_p99 | if . == null then null else . * 1000 end)},
         outbox_lag_max_seconds: $outbox_lag_max,
-        valkey_commands: $valkey
+        valkey_commands: $valkey,
+        limits_span_us: $limits
       }' >> "$results"
-    log "$(tail -1 "$results" | jq -r '"  \(.k6.requests) req, \(.k6.error_rate * 100 | . * 100 | round / 100)% failed, \(.k6.dropped_iterations) dropped; overhead p95 \(.overhead_prometheus_ms.p95 // "n/a") ms (prom), \(.overhead_db_ms.p95 // "n/a") ms (db)"')"
+    log "$(tail -1 "$results" | jq -r '"  \(.k6.requests) req, \(.k6.error_rate * 100 | . * 100 | round / 100)% failed, \(.k6.dropped_iterations) dropped; overhead p95 \(.overhead_prometheus_ms.p95 // "n/a") ms (prom), \(.overhead_db_ms.p95 // "n/a") ms (db); limits span p95 \(.limits_span_us.p95 // "n/a") µs"')"
     sleep "$step_gap"
+}
+
+for variant in ${variants//,/ }; do
+  for rate in ${rates//,/ }; do
+    measure_step "$variant" "$rate" "${variant}_${rate}rps"
   done
 done
+
+# --- supplementary: limits on the request path ---
+admin_session() { # signs in as the Owner from .env (like scripts/seed-demo.sh); sets $admin_jar and $admin_xsrf
+  admin_jar="$out_dir/admin-cookies"
+  local email password
+  email="$(awk -F= '$1 == "MODELSWITCH__Bootstrap__OwnerEmail" { v = substr($0, length($1) + 2) } END { print v }' .env)"
+  password="$(awk -F= '$1 == "MODELSWITCH__Bootstrap__OwnerPassword" { v = substr($0, length($1) + 2) } END { print v }' .env)"
+  admin_xsrf="$(curl -fsS -b "$admin_jar" -c "$admin_jar" "http://localhost:$port/admin/antiforgery-token" | jq -r .token)"
+  admin_xsrf="$(curl -fsS -b "$admin_jar" -c "$admin_jar" -H "X-XSRF-TOKEN: $admin_xsrf" -H 'Content-Type: application/json' \
+    -d "$(jq -n --arg e "$email" --arg p "$password" '{email: $e, password: $p}')" "http://localhost:$port/admin/session" | jq -r .antiforgeryToken)"
+}
+if [ "${LIMITS_STEP:-0}" = 1 ]; then
+  admin_session
+  tenant_id="$(curl -fsS -b "$admin_jar" "http://localhost:$port/admin/tenants?limit=200" | jq -r '.items[] | select(.name == "demo") | .id')"
+  [ -n "$tenant_id" ] || die "Tenant demo not found (LIMITS_STEP needs TENANTS=1)"
+  limits="$(jq -nc --argjson rpm "${LIMITS_RPM:-1000000}" --argjson concurrent "${LIMITS_CONCURRENT:-100000}" \
+    '{requestsPerMinute: $rpm, maxConcurrent: $concurrent}')"
+  curl -fsS -o /dev/null -X PUT -b "$admin_jar" -c "$admin_jar" -H "X-XSRF-TOKEN: $admin_xsrf" -H 'Content-Type: application/json' \
+    -d "$limits" "http://localhost:$port/admin/tenants/$tenant_id/limits"
+  echo "limits $limits" >> "$out_dir/environment.txt"
+  log "Tenant demo limits: $limits"
+  sleep 10 # the configuration snapshot is refreshed through LISTEN/NOTIFY, with a 5 s version poll as a backstop
+  measure_step nonstream "${LIMITS_RATE:-100}" "limits_nonstream_${LIMITS_RATE:-100}rps"
+fi
+
+# --- supplementary: dashboard read queries ---
+if [ "${DASHBOARD:-0}" = 1 ]; then
+  dataset() { # LABEL: row counts and how far the hourly rollup has caught up
+    psql_at "select json_build_object('label', '$1', 'at', now(),
+      'inference_request', (select count(*) from usage.inference_request),
+      'provider_attempt', (select count(*) from usage.provider_attempt),
+      'usage_record', (select count(*) from usage.usage_record),
+      'usage_hourly', (select count(*) from usage.usage_hourly),
+      'usage_hourly_requests', (select coalesce(sum(requests), 0) from usage.usage_hourly),
+      'outbox_unpublished', (select count(*) from jobs.outbox_event where published_at is null),
+      'oldest_request', (select min(started_at) from usage.inference_request),
+      'newest_request', (select max(started_at) from usage.inference_request),
+      'database_bytes', pg_database_size(current_database()))" >> "$out_dir/dataset.jsonl"
+  }
+  owner_email="$(awk -F= '$1 == "MODELSWITCH__Bootstrap__OwnerEmail" { v = substr($0, length($1) + 2) } END { print v }' .env)"
+  owner_password="$(awk -F= '$1 == "MODELSWITCH__Bootstrap__OwnerPassword" { v = substr($0, length($1) + 2) } END { print v }' .env)"
+  run_dashboard() { # LABEL
+    log "Dashboard queries ($1) for ${DASHBOARD_DURATION:-3m}"
+    BASE_URL="http://localhost:$port" OWNER_EMAIL="$owner_email" OWNER_PASSWORD="$owner_password" RATE="${DASHBOARD_RATE:-9}" \
+      DURATION="${DASHBOARD_DURATION:-3m}" SUMMARY_FILE="$out_dir/dashboard-$1.json" \
+      k6 run -q --no-color load/scenarios/dashboard.js > "$out_dir/dashboard-$1.txt" 2>&1 || log "dashboard k6 exited non-zero ($1)"
+    cat "$out_dir/dashboard-$1.txt" >&2
+  }
+  : > "$out_dir/dataset.jsonl"
+  dataset idle-before
+  run_dashboard idle
+  dataset idle-after
+  load_rate="${DASHBOARD_LOAD_RATE:-100}"
+  if [ "$load_rate" != 0 ]; then
+    sleep "$step_gap"
+    API_KEYS="$key" BASE_URL="http://localhost:$port" RATES="$load_rate" STEP_DURATION="${DASHBOARD_DURATION:-3m}" STEP_GAP=0s STREAM=false \
+      MOCK_LATENCY_MS="$mock_latency_ms" SUMMARY_FILE="$out_dir/k6-dashboard-load.json" \
+      k6 run -q --no-color load/scenarios/overhead.js > "$out_dir/k6-dashboard-load.txt" 2>&1 &
+    load_pid=$!
+    sleep 5
+    run_dashboard "under-${load_rate}rps"
+    wait "$load_pid" || true
+    cat "$out_dir/k6-dashboard-load.txt" >&2
+    dataset under-load-after
+  fi
+  for summary in "$out_dir"/dashboard-*.json; do
+    jq -r --arg file "$(basename "$summary" .json)" '
+      def f: if . == null then "n/a" else (. * 10 | round / 10 | tostring) end;
+      .metrics | to_entries | map(select(.key | startswith("http_req_duration{query:")))
+      | map("| \($file) | \(.key | capture("query:(?<q>[^}]+)").q) | \(.value.values.count) | \(.value.values.med | f) / \(.value.values["p(95)"] | f) / \(.value.values["p(99)"] | f) | \(.value.values.max | f) | \(if .value.values["p(95)"] < 500 then "yes" else "no" end) |")
+      | .[]' "$summary"
+  done | { echo "| Run | Query | Samples | p50 / p95 / p99 (ms) | Max (ms) | p95 < 500 ms |"; echo "|---|---|---|---|---|---|"; cat; } > "$out_dir/dashboard.md"
+  cat "$out_dir/dashboard.md" >&2
+fi
 
 jq -s '.' "$results" > "$out_dir/results.json"
 jq -r '
