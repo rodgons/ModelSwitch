@@ -1,0 +1,50 @@
+# Nightly and main-branch checks against the full Compose stack (docs/conventions.md "CI", docs/testing.md section 1).
+name: nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    # Playwright smoke + axe (web/e2e) against the stack scripts/e2e.sh builds, seeds with the Mock Provider and tears down.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package-json-file: web/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install the web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        working-directory: web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build, start and seed the stack, run the suite, tear down
+        # `all` always runs `docker compose down -v`, and on failure writes the Compose logs to web/test-results/compose.log.
+        run: ./scripts/e2e.sh all
+      - name: Upload the Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 14
