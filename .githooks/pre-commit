@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Runs the CI format checks on the staged files only, so a commit never leaves main failing them (docs/conventions.md "CI").
+# Enable once per clone: git config core.hooksPath .githooks
+# Written for bash 3.2 (macOS /bin/bash): no mapfile.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+cs=()
+while IFS= read -r file; do cs+=("$file"); done < <(git diff --cached --name-only --diff-filter=ACMR -- '*.cs')
+if ((${#cs[@]})); then
+  dotnet format ModelSwitch.slnx --verify-no-changes --include "${cs[@]}" \
+    || { echo "pre-commit: run 'dotnet format ModelSwitch.slnx --include <files>' and stage the result." >&2; exit 1; }
+fi
+
+web=()
+while IFS= read -r file; do web+=("${file#web/}"); done < <(git diff --cached --name-only --diff-filter=ACMR -- 'web/*')
+if ((${#web[@]})); then
+  (cd web && pnpm exec prettier --check --ignore-unknown "${web[@]}") \
+    || { echo "pre-commit: run 'pnpm exec prettier --write' on those files in web/ and stage the result." >&2; exit 1; }
+fi
