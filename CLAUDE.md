@@ -11,6 +11,5 @@ Before changing anything, read:
 Rules:
 - Modules talk only through each other's `Contracts/` namespace. Everything else is `internal`.
 - Inject `TimeProvider` and the UUIDv7 generator. Never call `DateTime.UtcNow` or `Guid.NewGuid()` directly.
-- Every new error goes into the closed error-code set in `docs/api.md §2`.
-- Tests never call a real external Provider. Use the Mock Provider or WireMock fixtures.
 - Work from `docs/roadmap.md` and tick tasks off there.
+- Review standards: `docs/conventions.md`, "Review checklist".
