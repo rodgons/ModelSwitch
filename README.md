@@ -2,7 +2,7 @@
 
 A self-hosted AI gateway: one OpenAI-compatible API in front of multiple LLM Providers, with routing, Fallbacks, circuit breakers, per-Tenant limits and Budgets, cost tracking with explicit provenance, request tracing, and an evaluation lab for comparing models.
 
-> **Status: MVP complete (Phases 0–6).** Every item of the PRD's Definition of Done is checked, with links to its evidence, in [docs/roadmap.md](docs/roadmap.md#definition-of-done-evidence).
+> **Status:** progress and the evidence for each Definition of Done item are tracked in [docs/roadmap.md](docs/roadmap.md).
 
 ## Architecture
 
