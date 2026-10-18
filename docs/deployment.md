@@ -48,6 +48,8 @@ curl http://localhost:8080/v1/chat/completions -H "Authorization: Bearer $KEY" -
 docker compose --profile demo --profile ollama down -v   # remove everything, including the database volume
 ```
 
+`make` does the same in one step: it creates `.env` from the example with generated secrets and an Owner (your `git config user.email` and a random password) when there is none, copies `deploy/compose.override.example.yaml` to `compose.override.yaml`, then builds, starts and waits for the stack, seeds it and prints the API Key. `make up` only builds and starts, `make seed` seeds again, `make down` stops and `make clean` also deletes the volumes. `PROFILES` picks the Compose profiles (default `demo`), e.g. `make PROFILES="demo ollama"`.
+
 The "setup time from a clean checkout" metric (PRD §13) is measured by timing this script on a clean machine. The first `--build` takes a few minutes (about 3.5 minutes on a 4-CPU VM).
 
 `seed-demo.sh` signs in through the proxy as the Owner from `.env` (or the file in `MODELSWITCH_ENV_FILE`; `scripts/e2e.sh` seeds its separate `modelswitch-e2e` stack that way, [testing.md §1](testing.md#1-projects-and-what-goes-where)) and uses the admin API, so it needs the stack running. It prints the new API Key **alone on stdout** (progress goes to stderr) and can be run again: the Providers, models, Prices, policy and Tenant are reused, and each run creates one more key. It seeds:
@@ -66,9 +68,19 @@ docker run --rm --network modelswitch_default curlimages/curl:8.11.1 -s http://m
 
 `./scripts/seed-demo.sh --with-openai` also seeds the reference hosted Provider: an `openai` Provider with `credential_reference = env:OPENAI_API_KEY`, the Provider Models `gpt-5-nano` and `gpt-4o-mini`, and their input, cached-input and output Prices (cached $0.005 and $0.075 per 1M tokens, 0.1× and 0.5× of input) with `effective_from` set to the seed time. Set `OPENAI_API_KEY` in `.env` and recreate `api` and `worker` (`docker compose up -d api worker`) for it to be used. The seeded Prices are a snapshot, so check them against OpenAI's pricing page before relying on Estimated Cost. Without the flag, only the mock and Ollama Providers are seeded and nothing calls a paid API.
 
+`./scripts/seed-demo.sh --with-openrouter` seeds a hosted Provider through OpenRouter instead: Provider `openrouter` (`https://openrouter.ai/api/v1`, 60 s timeout) with the Provider Model `openai/gpt-4.1-nano` and its Prices, and a Routing Policy and alias **`openrouter`** that try it first and fall back to `mock/mock-fixed`. The key comes from `OPENROUTER_API_KEY` in the environment or `.env` and is stored encrypted in the catalog, not passed as `env:`, so `api` and `worker` need no restart. It calls a paid API, and the seeded Prices are a snapshot to check against OpenRouter's model page.
+
 An API Key can also be created without the admin API: `docker compose run --rm -T migrator seed --tenant acme` prints one on stdout (section 4).
 
 **The demo (PRD §15) needs no paid account.** The baseline runs on the Mock Provider and Ollama: failures are injected through the mock's `/__scenarios`, the Fallback goes from a mock model to Ollama, usage comes from both, and the Comparison gets real quality numbers from Ollama. An optional extended section uses `--with-openai` for a Comparison against a hosted model.
+
+### Development loop
+
+`make dev` (`scripts/dev.sh`) runs the gateway on the host with hot reload, for working on the code. PostgreSQL and Valkey run in Compose, published on localhost by `compose.override.yaml`; on the host run the api (`dotnet watch`, `https://localhost:5081`), the worker (`dotnet run`; restart `make dev` after changing it), the Mock Provider (`http://localhost:8091`) and Vite (`http://localhost:5173`, proxying `/admin`, `/v1`, `/health` and `/ready` to the api). Open the dashboard at `http://localhost:5173`. The api serves HTTPS with the .NET dev certificate because the session cookies are `__Host-` cookies, which need HTTPS ([security.md §3](security.md#3-administrators)), so run `dotnet dev-certs https --trust` once.
+
+It uses its own database, `modelswitch_dev`, in the Compose PostgreSQL, so the Compose stack's catalog, whose Providers use Compose host names, is untouched. The script points the connection strings at localhost and that database, and allows `localhost` as a private outbound host so the local mock is reachable. The first run creates the database and seeds it against the local mock (`MODELSWITCH_DEMO_MOCK_URL=http://localhost:8091/v1`, without Ollama) and prints an API Key. Each process's output is prefixed with its name, and Ctrl-C, or any process exiting, stops them all.
+
+Needs, besides Docker: the .NET SDK, pnpm, `curl` and `jq`.
 
 ## 3. Environment variables
 
