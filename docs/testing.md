@@ -124,7 +124,7 @@ How to run: [load/README.md](../load/README.md). Latest report: [benchmarks/2026
 
 ## 6. Coverage expectations
 
-Coverage percentage is not a gate. Instead, CI fails if any of these are missing tests: each row of the failure-classification table, each eligibility reason code, each error code in [api.md §2](api.md#2-error-codes) (there is a test that triggers it), and each Evaluator kind.
+Coverage percentage is not a gate. Instead, CI fails if any of these are missing tests: each row of the failure-classification table, each eligibility reason code, each error code in [api.md §2](api.md#2-error-codes) (there is a test that triggers it), each Evaluator kind, each route, and each documented response header (there is a test that asserts it).
 
 | Gate | Test |
 |---|---|
@@ -133,6 +133,7 @@ Coverage percentage is not a gate. Instead, CI fails if any of these are missing
 | Error codes | IT `ErrorCodeGateTests.Every_error_code_is_triggered_by_a_tagged_test`: each code in the closed set needs an integration test tagged `[TriggersError("<code>")]` that produces and asserts it. UT `ErrorCodeTests` keeps the set equal to the api.md table |
 | Evaluator kinds | UT `EvaluatorRegistryTests.Every_evaluator_kind_has_a_scoring_test_class` (kind `json_fields` needs `JsonFieldsEvaluatorTests`) |
 | Endpoints | IT `EndpointHappyPathGateTests.Every_route_has_a_happy_path_test` |
+| Response headers | IT `ResponseHeaderGateTests.Every_documented_response_header_is_asserted_by_a_tagged_test`: parses every "Response headers" table in [api.md](api.md#response-headers); each header needs an integration test tagged `[AssertsHeader("<Header-Name>")]` that makes the gateway send it and asserts it |
 
 **Endpoint gate:** a test in `ModelSwitch.IntegrationTests` lists every route from the app's `EndpointDataSource` and fails if one has no test tagged `[HappyPath("<METHOD> <route>")]`.
 

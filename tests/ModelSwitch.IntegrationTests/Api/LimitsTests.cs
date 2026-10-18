@@ -58,6 +58,10 @@ public sealed class LimitsTests(GatewayFixture gateway, PostgresFixture postgres
 
     [Fact]
     [TriggersError("rate_limit_exceeded")]
+    [AssertsHeader("X-RateLimit-Limit")]
+    [AssertsHeader("X-RateLimit-Remaining")]
+    [AssertsHeader("X-RateLimit-Reset")]
+    [AssertsHeader("Retry-After")]
     public async Task The_rate_limit_admits_the_burst_then_refuses_with_429_and_retry_after()
     {
         // 20 per minute: one token every 3 s, burst max(1, 20 / 10) = 2.

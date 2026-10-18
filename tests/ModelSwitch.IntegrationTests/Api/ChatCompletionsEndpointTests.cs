@@ -23,6 +23,8 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
     [InlineData(GatewayFixture.ChatAlias)]
     [InlineData(GatewayFixture.OllamaAlias)]
     [HappyPath("POST /v1/chat/completions")]
+    [AssertsHeader("X-Request-Id")]
+    [AssertsHeader("X-ModelSwitch-Attempts")]
     public async Task Non_streaming_completion_returns_an_openai_chat_completion_for_both_protocols(string alias)
     {
         var response = await gateway.Client.PostAsync("/v1/chat/completions", Json(Chat(alias)), TestContext.Current.CancellationToken);
@@ -47,6 +49,7 @@ public sealed class ChatCompletionsEndpointTests(GatewayFixture gateway) : IClas
 
     [Fact]
     [TriggersError("unsupported_parameter")]
+    [AssertsHeader("X-Request-Id")]
     public async Task Unsupported_parameter_is_a_400_problem_with_errors_and_the_openai_error_member()
     {
         var body = Chat();
