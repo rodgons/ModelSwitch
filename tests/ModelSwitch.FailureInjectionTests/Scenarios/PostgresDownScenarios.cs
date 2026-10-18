@@ -67,7 +67,7 @@ public sealed class PostgresStoppedMidLoadScenario(ValkeyFixture valkey) : Scena
 
         // Requests that have opened their Reservation and are waiting on the Provider when the database goes away.
         var inFlight = Enumerable.Range(0, _inFlight).Select(_ => SendAsync(alias)).ToArray();
-        await WaitUntilAsync(async () => (await ProviderCallsAsync()).GetValueOrDefault(GatewayFixture.PrimaryModel) == _inFlight);
+        await Eventually.UntilAsync(async () => (await ProviderCallsAsync()).GetValueOrDefault(GatewayFixture.PrimaryModel) == _inFlight, TimeSpan.FromSeconds(10), "every in-flight request reaches the Provider");
         await _postgres!.StopAsync(token);
 
         var refused = new List<Outcome>();
@@ -102,7 +102,7 @@ public sealed class PostgresStoppedMidLoadScenario(ValkeyFixture valkey) : Scena
         (await ProviderCallsAsync())[GatewayFixture.PrimaryModel].ShouldBe(_inFlight, "requests refused for the database never called the Provider");
 
         await _postgres.StartAsync(token);
-        await WaitUntilAsync(async () => (await Gateway.Anonymous.GetAsync("/ready", token)).StatusCode == HttpStatusCode.OK, TimeSpan.FromSeconds(30));
+        await Eventually.UntilAsync(async () => (await Gateway.Anonymous.GetAsync("/ready", token)).StatusCode == HttpStatusCode.OK, TimeSpan.FromSeconds(30), "/ready answers 200 once Postgres is back");
         await Gateway.SetFaultAsync(null, null);
         var recovered = await SendAsync(alias);
         recovered.StatusCode.ShouldBe(200, "the gateway serves requests again once the database is back");
@@ -130,27 +130,5 @@ public sealed class PostgresStoppedMidLoadScenario(ValkeyFixture valkey) : Scena
 
         // Client requests: the in-flight and refused ones. Each in-flight request made one call; a refused one made none.
         AmplificationReport.Measure("postgres stopped mid-load", _inFlight + _whileDown, _inFlight, _maxAttempts, $"maxAttempts = {_maxAttempts}");
-    }
-
-    private static async Task WaitUntilAsync(Func<Task<bool>> condition, TimeSpan? timeout = null)
-    {
-        var deadline = Environment.TickCount64 + (long)(timeout ?? TimeSpan.FromSeconds(10)).TotalMilliseconds;
-        while (true)
-        {
-            try
-            {
-                if (await condition())
-                {
-                    return;
-                }
-            }
-            catch (HttpRequestException)
-            {
-                // Not yet.
-            }
-
-            Environment.TickCount64.ShouldBeLessThan(deadline, "the condition was not met in time");
-            await Task.Delay(100, TestContext.Current.CancellationToken);
-        }
     }
 }
