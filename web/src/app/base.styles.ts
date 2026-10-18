@@ -12,5 +12,9 @@ export const base = stylex.create({
     fontSize: text.bodySize,
     lineHeight: text.bodyLine,
     WebkitFontSmoothing: 'antialiased',
+    // The parts the browser draws: native checkboxes and radios, the text caret and scrollbars. All three inherit.
+    accentColor: color.accentSolid,
+    caretColor: color.accentFg,
+    scrollbarColor: `${color.borderStrong} transparent`,
   },
 })

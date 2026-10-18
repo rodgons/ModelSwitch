@@ -75,14 +75,23 @@ export const shell = stylex.create({
     transitionDuration: motion.fast,
   },
   navActive: { color: color.accentFg, backgroundColor: color.accentSubtle },
-  navShort: {
-    display: { default: 'inline-flex', [bp.lg]: 'none' },
+  // The icon carries the rail on its own (the link keeps its name in title and in the hidden label); expanded, it leads the label.
+  navIcon: {
+    display: 'inline-flex',
+    flexShrink: 0,
     width: '24px',
     justifyContent: 'center',
-    fontSize: text.captionSize,
-    fontWeight: text.weightBold,
+    marginInlineStart: { default: 0, [bp.lg]: '-4px' },
   },
-  navLabel: { display: { default: 'inline', [bp.md]: 'none', [bp.lg]: 'inline' } },
+  // On the rail the label is visually hidden, not removed, so the link keeps its accessible name.
+  navLabel: {
+    position: { default: 'static', [bp.md]: 'absolute', [bp.lg]: 'static' },
+    width: { default: 'auto', [bp.md]: '1px', [bp.lg]: 'auto' },
+    height: { default: 'auto', [bp.md]: '1px', [bp.lg]: 'auto' },
+    overflow: { default: 'visible', [bp.md]: 'hidden', [bp.lg]: 'visible' },
+    clipPath: { default: 'none', [bp.md]: 'inset(50%)', [bp.lg]: 'none' },
+    whiteSpace: 'nowrap',
+  },
   topbar: {
     gridColumn: { default: '1', [bp.md]: '2' },
     gridRow: '1',

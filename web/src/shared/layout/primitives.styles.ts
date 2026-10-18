@@ -48,6 +48,18 @@ export const primitives = stylex.create({
     gap: space.s16,
     marginBottom: space.s24,
   },
+  back: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: space.s4,
+    minHeight: '24px',
+    marginBottom: space.s4,
+    marginInlineStart: '-2px',
+    fontSize: text.bodySize,
+    lineHeight: text.bodyLine,
+  },
+  // With a back link above the title, the actions move down by the link's height so they line up with the title.
+  actionsBelowBack: { marginTop: { default: 0, [bp.sm]: `calc(24px + ${space.s4})` } },
   heading: {
     margin: 0,
     fontSize: text.headingSize,
@@ -85,7 +97,9 @@ export const primitives = stylex.create({
   },
   flush: { padding: 0, overflow: 'hidden' },
 
+  // Positioned, so absolutely positioned descendants (VisuallyHidden labels, tooltips) scroll with it instead of widening the page.
   tableScroll: {
+    position: 'relative',
     overflowX: 'auto',
     maxWidth: '100%',
     outline: { default: 'none', ':focus-visible': `2px solid ${color.focusRing}` },

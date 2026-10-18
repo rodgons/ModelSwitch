@@ -28,7 +28,7 @@ web/src/
 
 | Route | Contents | Role |
 |---|---|---|
-| `/` Overview | Time-range picker (1 h, 24 h, 7 d, 30 d, custom); a `Readout` band (design-system.md §9.2): requests, success %, Estimated Cost, tokens, p50/p95 latency, p50/p95 TTFT, fallback %; time-series charts; recent failed requests with a mini Route Strip | Viewer |
+| `/` Overview | Time-range picker (1 h, 24 h, 7 d, 30 d, custom); a `Readout` band (design-system.md §9.2): requests, success %, Estimated Cost, tokens, p95 latency and p95 TTFT (each with its p50 on the line under the figure), fallback %; time-series charts; recent failed requests with a mini Route Strip | Viewer |
 | `/requests` | Cursor-paginated table, filters (time, tenant, alias, provider, model, status, error code, had fallback) synced to the URL query string | Viewer |
 | `/requests/:id` | Metadata, Routing Decision (chosen + excluded candidates with reasons), Attempt timeline drawn as the full Route Strip (design-system.md §10), Usage Records with source badges, error details, trace link, copy-able ids. A request an Evaluation Run made (`evaluationCase`) says "Candidate (or Judge) for Case X of run Y in Comparison Z", linking to the Case in its Comparison (`/comparisons/:id?case=X`) and to the run | Viewer |
 | `/providers` | Provider list + health; create/edit, write-only secret field, connectivity test button with result | Owner (write) |

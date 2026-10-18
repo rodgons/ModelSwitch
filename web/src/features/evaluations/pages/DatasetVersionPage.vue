@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import * as stylex from '@stylexjs/stylex'
 import { computed, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
 import { useSession } from '@/app/session'
 import Button from '@/shared/components/Button.vue'
 import { link, table, typo } from '@/shared/components/components.styles'
@@ -69,17 +68,14 @@ const s = {
     <PageHeader
       :title="`${dataset.data.value?.name ?? 'Dataset'} v${version}`"
       lede="Dataset Version. Its Cases never change; a new upload makes a new version."
+      :back="{ to: `/evaluations/datasets/${id}`, label: 'All versions' }"
     >
-      <template #actions>
-        <Inline :gap="12">
-          <RouterLink :to="`/evaluations/datasets/${id}`" v-bind="s.back">All versions</RouterLink>
-          <Button
-            v-if="session.can('operator')"
-            variant="primary"
-            :to="{ path: '/evaluations/new', query: { datasetId: id, version } }"
-            >Start a run</Button
-          >
-        </Inline>
+      <template v-if="session.can('operator')" #actions>
+        <Button
+          variant="primary"
+          :to="{ path: '/evaluations/new', query: { datasetId: id, version } }"
+          >Start a run</Button
+        >
       </template>
     </PageHeader>
     <Stack :gap="48">

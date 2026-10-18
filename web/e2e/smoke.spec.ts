@@ -119,7 +119,15 @@ test('the Owner creates a Tenant and an API Key, and the request it makes shows 
       .click()
     await expect(fact(page, /^Cost/)).toContainText('$')
     await expect(fact(page, /^Success/)).toContainText('%')
-    await expect(fact(page, /^Latency p50 \/ p95/)).toHaveText(/\d.*\/.*\d/)
+    // p95 is the figure; its p50 is the line under it (design-system.md section 0.4).
+    await expect(fact(page, /^p95 latency/)).toHaveText(/^\d/)
+    await expect(
+      page
+        .locator('dt')
+        .filter({ hasText: /^p95 latency/ })
+        .first()
+        .locator('xpath=following-sibling::dd[2]'),
+    ).toHaveText(/^p50 \d/)
     // Failures are recorded as they settle, like the request above.
     await expect(async () => {
       await page.reload()

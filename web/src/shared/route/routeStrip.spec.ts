@@ -97,11 +97,52 @@ describe('layoutRoute', () => {
 
   it('labels a segment only when its label fits before the next one, and always the last', () => {
     const route = layoutRoute(t0, 1000, [
-      attempt(1, 0, 10, 'failed'),
-      attempt(2, 500, 510, 'failed', 'retry'),
-      attempt(3, 560, 1000, 'succeeded', 'fallback'),
+      attempt(1, 0, 400, 'failed'),
+      attempt(2, 400, 460, 'failed', 'retry'),
+      attempt(3, 460, 1000, 'succeeded', 'fallback'),
     ])
     expect(route.segments.map((s) => s.labelled)).toEqual([true, false, true])
+    // Each label owns the room up to the next segment, so labels never overlap.
+    const [first, , last] = route.segments
+    expect(first!.labelStart + first!.labelWidth).toBeLessThanOrEqual(last!.labelStart)
+  })
+
+  it('keeps the axis to scale when every Attempt is legible on it', () => {
+    const route = layoutRoute(t0, 1000, [
+      attempt(1, 0, 400, 'failed'),
+      attempt(2, 450, 1000, 'succeeded', 'fallback'),
+    ])
+    expect(route.toScale).toBe(true)
+    expect(route.segments.map((s) => [s.x, s.w])).toEqual([
+      [0, 0.4],
+      [0.45, 0.55],
+    ])
+    expect(route.ticks.map((t) => t.label)).toEqual([
+      '0 ms',
+      '250 ms',
+      '500 ms',
+      '750 ms',
+      '1.00 s',
+    ])
+  })
+
+  it('shortens a long backoff and widens short Attempts, and says so', () => {
+    // The demo's shape: two 2 ms failures around a 100 ms backoff, then a 5 ms Fallback.
+    const route = layoutRoute(t0, 112, [
+      attempt(1, 0, 2, 'failed'),
+      attempt(2, 102, 104, 'failed', 'retry'),
+      attempt(3, 105, 110, 'succeeded', 'fallback'),
+    ])
+    expect(route.toScale).toBe(false)
+    expect(route.gaps[0]).toMatchObject({ durationMs: 100, shortened: true })
+    for (const segment of route.segments) expect(segment.w).toBeGreaterThanOrEqual(0.06 * 0.9)
+    // Segments keep their order and never overlap.
+    route.segments.slice(1).forEach((segment, i) => {
+      const previous = route.segments[i]!
+      expect(segment.x).toBeGreaterThan(previous.x + previous.w)
+    })
+    // The ticks name real times: the start, the shortened wait and the end.
+    expect(route.ticks.map((t) => t.label)).toEqual(['0 ms', '100 ms wait', '112 ms'])
   })
 
   it('uses the last Attempt end when the request has no duration yet', () => {

@@ -2,7 +2,6 @@
 import * as stylex from '@stylexjs/stylex'
 import { useQueryClient } from '@tanstack/vue-query'
 import { computed, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import { api, type Schemas } from '@/api/client'
 import { useSession } from '@/app/session'
 import Badge from '@/shared/components/Badge.vue'
@@ -73,14 +72,10 @@ const rowAttrs = (model: Schemas['ProviderModelView']) =>
     <PageHeader
       :title="provider ? `${provider.name} models` : 'Provider Models'"
       lede="The concrete models this Provider offers, their Capabilities and their Price history."
+      :back="{ to: '/providers', label: 'All Providers' }"
     >
-      <template #actions>
-        <Inline :gap="12">
-          <RouterLink to="/providers" v-bind="s.back">All Providers</RouterLink>
-          <Button v-if="session.can('owner')" variant="primary" @click="edit(null)"
-            >Add model</Button
-          >
-        </Inline>
+      <template v-if="session.can('owner')" #actions>
+        <Button variant="primary" @click="edit(null)">Add model</Button>
       </template>
     </PageHeader>
     <Stack :gap="48">

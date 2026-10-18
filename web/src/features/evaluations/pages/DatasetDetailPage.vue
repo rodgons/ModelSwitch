@@ -48,10 +48,13 @@ const s = {
       :refetch="dataset.refetch"
     >
       <template #default="{ data: detail }">
-        <PageHeader :title="detail.name" lede="Dataset">
+        <PageHeader
+          :title="detail.name"
+          lede="Dataset"
+          :back="{ to: '/evaluations?tab=datasets', label: 'All Datasets' }"
+        >
           <template #actions>
             <Inline :gap="12">
-              <RouterLink to="/evaluations" v-bind="s.back">All Datasets</RouterLink>
               <DeleteAction
                 v-if="canWrite"
                 kind="Dataset"

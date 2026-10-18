@@ -15,12 +15,12 @@ const account = stylex.props(shell.account)
 const router = useRouter()
 const queries = useQueryClient()
 const links = [
-  { to: '/', label: 'Overview', short: 'Ov' },
-  { to: '/requests', label: 'Requests', short: 'Rq' },
-  { to: '/providers', label: 'Providers', short: 'Pr' },
-  { to: '/routing', label: 'Routing', short: 'Ro' },
-  { to: '/tenants', label: 'Tenants', short: 'Te' },
-  { to: '/evaluations', label: 'Evaluations', short: 'Ev' },
+  { to: '/', label: 'Overview', icon: 'overview' as const },
+  { to: '/requests', label: 'Requests', icon: 'requests' as const },
+  { to: '/providers', label: 'Providers', icon: 'providers' as const },
+  { to: '/routing', label: 'Routing', icon: 'routing' as const },
+  { to: '/tenants', label: 'Tenants', icon: 'tenants' as const },
+  { to: '/evaluations', label: 'Evaluations', icon: 'evaluations' as const },
 ]
 const themes: { value: ThemeChoice; label: string }[] = [
   { value: 'system', label: 'System' },

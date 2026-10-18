@@ -315,18 +315,18 @@ A feature component that writes its own `display: grid` or a media query is a re
 
 | Primitive | Props | Behavior |
 |---|---|---|
-| `AppShell` | none | Sidebar + topbar + scrolling main. Sidebar: menu sheet below md, rail at md, expanded from lg |
+| `AppShell` | `links: { to, label, icon }[]` | Sidebar + topbar + scrolling main. Sidebar: menu sheet below md, rail at md, expanded from lg. Every nav item has an icon (§11); on the rail the icon stands alone and the label is visually hidden, so the link keeps its accessible name |
 | `Container` | `size: 'page' \| 'wide' \| 'form'` | Max-width (§5) and the stepped gutters |
 | `Stack` | `gap` | Vertical flow with a uniform gap |
 | `Inline` | `gap`, `align`, `justify`, `wrap = true` | Horizontal row that wraps |
 | `Grid` | `min` (`narrow` 160 · `field` 200 · `card` 280 · `chart` 420 px, layout tokens), `gap` | `repeat(auto-fit, minmax(min(<min>, 100%), 1fr))`: the column count follows the available width |
 | `Split` | `aside` slot, `asideAt = 'xl'` | Main + 360 px aside from the breakpoint; stacked below it |
-| `PageHeader` | `title`, `lede?`, `actions` slot | Title and actions share a row; the actions wrap under the title when space runs out |
+| `PageHeader` | `title`, `lede?`, `back?: { to, label }`, `actions` slot | Title and actions share a row; the actions wrap under the title when space runs out. A detail page names the list it belongs to with `back`: a quiet link with a 14 px back icon above the title ("All requests"), never a link in the actions |
 | `Section` | `title`, `actions?`, `surface = false` | A titled block on the canvas. `surface` adds `bg.surface`, a hairline and `radius.surface` for tables, forms and charts |
 | `Readout` | `items: { label, value, delta?, trend?, estimated? }[]` | One band of figures separated by vertical hairlines. Each figure is a `text.caption` label in `fg.muted` (with an `EstimatedBadge` when `estimated`), a `text.readout` value, an optional `delta` line in `text.caption` against the previous period of equal length, and an optional 24 px sparkline. Wraps to rows of 3 below lg and 2 below sm. This replaces separate stat cards |
 | `Facts` | `items: { label, value }[]` | A `<dl>` of label/value pairs laid out with `Inline`. Labels in `fg.muted`, values in `fg.default`. Used for request metadata, never a dot-joined string |
 | `Toolbar` | default slot | `Inline` with gap 8 that wraps filters |
-| `TableScroll` | none | Wide tables scroll inside themselves (`overflow-x: auto`, focusable, labelled). The page never scrolls sideways. Below lg the first column stays in view: its cells take the `table.pinned` style (StyleX has no descendant selectors, so the table opts in per cell; the Request Explorer does) |
+| `TableScroll` | none | Wide tables scroll inside themselves (`overflow-x: auto`, focusable, labelled). The page never scrolls sideways. It is positioned (`position: relative`), so absolutely positioned descendants such as `VisuallyHidden` text scroll with the table instead of widening the page. Below lg the first column stays in view: its cells take the `table.pinned` style (StyleX has no descendant selectors, so the table opts in per cell; the Request Explorer does) |
 | `VisuallyHidden` | none | Screen-reader-only text |
 
 Rules:
@@ -340,9 +340,19 @@ The Route Strip draws one request's path: each Attempt in order, how long it too
 
 **Anatomy**, on a horizontal time axis that starts when the request is received:
 - **Segment**: one Attempt. Its length is proportional to the Attempt's duration (minimum 4 px). It is 8 px tall (detail) or 6 px tall (table), with `radius.hair`. Its fill is the outcome's `*.fg` color.
-- **End glyph**: the shape that encodes the outcome, so that color is never the only signal. ✓ succeeded, ✕ failed, ⤳ fell back (failed and another Candidate followed), ⊘ skipped because the circuit was open (a hatched, zero-length marker), ◷ timed out.
+- **End glyph**: the shape that encodes the outcome, so that color is never the only signal. ✓ succeeded, ✕ failed, ⤳ fell back (failed and another Candidate followed), ⊘ skipped because the circuit was open (a hatched, zero-length marker), ◷ timed out. On the detail strip it sits in a 16 px `bg.canvas` disc ringed in the outcome color, centered on the segment's end; in a table row it is bare `text.caption` text. The glyph is drawn in the outcome color, never filled with it.
 - **Gap**: a dotted `border.strong` line for backoff between Attempts. Its length is proportional to the wait.
-- **Label** (detail only): the Provider Model identifier above each segment in `font.mono` 12 px, truncated in the middle, with the time ticks below in `text.caption` tabular figures.
+- **Label** (detail only): the Provider Model identifier above each segment in `font.mono` 12 px, truncated in the middle, with the time ticks below in `text.caption` tabular figures. A label owns the room from its segment to the next one and is dropped when that room is under 12 % of the strip; the last label is right-aligned and always drawn.
+
+**Scale.** The axis is to scale whenever every Attempt stays legible on it. Real traffic often is not: a 100 ms backoff between two 2 ms Attempts crushes both into one end of the strip. So the layout (`layoutRoute` in `web/src/shared/route/routeStrip.ts`) bends the axis within fixed bounds, as shares of the drawn width:
+
+| | Detail | Table row |
+|---|---|---|
+| Narrowest segment | 6 % | 8 % |
+| Narrowest wait between two Attempts | 2 % | 5 % |
+| Widest wait | 25 % | 30 % |
+
+A bent axis says so. A wait drawn shorter than it was carries an axis break (two slanted `fg.muted` strokes across the dotted line), and the ticks stop pretending to be linear: instead of quarters they name real times, `0 ms`, each shortened wait (`115 ms wait`) under its break, and the request's total. The strip's accessible name adds "long waits drawn shorter". Exact times are always in the Attempts table and in "View as table".
 
 | Outcome | Fill | Glyph |
 |---|---|---|
@@ -361,7 +371,7 @@ The Route Strip draws one request's path: each Attempt in order, how long it too
 ## 11. Imagery, icons, motion
 
 - **No decorative imagery.** Data, the Route Strip and charts are the visual content. Empty states use one 24 px line icon, one sentence and one action.
-- **Icons**: one outline set with a 1.5 px stroke at 14 / 16 / 18 px, in `currentColor`. An icon next to text is `aria-hidden`.
+- **Icons**: one outline set with a 1.5 px stroke at 14 / 16 / 18 px, in `currentColor`. An icon next to text is `aria-hidden`. The set is authored in `web/src/shared/components/Icon.vue` on a 24 px grid with `vector-effect: non-scaling-stroke`, so the stroke is 1.5 px on screen at every size. No icon library is installed.
 - **Motion that responds to the Administrator** is welcome when it shows what changed. Menus and sheets open over `motion.base` (200 ms, `cubic-bezier(0.2, 0, 0, 1)`), and colors change over `motion.fast` (120 ms).
 - **The one orchestrated moment**: on Request detail, the Route Strip draws its segments left to right in time order, in ≤ 600 ms total, the first time the page renders. Nothing else animates on load: no fade-up sections and no hover lifts on surfaces.
 - **Reduced motion** (`prefers-reduced-motion: reduce`): the Route Strip renders complete, the press scale is off, and the skeleton shimmer becomes a static fill.

@@ -123,12 +123,13 @@ const s = {
       :refetch="comparison.refetch"
     >
       <template #default="{ data: detail }">
-        <PageHeader :title="detail.name" lede="Comparison">
+        <PageHeader
+          :title="detail.name"
+          lede="Comparison"
+          :back="{ to: '/evaluations?tab=comparisons', label: 'All Comparisons' }"
+        >
           <template #actions>
             <Inline :gap="12">
-              <RouterLink to="/evaluations?tab=comparisons" v-bind="s.back"
-                >All Comparisons</RouterLink
-              >
               <Button
                 v-if="canWrite"
                 :to="{

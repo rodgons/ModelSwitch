@@ -21,7 +21,7 @@ const s = {
   table: stylex.props(table.table),
   th: stylex.props(table.th),
   thPinned: stylex.props(table.th, table.pinned),
-  tdPinned: stylex.props(table.td, table.pinned),
+  tdPinned: stylex.props(table.td, table.pinned, table.noWrap),
   thNumber: stylex.props(table.th, table.number),
   td: stylex.props(table.td),
   tdNoWrap: stylex.props(table.td, table.noWrap),
@@ -58,10 +58,10 @@ const s = {
               truncateMiddle(request.id)
             }}</RouterLink>
           </td>
-          <td v-bind="s.td">
+          <td v-bind="s.tdNoWrap">
             <span v-bind="s.mono">{{ request.requestedAlias }}</span>
           </td>
-          <td v-bind="s.td">
+          <td v-bind="s.tdNoWrap">
             <RouteStrip
               v-if="request.attempts.length"
               variant="mini"
@@ -88,7 +88,7 @@ const s = {
           <td v-if="!compact" v-bind="s.number">
             <Money :amount="request.totalEstimatedCost" estimated :badge="false" />
           </td>
-          <td v-bind="s.td">
+          <td v-bind="s.tdNoWrap">
             <span :title="request.startedAt">{{ formatRelative(request.startedAt) }}</span>
           </td>
         </tr>

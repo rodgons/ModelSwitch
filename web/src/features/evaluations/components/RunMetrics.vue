@@ -46,7 +46,7 @@ const s = {
 </script>
 
 <template>
-  <Stack :gap="24">
+  <Stack v-if="classification.length || fieldRuns.length || judgeRuns.length" :gap="24">
     <Section
       v-for="run in classification"
       :key="run.label"

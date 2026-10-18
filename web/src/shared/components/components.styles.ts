@@ -107,6 +107,10 @@ export const typo = stylex.create({
   },
   muted: { color: color.fgMuted },
   mono: { fontFamily: font.mono, fontFeatureSettings: '"zero"', fontSize: text.bodySize },
+  // A truncated identifier stays on one line: the browser would otherwise break it at the ellipsis. One shown whole (a new API Key)
+  // wraps anywhere instead, so it never runs out of its dialog.
+  identifier: { whiteSpace: 'nowrap' },
+  identifierWhole: { overflowWrap: 'anywhere', minWidth: 0 },
   numeric: { fontVariantNumeric: 'tabular-nums' },
   title: {
     margin: 0,
@@ -188,6 +192,15 @@ export const field = stylex.create({
     fontSize: text.bodySize,
     color: color.fgDefault,
     minHeight: '24px',
+    cursor: 'pointer',
+  },
+  checkboxInput: {
+    width: '16px',
+    height: '16px',
+    margin: 0,
+    flexShrink: 0,
+    accentColor: color.accentSolid,
+    cursor: 'pointer',
   },
 })
 
@@ -350,6 +363,12 @@ export const dialog = stylex.create({
   },
   wide: { maxWidth: '560px' },
   hidden: { display: 'none' },
+})
+
+// Charts: the "View as table" toggle shares the legend's row instead of taking a row of its own.
+export const chart = stylex.create({
+  frame: { position: 'relative', minWidth: 0 },
+  toggle: { position: 'absolute', top: '-4px', right: 0, zIndex: 1 },
 })
 
 export const tone = stylex.create({

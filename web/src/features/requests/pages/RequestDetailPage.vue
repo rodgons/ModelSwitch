@@ -42,7 +42,21 @@ const s = {
   mono: stylex.props(typo.mono),
   external: stylex.props(link.inline, link.focus),
   back: stylex.props(link.quiet, link.focus),
+  caption: stylex.props(typo.caption),
 }
+const errorDetail = (attempt: {
+  errorClass?: string | null
+  errorCode?: string | null
+  httpStatus?: number | null
+  providerErrorType?: string | null
+}) =>
+  [
+    attempt.errorClass,
+    attempt.httpStatus ? `HTTP ${attempt.httpStatus}` : null,
+    attempt.errorCode ? attempt.providerErrorType : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
 const rowAttrs = (attempt: number) =>
   stylex.props(table.row, highlighted.value === attempt && table.highlighted)
 
@@ -84,7 +98,7 @@ const facts = computed(() => {
       :refetch="request.refetch"
     >
       <template #default="{ data: detail }">
-        <PageHeader title="">
+        <PageHeader title="" :back="{ to: '/requests', label: 'All requests' }">
           <template #title
             ><Identifier :value="detail.request.id" :head="12" :tail="6" copy
           /></template>
@@ -97,18 +111,10 @@ const facts = computed(() => {
               <Badge v-if="detail.request.hadFallback" tone="warning">Fallback used</Badge>
             </Inline>
           </template>
-          <template #actions>
-            <Inline :gap="12">
-              <RouterLink to="/requests" v-bind="s.back">All requests</RouterLink>
-              <a
-                v-if="detail.traceUrl"
-                :href="detail.traceUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                v-bind="s.external"
-                >Open trace ↗</a
-              >
-            </Inline>
+          <template v-if="detail.traceUrl" #actions>
+            <a :href="detail.traceUrl" target="_blank" rel="noopener noreferrer" v-bind="s.external"
+              >Open trace ↗</a
+            >
           </template>
         </PageHeader>
         <Stack :gap="40">
@@ -176,21 +182,17 @@ const facts = computed(() => {
                         <td v-bind="s.td">{{ attempt.kind }}</td>
                         <td v-bind="s.td"><StatusBadge :status="attempt.status" /></td>
                         <td v-bind="s.tdNoWrap">
-                          <span
+                          <!-- The code is what an Operator searches for; class, HTTP status and the Provider's own type explain it. -->
+                          <Stack
                             v-if="attempt.errorCode || attempt.providerErrorType"
-                            v-bind="s.mono"
+                            :gap="2"
+                            as="span"
                           >
-                            {{
-                              [
-                                attempt.errorClass,
-                                attempt.errorCode,
-                                attempt.httpStatus,
-                                attempt.providerErrorType,
-                              ]
-                                .filter((v) => v !== null && v !== undefined)
-                                .join(' · ')
-                            }}
-                          </span>
+                            <span v-bind="s.mono">{{
+                              attempt.errorCode ?? attempt.providerErrorType
+                            }}</span>
+                            <span v-bind="s.caption">{{ errorDetail(attempt) }}</span>
+                          </Stack>
                           <span v-else>—</span>
                         </td>
                         <td v-bind="s.number">{{ formatDuration(attempt.durationMs) }}</td>

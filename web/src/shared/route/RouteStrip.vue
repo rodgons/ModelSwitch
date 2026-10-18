@@ -6,7 +6,7 @@ import { table, typo } from '@/shared/components/components.styles'
 import { formatDuration, truncateMiddle } from '@/shared/format'
 import Inline from '@/shared/layout/Inline.vue'
 import TableScroll from '@/shared/layout/TableScroll.vue'
-import { layoutRoute, type StripAttempt } from './routeStrip'
+import { fullScale, layoutRoute, miniScale, type StripAttempt } from './routeStrip'
 import { strip } from './RouteStrip.styles'
 
 /**
@@ -26,43 +26,58 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ highlight: [attempt: number | null] }>()
 const asTable = ref(false)
-const route = computed(() => layoutRoute(props.startedAt, props.durationMs, props.attempts))
 const full = computed(() => props.variant === 'full')
-const pct = (ms: number) => `${((ms / route.value.totalMs) * 100).toFixed(3)}%`
-const ticks = computed(() =>
-  [0, 0.25, 0.5, 0.75, 1].map((f) => formatDuration(Math.round(route.value.totalMs * f))),
+const route = computed(() =>
+  layoutRoute(
+    props.startedAt,
+    props.durationMs,
+    props.attempts,
+    full.value ? fullScale : miniScale,
+  ),
 )
+const pct = (share: number) => `${(share * 100).toFixed(3)}%`
+const trackLabel = computed(() => {
+  const count = route.value.segments.length
+  const name = `Route of the request, ${count} ${count === 1 ? 'Attempt' : 'Attempts'}`
+  return route.value.toScale ? name : `${name}, long waits drawn shorter`
+})
 
 const s = computed(() => ({
   root: stylex.props(strip.root),
   track: stylex.props(strip.track, full.value ? strip.full : strip.mini),
-  label: stylex.props(strip.label),
-  labelEnd: stylex.props(strip.label, strip.labelEnd),
   ticks: stylex.props(strip.ticks),
+  brk: stylex.props(strip.brk),
   table: stylex.props(table.table),
   th: stylex.props(table.th),
   td: stylex.props(table.td),
   number: stylex.props(table.td, table.number),
   mono: stylex.props(typo.mono),
 }))
-const itemAttrs = (offset: number, duration: number) =>
-  stylex.props(strip.item(pct(offset), pct(duration)))
-const barAttrs = (outcome: keyof typeof strip, offset: number, attempt: number) =>
+const itemAttrs = (x: number, w: number) => stylex.props(strip.item(pct(x), pct(w)))
+const barAttrs = (outcome: keyof typeof strip, x: number, attempt: number) =>
   stylex.props(
     strip.bar,
     full.value ? strip.barFull : strip.barMini,
     strip[outcome as 'succeeded'],
-    full.value && strip.drawn(`${Math.round((offset / route.value.totalMs) * 360)}ms`),
+    full.value && strip.drawn(`${Math.round(x * 360)}ms`),
     props.highlighted === attempt && strip.emphasised,
   )
+const labelAttrs = (start: number, width: number, end: boolean) =>
+  stylex.props(strip.label(pct(start), pct(width)), end && strip.labelEnd)
+const tickAttrs = (at: number) =>
+  stylex.props(
+    strip.tick(pct(at)),
+    at === 0 ? strip.tickStart : at === 1 ? strip.tickEnd : strip.tickMiddle,
+  )
 const glyphAttrs = (outcome: keyof typeof strip) =>
+  // The outcome style sets the color; the variant style after it takes back the fill, so the glyph reads as a shape, not a block.
   stylex.props(
     strip.glyph,
-    full.value ? strip.glyphFull : strip.glyphMini,
     strip[outcome as 'succeeded'],
+    full.value ? strip.glyphFull : strip.glyphMini,
   )
-const gapAttrs = (offset: number, duration: number) =>
-  stylex.props(strip.gap(pct(offset), pct(duration)), full.value ? strip.gapFull : strip.gapMini)
+const gapAttrs = (x: number, w: number) =>
+  stylex.props(strip.gap(pct(x), pct(w)), full.value ? strip.gapFull : strip.gapMini)
 </script>
 
 <template>
@@ -99,32 +114,39 @@ const gapAttrs = (offset: number, duration: number) =>
       </table>
     </TableScroll>
     <template v-else>
-      <ol
-        v-bind="s.track"
-        :aria-label="`Route of the request, ${route.segments.length} Attempt(s)`"
-      >
+      <ol v-bind="s.track" :aria-label="trackLabel">
         <li
           v-for="gap in route.gaps"
           :key="`gap-${gap.offsetMs}`"
-          v-bind="gapAttrs(gap.offsetMs, gap.durationMs)"
+          v-bind="gapAttrs(gap.x, gap.w)"
           aria-hidden="true"
-        />
-        <li
-          v-for="segment in route.segments"
-          :key="segment.attemptNumber"
-          v-bind="itemAttrs(segment.offsetMs, segment.durationMs)"
         >
-          <span
-            v-if="full && segment.labelled"
+          <span v-if="gap.shortened" v-bind="s.brk" />
+        </li>
+        <template v-if="full">
+          <li
+            v-for="segment in route.segments.filter((x) => x.labelled)"
+            :key="`label-${segment.attemptNumber}`"
             v-bind="
-              segment.attemptNumber === route.segments.at(-1)?.attemptNumber ? s.labelEnd : s.label
+              labelAttrs(
+                segment.labelStart,
+                segment.labelWidth,
+                segment.attemptNumber === route.segments.at(-1)?.attemptNumber,
+              )
             "
             :title="segment.model"
             aria-hidden="true"
-            >{{ truncateMiddle(segment.model, 14, 8) }}</span
           >
+            {{ truncateMiddle(segment.model, 14, 8) }}
+          </li>
+        </template>
+        <li
+          v-for="segment in route.segments"
+          :key="segment.attemptNumber"
+          v-bind="itemAttrs(segment.x, segment.w)"
+        >
           <span
-            v-bind="barAttrs(segment.outcome, segment.offsetMs, segment.attemptNumber)"
+            v-bind="barAttrs(segment.outcome, segment.x, segment.attemptNumber)"
             :tabindex="full ? 0 : undefined"
             role="img"
             :aria-label="segment.accessibleName"
@@ -138,7 +160,9 @@ const gapAttrs = (offset: number, duration: number) =>
         </li>
       </ol>
       <div v-if="full" v-bind="s.ticks" aria-hidden="true">
-        <span v-for="(tick, index) in ticks" :key="index">{{ tick }}</span>
+        <span v-for="tick in route.ticks" :key="tick.at" v-bind="tickAttrs(tick.at)">{{
+          tick.label
+        }}</span>
       </div>
     </template>
   </div>

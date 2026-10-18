@@ -124,7 +124,10 @@ const s = {
       :refetch="run.refetch"
     >
       <template #default="{ data: detail }">
-        <PageHeader :title="`Run: ${detail.reproducibility.target.label}`">
+        <PageHeader
+          :title="`Run: ${detail.reproducibility.target.label}`"
+          :back="{ to: `/comparisons/${detail.comparisonId}`, label: detail.comparisonName }"
+        >
           <template #lede
             ><Inline :gap="8"
               ><StatusBadge :status="detail.status" /><span
@@ -135,9 +138,6 @@ const s = {
           >
           <template #actions>
             <Inline :gap="12">
-              <RouterLink :to="`/comparisons/${detail.comparisonId}`" v-bind="s.back">{{
-                detail.comparisonName
-              }}</RouterLink>
               <a :href="exportUrl(detail.id, 'csv')" download v-bind="s.link">Export CSV</a>
               <a :href="exportUrl(detail.id, 'jsonl')" download v-bind="s.link">Export JSONL</a>
               <template v-if="canWrite">

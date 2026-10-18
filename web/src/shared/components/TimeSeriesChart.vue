@@ -7,11 +7,11 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { computed, ref } from 'vue'
 import VChart from 'vue-echarts'
 import { theme } from '@/app/theme'
-import { chartPalette } from '@/shared/design/chart'
+import { chartBase, chartPalette } from '@/shared/design/chart'
 import Inline from '@/shared/layout/Inline.vue'
 import TableScroll from '@/shared/layout/TableScroll.vue'
 import Button from './Button.vue'
-import { table } from './components.styles'
+import { chart, table } from './components.styles'
 
 use([LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
@@ -32,12 +32,26 @@ const dark = computed(
 )
 const option = computed(() => {
   const palette = dark.value ? chartPalette.dark : chartPalette.light
+  const base = chartBase(palette)
   return {
+    ...base,
     color: palette.series,
     animation: false,
     grid: { left: 8, right: 16, top: 32, bottom: 8, containLabel: true },
-    legend: { top: 0, left: 0, textStyle: { color: palette.text } },
-    tooltip: { trigger: 'axis', valueFormatter: (value: number | null) => props.format(value) },
+    // The right inset keeps the legend clear of the "View as table" toggle in the same row.
+    legend: {
+      type: 'scroll',
+      top: 0,
+      left: 0,
+      right: 112,
+      itemGap: 16,
+      textStyle: { color: palette.text, fontFamily: base.textStyle.fontFamily },
+    },
+    tooltip: {
+      ...base.tooltip,
+      trigger: 'axis',
+      valueFormatter: (value: number | null) => props.format(value),
+    },
     xAxis: {
       type: 'time',
       axisLine: { lineStyle: { color: palette.grid } },
@@ -64,6 +78,8 @@ const rows = computed(() =>
   })),
 )
 const s = {
+  frame: stylex.props(chart.frame),
+  toggle: stylex.props(chart.toggle),
   table: stylex.props(table.table),
   th: stylex.props(table.th),
   td: stylex.props(table.td),
@@ -72,8 +88,8 @@ const s = {
 </script>
 
 <template>
-  <div>
-    <Inline justify="end">
+  <div v-bind="s.frame">
+    <Inline justify="end" v-bind="asTable ? {} : s.toggle">
       <Button variant="ghost" size="sm" :aria-pressed="asTable" @click="asTable = !asTable">{{
         asTable ? 'View as chart' : 'View as table'
       }}</Button>

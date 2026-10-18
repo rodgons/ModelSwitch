@@ -139,15 +139,14 @@ const s = {
       :refetch="tenant.refetch"
     >
       <template #default="{ data: detail }">
-        <PageHeader :title="detail.name">
+        <PageHeader :title="detail.name" :back="{ to: '/tenants', label: 'All Tenants' }">
           <template #lede><StatusBadge :status="detail.status" /></template>
           <template #actions>
             <Inline :gap="12">
-              <RouterLink to="/tenants" v-bind="s.back">All Tenants</RouterLink>
               <RouterLink
                 :to="{ path: '/requests', query: { tenantId: detail.id } }"
                 v-bind="s.back"
-                >Requests</RouterLink
+                >This Tenant's requests</RouterLink
               >
               <Button
                 v-if="canEdit"

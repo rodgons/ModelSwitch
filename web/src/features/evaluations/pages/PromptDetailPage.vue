@@ -80,10 +80,13 @@ const s = {
       :refetch="prompt.refetch"
     >
       <template #default="{ data: detail }">
-        <PageHeader :title="detail.name" lede="Prompt">
+        <PageHeader
+          :title="detail.name"
+          lede="Prompt"
+          :back="{ to: '/evaluations?tab=prompts', label: 'All Prompts' }"
+        >
           <template #actions>
             <Inline :gap="12">
-              <RouterLink to="/evaluations?tab=prompts" v-bind="s.back">All Prompts</RouterLink>
               <DeleteAction
                 v-if="canWrite"
                 kind="Prompt"

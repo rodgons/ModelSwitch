@@ -89,14 +89,17 @@ const readout = computed<ReadoutItem[]>(() => {
       value: formatTokens(t.inputTokens + t.outputTokens),
       trend: series.map((f) => f.inputTokens + f.outputTokens),
     },
+    // One figure per cell (design-system.md section 0.4): p95 is the figure an incident is judged by, p50 sits under it.
     {
-      label: `Latency p50 / p95${t.exact ? '' : ' (approx.)'}`,
-      value: `${formatDuration(t.latencyP50Ms)} / ${formatDuration(t.latencyP95Ms)}`,
+      label: `p95 latency${t.exact ? '' : ' (approx.)'}`,
+      value: formatDuration(t.latencyP95Ms),
+      delta: `p50 ${formatDuration(t.latencyP50Ms)}`,
       trend: series.map((f) => f.latencyP95Ms),
     },
     {
-      label: 'First Token p50 / p95',
-      value: `${formatDuration(t.ttftP50Ms)} / ${formatDuration(t.ttftP95Ms)}`,
+      label: 'p95 First Token',
+      value: formatDuration(t.ttftP95Ms),
+      delta: `p50 ${formatDuration(t.ttftP50Ms)}`,
     },
     {
       label: 'Fallback',

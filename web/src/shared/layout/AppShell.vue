@@ -3,10 +3,11 @@ import * as stylex from '@stylexjs/stylex'
 import { ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import Button from '@/shared/components/Button.vue'
+import Icon, { type IconName } from '@/shared/components/Icon.vue'
 import { shell } from './AppShell.styles'
 
 /** Navigation and the scrolling main area. The topbar slot holds the time range, theme and Administrator menu. */
-defineProps<{ links: { to: string; label: string; short: string }[] }>()
+defineProps<{ links: { to: string; label: string; icon: IconName }[] }>()
 const open = ref(false)
 const route = useRoute()
 watch(
@@ -20,7 +21,7 @@ const s = {
   brandFull: stylex.props(shell.brandFull),
   brandShort: stylex.props(shell.brandShort),
   nav: stylex.props(shell.nav),
-  short: stylex.props(shell.navShort),
+  icon: stylex.props(shell.navIcon),
   label: stylex.props(shell.navLabel),
   topbar: stylex.props(shell.topbar),
   menu: stylex.props(shell.menuButton),
@@ -48,7 +49,7 @@ const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.s
             :aria-current="isActive(link.to) ? 'page' : undefined"
             :title="link.label"
           >
-            <span v-bind="s.short" aria-hidden="true">{{ link.short }}</span>
+            <span v-bind="s.icon"><Icon :name="link.icon" /></span>
             <span v-bind="s.label">{{ link.label }}</span>
           </RouterLink>
         </li>
@@ -70,9 +71,12 @@ const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.s
       <nav aria-label="Main">
         <ul v-bind="s.nav">
           <li v-for="link in links" :key="link.to">
-            <RouterLink :to="link.to" v-bind="linkAttrs(isActive(link.to))">{{
-              link.label
-            }}</RouterLink>
+            <RouterLink
+              :to="link.to"
+              v-bind="linkAttrs(isActive(link.to))"
+              :aria-current="isActive(link.to) ? 'page' : undefined"
+              ><span v-bind="s.icon"><Icon :name="link.icon" /></span>{{ link.label }}</RouterLink
+            >
           </li>
         </ul>
       </nav>
