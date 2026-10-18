@@ -35,6 +35,8 @@ KEY=$(./scripts/seed-demo.sh)          # mock Provider, alias "balanced", Tenant
 open http://localhost:8080             # dashboard: sign in as the Owner
 ```
 
+Or run `make`, which does all of the above in one step: it creates `.env` with secrets and an Owner (your git e-mail and a random password) if there is none, then builds, starts, seeds and prints the API Key. `make down` stops the stack and `make clean` also deletes the volumes.
+
 Add `--profile ollama` to run a small local model as the Fallback. Environment variables, images, health checks, TLS and production notes are in [docs/deployment.md](docs/deployment.md).
 
 ## API usage
