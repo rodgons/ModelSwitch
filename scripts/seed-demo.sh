@@ -8,13 +8,17 @@
 # The plaintext key is printed once, alone on stdout, so `KEY=$(./scripts/seed-demo.sh)` works; progress goes to stderr.
 # Safe to run again: existing Providers, models, Prices, the policy and the Tenant are reused, and a new key is created.
 #
-#   ./scripts/seed-demo.sh [--with-openai] [--no-ollama]
+#   ./scripts/seed-demo.sh [--with-openai] [--with-openrouter] [--no-ollama]
 #
 #   --with-openai  also seeds the hosted reference Provider "openai" (env:OPENAI_API_KEY; set OPENAI_API_KEY in .env and
 #                  recreate api and worker). Without it nothing calls a paid API.
+#   --with-openrouter  also seeds the hosted Provider "openrouter" with openai/gpt-4.1-nano, and alias "openrouter" (that model,
+#                  falling back to the mock). The key is OPENROUTER_API_KEY from the environment or .env, stored encrypted in
+#                  the catalog, so the containers need no restart. Calls a paid API.
 #   --no-ollama    skip Ollama even when its container runs.
 #
-# Environment: MODELSWITCH_URL (default http://localhost:$MODELSWITCH_HTTP_PORT, or :8080), MODELSWITCH_DEMO_OLLAMA_MODEL
+# Environment: MODELSWITCH_URL (default http://localhost:$MODELSWITCH_HTTP_PORT, or :8080), MODELSWITCH_DEMO_MOCK_URL (the mock's base URL,
+# default http://mock-provider:8080/v1; scripts/dev.sh runs it on localhost), MODELSWITCH_DEMO_OLLAMA_MODEL
 # (default below), MODELSWITCH_ENV_FILE (default .env, read for the port and the Owner credentials: MODELSWITCH__Bootstrap__OwnerEmail
 # / OwnerPassword), MODELSWITCH_DEMO_TENANT (the Tenant's name, default demo; load/run.sh seeds several).
 # Needs: bash, curl, jq, and docker compose (for Ollama only).
@@ -25,13 +29,15 @@ set -euo pipefail
 default_ollama_model="qwen2.5:1.5b-instruct-q4_K_M"
 
 with_openai=false
+with_openrouter=false
 use_ollama=auto
 for argument in "$@"; do
   case "$argument" in
     --with-openai) with_openai=true ;;
+    --with-openrouter) with_openrouter=true ;;
     --no-ollama) use_ollama=false ;;
     -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "Unknown option: $argument (use --with-openai, --no-ollama)" >&2; exit 64 ;;
+    *) echo "Unknown option: $argument (use --with-openai, --with-openrouter, --no-ollama)" >&2; exit 64 ;;
   esac
 done
 
@@ -56,6 +62,8 @@ owner_password="$(env_value MODELSWITCH__Bootstrap__OwnerPassword)"
 ollama_model="${MODELSWITCH_DEMO_OLLAMA_MODEL:-$default_ollama_model}"
 tenant_name="${MODELSWITCH_DEMO_TENANT:-demo}"
 [ -n "$owner_email" ] && [ -n "$owner_password" ] || die "set MODELSWITCH__Bootstrap__OwnerEmail and OwnerPassword in .env"
+openrouter_key="${OPENROUTER_API_KEY:-$(env_value OPENROUTER_API_KEY)}"
+[ "$with_openrouter" = false ] || [ -n "$openrouter_key" ] || die "--with-openrouter needs OPENROUTER_API_KEY (in .env or the environment)"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -130,7 +138,7 @@ capabilities() { # STREAMING JSON_OBJECT JSON_SCHEMA CONTEXT MAX_OUTPUT [TOKENIZ
 }
 
 # --- Mock Provider (compose profile `demo`) ---
-mock="$(provider mock openai_compatible http://mock-provider:8080/v1 30000)"
+mock="$(provider mock openai_compatible "${MODELSWITCH_DEMO_MOCK_URL:-http://mock-provider:8080/v1}" 30000)"
 model "$mock" mock-echo "$(capabilities true false false 32768 4096 o200k_base)" 0.15 0.075 0.60 >/dev/null
 model "$mock" mock-fixed "$(capabilities true false false 32768 4096 o200k_base)" 0.10 0.05 0.40 >/dev/null
 model "$mock" mock-judge "$(capabilities true true true 32768 4096 o200k_base)" 0.10 0.05 0.40 >/dev/null
@@ -162,6 +170,41 @@ if [ "$with_openai" = true ]; then
   model "$openai" gpt-4o-mini "$(capabilities true true true 128000 16384 o200k_base)" 0.15 0.075 0.60 >/dev/null
 fi
 
+# policy NAME DEFINITION_JSON → Routing Policy id; a changed candidate list is saved as a new version
+policy() {
+  local name="$1" definition="$2" current id
+  current="$(api GET '/admin/routing-policies?limit=200' | jq -c --arg name "$name" '.items[] | select(.name == $name)')"
+  if [ -z "$current" ]; then
+    id="$(api POST /admin/routing-policies "$(jq -n --arg name "$name" --argjson definition "$definition" '{name: $name, definition: $definition}')" | jq -r .policyId)"
+    log "Created Routing Policy $name: $(jq -r '.candidates | join(" → ")' <<<"$definition")"
+  else
+    id="$(jq -r .id <<<"$current")"
+    if [ "$(jq -c '.definition.candidates' <<<"$current")" != "$(jq -c .candidates <<<"$definition")" ]; then
+      api PUT "/admin/routing-policies/$id" "$(jq -n --argjson definition "$definition" --argjson version "$(jq .version <<<"$current")" \
+        '{definition: $definition, expectedVersion: $version}')" >/dev/null
+      log "Routing Policy $name is now $(jq -r '.candidates | join(" → ")' <<<"$definition") (new version)"
+    else
+      log "Routing Policy $name is up to date"
+    fi
+  fi
+  printf '%s' "$id"
+}
+
+# --- Hosted Provider through OpenRouter (opt-in; calls a paid API) ---
+if [ "$with_openrouter" = true ]; then
+  openrouter="$(provider openrouter openai_compatible https://openrouter.ai/api/v1 60000 "$(jq -n --arg secret "$openrouter_key" '{secret: $secret}')")"
+  # OpenAI's gpt-4.1-nano Prices when this was written: check https://openrouter.ai/openai/gpt-4.1-nano before trusting Estimated Cost.
+  model "$openrouter" openai/gpt-4.1-nano "$(capabilities true true true 1047576 32768 o200k_base)" 0.10 0.025 0.40 >/dev/null
+  openrouter_policy="$(policy openrouter "$(jq -n '{
+    strategy: "static",
+    candidates: ["openrouter/openai/gpt-4.1-nano", "mock/mock-fixed"],
+    defaultMaxOutputTokens: 512,
+    execution: {deadlineMs: 60000, attemptTimeoutMs: 45000, maxAttempts: 3, maxRetriesPerCandidate: 1}
+  }')")"
+  api PUT /admin/aliases/openrouter "$(jq -n --arg id "$openrouter_policy" '{policyId: $id, description: "openai/gpt-4.1-nano through OpenRouter, falling back to the mock"}')" >/dev/null
+  log "Alias openrouter → policy openrouter"
+fi
+
 # --- Routing Policy and alias "balanced": mock-echo, then the Fallback ---
 definition="$(jq -n --arg fallback "$fallback" '{
   strategy: "static",
@@ -169,20 +212,7 @@ definition="$(jq -n --arg fallback "$fallback" '{
   defaultMaxOutputTokens: 256,
   execution: {deadlineMs: 120000, attemptTimeoutMs: 90000, maxAttempts: 4, maxRetriesPerCandidate: 1}
 }')"
-policy="$(api GET '/admin/routing-policies?limit=200' | jq -c '.items[] | select(.name == "balanced")')"
-if [ -z "$policy" ]; then
-  policy_id="$(api POST /admin/routing-policies "$(jq -n --argjson definition "$definition" '{name: "balanced", definition: $definition}')" | jq -r .policyId)"
-  log "Created Routing Policy balanced: mock/mock-echo → $fallback"
-else
-  policy_id="$(jq -r .id <<<"$policy")"
-  if [ "$(jq -c '.definition.candidates' <<<"$policy")" != "$(jq -c .candidates <<<"$definition")" ]; then
-    api PUT "/admin/routing-policies/$policy_id" "$(jq -n --argjson definition "$definition" --argjson version "$(jq .version <<<"$policy")" \
-      '{definition: $definition, expectedVersion: $version}')" >/dev/null
-    log "Routing Policy balanced now falls back to $fallback (new version)"
-  else
-    log "Routing Policy balanced is up to date"
-  fi
-fi
+policy_id="$(policy balanced "$definition")"
 api PUT /admin/aliases/balanced "$(jq -n --arg id "$policy_id" '{policyId: $id, description: "Demo: mock-echo with a Fallback"}')" >/dev/null
 log "Alias balanced → policy balanced"
 
