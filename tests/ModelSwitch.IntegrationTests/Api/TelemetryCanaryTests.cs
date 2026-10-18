@@ -56,7 +56,7 @@ public sealed class TelemetryCanaryTests(GatewayFixture gateway) : IClassFixture
         var requestId = completion.Headers.GetValues("X-Request-Id").Single();
 
         // Settlement and the request log line run after the response; wait for the last one, then flush everything.
-        await WaitForAsync(() => logs.ToArray().Count(l => l.EventId.Id == 4001) >= 2);
+        await Eventually.UntilAsync(() => logs.ToArray().Count(l => l.EventId.Id == 4001) >= 2, TimeSpan.FromSeconds(10), "both requests write their request log line");
         host.Services.GetRequiredService<TracerProvider>().ForceFlush();
         host.Services.GetRequiredService<MeterProvider>().ForceFlush();
         host.Services.GetRequiredService<LoggerProvider>().ForceFlush();
@@ -127,17 +127,6 @@ public sealed class TelemetryCanaryTests(GatewayFixture gateway) : IClassFixture
             }.ToJsonString(),
             Encoding.UTF8,
             "application/json");
-
-    private static async Task WaitForAsync(Func<bool> condition)
-    {
-        var deadline = Environment.TickCount64 + 10_000;
-        while (!condition() && Environment.TickCount64 < deadline)
-        {
-            await Task.Delay(20);
-        }
-
-        condition().ShouldBeTrue();
-    }
 
     // Everything an exporter would send, as text: names, tags, events, status, metric point tags and values, log messages, attributes and scopes.
     private static string Render(Activity[] spans, Metric[] metrics, LogRecord[] logs)

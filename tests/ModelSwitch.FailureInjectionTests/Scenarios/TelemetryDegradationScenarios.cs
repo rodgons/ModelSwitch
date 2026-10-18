@@ -114,16 +114,8 @@ public abstract class TelemetryDegradationScenario(PostgresFixture postgres, Val
     protected static TimeSpan P95(List<(HttpStatusCode Status, TimeSpan Elapsed)> phase)
         => phase.Select(r => r.Elapsed).Order().ElementAt((int)Math.Ceiling(phase.Count * 0.95) - 1);
 
-    protected async Task WaitForExportAsync(string signal)
-    {
-        var deadline = Environment.TickCount64 + 10_000;
-        while (Backend.Exports(signal) == 0 && Environment.TickCount64 < deadline)
-        {
-            await Task.Delay(50, TestContext.Current.CancellationToken);
-        }
-
-        Backend.Exports(signal).ShouldBeGreaterThan(0, $"the gateway exported {signal} to the backend before it failed");
-    }
+    protected Task WaitForExportAsync(string signal)
+        => Eventually.UntilAsync(() => Backend.Exports(signal) > 0, TimeSpan.FromSeconds(10), $"the gateway exported {signal} to the backend before it failed");
 }
 
 [Slow]

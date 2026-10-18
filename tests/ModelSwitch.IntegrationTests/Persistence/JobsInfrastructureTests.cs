@@ -176,7 +176,7 @@ public sealed class JobsInfrastructureTests(PostgresFixture postgres) : IAsyncLi
             var before = await Scalar($"select locked_until::text from jobs.job where id = '{id}'");
             await Task.Delay(100, TestContext.Current.CancellationToken);
             _time.Advance(TimeSpan.FromSeconds(15));
-            await WaitUntil(async () => await Scalar($"select locked_until::text from jobs.job where id = '{id}'") != before);
+            await Eventually.UntilAsync(async () => await Scalar($"select locked_until::text from jobs.job where id = '{id}'") != before, TimeSpan.FromSeconds(10), $"heartbeat {beat + 1} extends the lease");
         }
 
         (await Processor(b).ProcessOneAsync(CancellationToken.None)).ShouldBeFalse("the heartbeat kept the lease valid");
@@ -453,19 +453,5 @@ public sealed class JobsInfrastructureTests(PostgresFixture postgres) : IAsyncLi
         }
 
         return rows;
-    }
-
-    private static async Task WaitUntil(Func<Task<bool>> condition)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (!await condition())
-        {
-            if (DateTime.UtcNow > deadline)
-            {
-                throw new TimeoutException("The condition was not met in 10 s.");
-            }
-
-            await Task.Delay(25);
-        }
     }
 }

@@ -147,33 +147,22 @@ public sealed class ConfigurationPropagationTests(PostgresFixture postgres)
 
     private static async Task WaitForListenersAsync(string connectionString, int expected)
     {
-        var deadline = Environment.TickCount64 + 30_000;
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(TestContext.Current.CancellationToken);
-        while (true)
-        {
-            await using var command = new NpgsqlCommand(
-                "select count(*) from pg_stat_activity where datname = current_database() and state = 'idle' and query like 'LISTEN %'",
-                connection);
-            if ((long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))! >= expected)
+        await Eventually.UntilAsync(
+            async () =>
             {
-                return;
-            }
-
-            Environment.TickCount64.ShouldBeLessThan(deadline, "the hosts did not open their LISTEN connections within 30 s");
-            await Task.Delay(20, TestContext.Current.CancellationToken);
-        }
+                await using var command = new NpgsqlCommand(
+                    "select count(*) from pg_stat_activity where datname = current_database() and state = 'idle' and query like 'LISTEN %'",
+                    connection);
+                return (long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))! >= expected;
+            },
+            TimeSpan.FromSeconds(30),
+            $"the hosts open {expected} LISTEN connections");
     }
 
-    private static async Task WaitForVersionAsync(IConfigurationSnapshotProvider snapshots, long version, TimeSpan within)
-    {
-        var deadline = Environment.TickCount64 + (long)within.TotalMilliseconds;
-        while (snapshots.Current.Version < version)
-        {
-            Environment.TickCount64.ShouldBeLessThan(deadline, $"the snapshot did not reach version {version} within {within}");
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
-    }
+    private static Task WaitForVersionAsync(IConfigurationSnapshotProvider snapshots, long version, TimeSpan within)
+        => Eventually.UntilAsync(() => snapshots.Current.Version >= version, within, $"the snapshot reaches version {version}");
 
     private sealed class ApiFactory(string connectionString) : WebApplicationFactory<ApiHost>
     {

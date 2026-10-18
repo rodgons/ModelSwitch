@@ -42,7 +42,7 @@ public sealed class WorkerKilledDuringEvaluationScenario(GatewayFixture gateway)
         {
             try
             {
-                await WaitUntilAsync(async () => await CountAsync($"select count(*) from evaluation.case_result where run_id = '{runId}'") >= _killAfter, "the first worker records some Case Results");
+                await Eventually.UntilAsync(async () => await CountAsync($"select count(*) from evaluation.case_result where run_id = '{runId}'") >= _killAfter, TimeSpan.FromSeconds(30), "the first worker records some Case Results");
             }
             finally
             {
@@ -160,9 +160,10 @@ public sealed class WorkerKilledDuringEvaluationScenario(GatewayFixture gateway)
         {
             // The run turns terminal a moment before its job handler returns; stopping the host in between would hand the job back
             // (released, not failed), so wait for the job too.
-            await WaitUntilAsync(
+            await Eventually.UntilAsync(
                 async () => await ScalarAsync($"select status from evaluation.evaluation_run where id = '{runId}'") is not ("queued" or "running")
                     && await ScalarAsync($"select status from jobs.job where dedupe_key = 'evaluation.run:{runId}'") == "succeeded",
+                TimeSpan.FromSeconds(30),
                 "the resumed run and its job finish");
         }
         finally
@@ -172,14 +173,4 @@ public sealed class WorkerKilledDuringEvaluationScenario(GatewayFixture gateway)
     }
 
     private async Task<int> CountAsync(string sql) => int.Parse((await ScalarAsync(sql))!, CultureInfo.InvariantCulture);
-
-    private static async Task WaitUntilAsync(Func<Task<bool>> condition, string what)
-    {
-        var deadline = Environment.TickCount64 + 30_000;
-        while (!await condition())
-        {
-            Environment.TickCount64.ShouldBeLessThan(deadline, $"timed out waiting until {what}");
-            await Task.Delay(100, Token);
-        }
-    }
 }

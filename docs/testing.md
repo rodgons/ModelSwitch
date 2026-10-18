@@ -24,7 +24,7 @@ Rules from the [constitution](constitution.md), which apply to every task:
 
 Test runner: xUnit v3 on Microsoft.Testing.Platform (`global.json` `test.runner`), run with `dotnet test ModelSwitch.slnx`. `tests/Directory.Build.props` passes `--ignore-exit-code 8`, so a test project that has no tests yet does not fail the run; real failures still do.
 
-Other rules: no test calls a real external Provider. Testcontainers are shared per collection (one Postgres per test assembly, with a fresh database per test class via template DB clone) to keep the suite fast. Time is controlled with `FakeTimeProvider`, never `Thread.Sleep`.
+Other rules: no test calls a real external Provider. Testcontainers are shared per collection (one Postgres per test assembly, with a fresh database per test class via template DB clone) to keep the suite fast. Tests wait for a state, not for time: anything another thread, host or process does is awaited with `Eventually.UntilAsync(condition, within, because)` (`ModelSwitch.IntegrationTests/Infrastructure/Eventually.cs`), which polls and fails with `because` after the deadline. Never a fixed `Task.Delay` or `Thread.Sleep` sized to "long enough"; a delay is allowed only when the wait is the scenario itself (letting load run before a backend is stopped, letting a real rate-limit bucket refill). Time inside the code under test is controlled with `FakeTimeProvider`, advanced by exact amounts, never driven in an unbounded loop until a task finishes.
 
 **Playwright suite (`web/e2e`).** `./scripts/e2e.sh` builds and starts the Compose stack as its own project, `modelswitch-e2e` (`.env.e2e` with generated secrets and an Owner, port 8081, image names from `deploy/compose.e2e.yaml`, default services plus the Mock Provider, no Ollama or observability), seeds it with `seed-demo.sh --no-ollama`, runs `playwright test` and always ends with `down -v`. `up`, `test [playwright args]` and `down` run the steps one at a time. It needs the browser once: `cd web && pnpm exec playwright install chromium`. The projects, in order:
 
@@ -124,7 +124,7 @@ How to run: [load/README.md](../load/README.md). Latest report: [benchmarks/2026
 
 ## 6. Coverage expectations
 
-Coverage percentage is not a gate. Instead, CI fails if any of these are missing tests: each row of the failure-classification table, each eligibility reason code, each error code in [api.md §2](api.md#2-error-codes) (there is a test that triggers it), and each Evaluator kind.
+Coverage percentage is not a gate. Instead, CI fails if any of these are missing tests: each row of the failure-classification table, each eligibility reason code, each error code in [api.md §2](api.md#2-error-codes) (there is a test that triggers it), each Evaluator kind, each route, and each documented response header (there is a test that asserts it).
 
 | Gate | Test |
 |---|---|
@@ -133,6 +133,7 @@ Coverage percentage is not a gate. Instead, CI fails if any of these are missing
 | Error codes | IT `ErrorCodeGateTests.Every_error_code_is_triggered_by_a_tagged_test`: each code in the closed set needs an integration test tagged `[TriggersError("<code>")]` that produces and asserts it. UT `ErrorCodeTests` keeps the set equal to the api.md table |
 | Evaluator kinds | UT `EvaluatorRegistryTests.Every_evaluator_kind_has_a_scoring_test_class` (kind `json_fields` needs `JsonFieldsEvaluatorTests`) |
 | Endpoints | IT `EndpointHappyPathGateTests.Every_route_has_a_happy_path_test` |
+| Response headers | IT `ResponseHeaderGateTests.Every_documented_response_header_is_asserted_by_a_tagged_test`: parses every "Response headers" table in [api.md](api.md#response-headers); each header needs an integration test tagged `[AssertsHeader("<Header-Name>")]` that makes the gateway send it and asserts it |
 
 **Endpoint gate:** a test in `ModelSwitch.IntegrationTests` lists every route from the app's `EndpointDataSource` and fails if one has no test tagged `[HappyPath("<METHOD> <route>")]`.
 

@@ -257,11 +257,7 @@ public sealed class GatewayFixture(PostgresFixture postgres, ValkeyFixture valke
         if (_factory is not null)
         {
             var snapshots = Services.GetRequiredService<IConfigurationSnapshotProvider>();
-            var deadline = Environment.TickCount64 + 5_000;
-            while (snapshots.Current.Version < version && Environment.TickCount64 < deadline)
-            {
-                await Task.Delay(10);
-            }
+            await Eventually.UntilAsync(() => snapshots.Current.Version >= version, TimeSpan.FromSeconds(5), $"the gateway's snapshot reaches config version {version}");
         }
     }
 

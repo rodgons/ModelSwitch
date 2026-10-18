@@ -609,12 +609,7 @@ public sealed class CatalogAdminEndpointTests(CatalogFixture fixture) : IClassFi
     {
         var target = long.Parse(await fixture.ScalarAsync("select version from config.config_version"), System.Globalization.CultureInfo.InvariantCulture);
         var snapshots = fixture.ServicesB.GetRequiredService<IConfigurationSnapshotProvider>();
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        while (!snapshots.IsLoaded || snapshots.Current.Version < target)
-        {
-            clock.Elapsed.ShouldBeLessThan(within, $"host B did not reach config version {target}");
-            await Task.Delay(20, TestContext.Current.CancellationToken);
-        }
+        await Eventually.UntilAsync(() => snapshots.IsLoaded && snapshots.Current.Version >= target, within, $"host B serves config version {target}");
     }
 
     private async Task<(string RequestId, string ProviderModelId)> ChatOnHostBAsync(string alias)

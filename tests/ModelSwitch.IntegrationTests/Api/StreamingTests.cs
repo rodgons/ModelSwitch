@@ -256,10 +256,14 @@ public sealed class StreamingTests(GatewayFixture gateway) : IClassFixture<Gatew
             reader.Dispose();
             response.Dispose();
 
-            (await EventuallyAsync(async () => (await gateway.MockStatsAsync()).Aborted.GetValueOrDefault(GatewayFixture.PrimaryModel) >= 1))
-                .ShouldBeTrue("the Mock Provider saw the gateway hang up: the upstream call was closed");
-            (await EventuallyAsync(async () => (await Row($"select status from usage.inference_request where id = '{requestId}'"))[0] == "cancelled"))
-                .ShouldBeTrue("the request is settled cancelled, on a fresh token, though the client is gone");
+            await Eventually.UntilAsync(
+                async () => (await gateway.MockStatsAsync()).Aborted.GetValueOrDefault(GatewayFixture.PrimaryModel) >= 1,
+                TimeSpan.FromSeconds(10),
+                "the Mock Provider saw the gateway hang up: the upstream call was closed");
+            await Eventually.UntilAsync(
+                async () => (await Row($"select status from usage.inference_request where id = '{requestId}'"))[0] == "cancelled",
+                TimeSpan.FromSeconds(10),
+                "the request is settled cancelled, on a fresh token, though the client is gone");
             (await Row($"select status, provider_error_type, output_tokens > 0 from usage.provider_attempt where inference_request_id = '{requestId}'"))
                 .ShouldBe(["ambiguous", "client_cancelled", "True"]);
             (await Row($"select attempt_count, usage_status from usage.inference_request where id = '{requestId}'")).ShouldBe(["1", "estimated"]);
@@ -280,21 +284,6 @@ public sealed class StreamingTests(GatewayFixture gateway) : IClassFixture<Gatew
         var dump = await Rows("select t::text from usage.inference_request t union all select t::text from usage.provider_attempt t");
 
         dump.ShouldAllBe(row => !row[0].Contains(marker, StringComparison.Ordinal));
-    }
-
-    private static async Task<bool> EventuallyAsync(Func<Task<bool>> condition)
-    {
-        for (var i = 0; i < 200; i++)
-        {
-            if (await condition())
-            {
-                return true;
-            }
-
-            await Task.Delay(50, TestContext.Current.CancellationToken);
-        }
-
-        return false;
     }
 
     private async Task<string[]> Row(string sql) => (await Rows(sql)).FirstOrDefault() ?? [];

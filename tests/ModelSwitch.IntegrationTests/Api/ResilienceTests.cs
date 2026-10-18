@@ -152,6 +152,7 @@ public sealed class ResilienceTests(GatewayFixture gateway) : IClassFixture<Gate
 public sealed class CircuitBreakerTests(GatewayFixture gateway) : IClassFixture<GatewayFixture>
 {
     [Fact]
+    [AssertsHeader("Retry-After")]
     public async Task A_failing_provider_trips_the_circuit_and_later_requests_fail_fast_without_calling_it()
     {
         await gateway.SetFaultAsync(GatewayFixture.PrimaryModel, "status=503");

@@ -52,21 +52,20 @@ public sealed class RoutingSimulationEndpointTests(CatalogFixture fixture) : ICl
     /// <summary>Simulates until host A's configuration snapshot has caught up with the catalog just written (NOTIFY, about a second).</summary>
     private static async Task<JsonElement> SimulateWhenCaughtUpAsync(AdminBrowser caller, Guid policyId, object body)
     {
-        var deadline = Environment.TickCount64 + 10_000;
-        while (true)
-        {
-            var response = await caller.SendJsonAsync(HttpMethod.Post, $"/admin/routing-policies/{policyId}/simulate", body);
-            response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-            var result = await AdminBrowser.JsonAsync(response);
-            var known = result.GetProperty("candidates").EnumerateArray().All(c => c.GetProperty("providerName").ValueKind == JsonValueKind.String);
-            var priced = result.GetProperty("candidates").EnumerateArray().Count(c => c.GetProperty("worstCaseEstimatedCost").ValueKind == JsonValueKind.Number) == 2;
-            if ((known && priced) || Environment.TickCount64 > deadline)
+        var result = default(JsonElement);
+        await Eventually.UntilAsync(
+            async () =>
             {
-                return result;
-            }
-
-            await Task.Delay(100, TestContext.Current.CancellationToken);
-        }
+                var response = await caller.SendJsonAsync(HttpMethod.Post, $"/admin/routing-policies/{policyId}/simulate", body);
+                response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+                result = await AdminBrowser.JsonAsync(response);
+                var known = result.GetProperty("candidates").EnumerateArray().All(c => c.GetProperty("providerName").ValueKind == JsonValueKind.String);
+                var priced = result.GetProperty("candidates").EnumerateArray().Count(c => c.GetProperty("worstCaseEstimatedCost").ValueKind == JsonValueKind.Number) == 2;
+                return known && priced;
+            },
+            TimeSpan.FromSeconds(10),
+            "host A's snapshot knows every Candidate's Provider and both Prices");
+        return result;
     }
 
     [Fact]

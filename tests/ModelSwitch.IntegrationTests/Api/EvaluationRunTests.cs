@@ -310,11 +310,7 @@ public sealed class EvaluationRunTests(GatewayFixture gateway) : IClassFixture<G
         try
         {
             var job = RunJobAsync(runId, Token);
-            var deadline = Environment.TickCount64 + 10_000;
-            while (await RunColumnAsync(runId, "cases_done") == "0" && Environment.TickCount64 < deadline)
-            {
-                await Task.Delay(20, Token);
-            }
+            await Eventually.UntilAsync(async () => await RunColumnAsync(runId, "cases_done") != "0", TimeSpan.FromSeconds(10), "the run finishes its first Case");
 
             (await owner.SendJsonAsync(HttpMethod.Post, $"/admin/evaluations/{runId}/cancel")).StatusCode.ShouldBe(HttpStatusCode.OK);
             await job;

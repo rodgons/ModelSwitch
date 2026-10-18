@@ -154,16 +154,11 @@ public sealed class ApiKeyAuthenticationTests(PostgresFixture postgres)
         return (connectionString, seeded);
     }
 
-    private static async Task WaitForLastUsedAsync(string connectionString, string expectedUtc)
-    {
-        var sql = $"select last_used_at = timestamptz '{expectedUtc}' from identity.api_key";
-        var deadline = TimeProvider.System.GetUtcNow().AddSeconds(10);
-        while (await ScalarAsync(connectionString, sql) != "True")
-        {
-            (TimeProvider.System.GetUtcNow() < deadline).ShouldBeTrue($"last_used_at never became {expectedUtc}");
-            await Task.Delay(50);
-        }
-    }
+    private static Task WaitForLastUsedAsync(string connectionString, string expectedUtc)
+        => Eventually.UntilAsync(
+            async () => await ScalarAsync(connectionString, $"select last_used_at = timestamptz '{expectedUtc}' from identity.api_key") == "True",
+            TimeSpan.FromSeconds(10),
+            $"last_used_at becomes {expectedUtc}");
 
     private static async Task ExecuteAsync(string connectionString, string sql)
     {
