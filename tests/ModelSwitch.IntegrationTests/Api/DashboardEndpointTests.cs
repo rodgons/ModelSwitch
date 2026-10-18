@@ -30,11 +30,10 @@ public sealed class DashboardEndpointTests(GatewayFixture gateway) : IClassFixtu
         var requestId = response.Headers.GetValues("X-Request-Id").Single();
 
         // Settlement runs after the response is written.
-        var deadline = Environment.TickCount64 + 5_000;
-        while (await gateway.ScalarAsync($"select status from usage.inference_request where id = '{requestId}'") == "running" && Environment.TickCount64 < deadline)
-        {
-            await Task.Delay(20, TestContext.Current.CancellationToken);
-        }
+        await Eventually.UntilAsync(
+            async () => await gateway.ScalarAsync($"select status from usage.inference_request where id = '{requestId}'") != "running",
+            TimeSpan.FromSeconds(5),
+            $"request {requestId} is settled");
 
         return requestId;
     }

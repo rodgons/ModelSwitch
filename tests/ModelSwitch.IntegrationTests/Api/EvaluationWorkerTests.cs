@@ -54,11 +54,10 @@ public sealed class EvaluationWorkerTests(GatewayFixture gateway) : IClassFixtur
         await worker.StartAsync(token);
         try
         {
-            var deadline = Environment.TickCount64 + 30_000;
-            while (await gateway.ScalarAsync($"select status from evaluation.evaluation_run where id = '{runId}'") is "queued" or "running" && Environment.TickCount64 < deadline)
-            {
-                await Task.Delay(100, token);
-            }
+            await Eventually.UntilAsync(
+                async () => await gateway.ScalarAsync($"select status from evaluation.evaluation_run where id = '{runId}'") is not ("queued" or "running"),
+                TimeSpan.FromSeconds(30),
+                "the worker host finishes the run");
         }
         finally
         {

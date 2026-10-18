@@ -139,8 +139,12 @@ public sealed class LimitsTests(GatewayFixture gateway, PostgresFixture postgres
         await gateway.SetFaultAsync(GatewayFixture.PrimaryModel, "latency=1500");
         try
         {
+            var startedBefore = (await gateway.MockStatsAsync()).Started.GetValueOrDefault(GatewayFixture.PrimaryModel);
             var held = PostAsync(client);
-            await Task.Delay(500, TestContext.Current.CancellationToken);
+            await Eventually.UntilAsync(
+                async () => (await gateway.MockStatsAsync()).Started.GetValueOrDefault(GatewayFixture.PrimaryModel) > startedBefore,
+                TimeSpan.FromSeconds(5),
+                "the held request has its slot and is at the Provider");
             for (var i = 0; i < 3; i++)
             {
                 (await PostAsync(client)).StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
@@ -329,22 +333,9 @@ public sealed class LimitsTests(GatewayFixture gateway, PostgresFixture postgres
     }
 
     // The slot is freed when the server notices the disconnect or finishes the stream, which is shortly after the client sees it.
-    private static async Task EventuallyOkAsync(HttpClient client, TimeSpan? within = null)
-    {
-        var deadline = Environment.TickCount64 + (long)(within ?? TimeSpan.FromSeconds(5)).TotalMilliseconds;
-        HttpStatusCode last;
-        do
-        {
-            last = (await PostAsync(client)).StatusCode;
-            if (last == HttpStatusCode.OK)
-            {
-                return;
-            }
-
-            await Task.Delay(100, TestContext.Current.CancellationToken);
-        }
-        while (Environment.TickCount64 < deadline);
-
-        last.ShouldBe(HttpStatusCode.OK);
-    }
+    private static Task EventuallyOkAsync(HttpClient client, TimeSpan? within = null)
+        => Eventually.UntilAsync(
+            async () => (await PostAsync(client)).StatusCode == HttpStatusCode.OK,
+            within ?? TimeSpan.FromSeconds(5),
+            "the concurrency slot is free again and a request is admitted");
 }
